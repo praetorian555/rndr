@@ -12694,3 +12694,440 @@ TEST_CASE("Forge a mesh shader draw without the extension", "[forge]")
     REQUIRE(command_buffer.End() == ErrorCode::Success);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+namespace
+{
+
+/**
+ * A task stage in front of the mesh one. The task shader decides how many mesh workgroups run and hands each
+ * of them a payload, and the mesh shader reads the far corner of its triangle out of that payload - so a
+ * triangle that covers the target says the payload arrived, and one that covers a corner of it says the
+ * mesh stage read zeros.
+ */
+constexpr const char* k_task_source = R"(
+struct MeshVertex
+{
+    float4 position : SV_Position;
+};
+
+struct TrianglePayload
+{
+    float far_corner;
+};
+
+groupshared TrianglePayload g_payload;
+
+[shader("amplification")]
+[numthreads(1, 1, 1)]
+void main_task()
+{
+    g_payload.far_corner = 3.0;
+    DispatchMesh(1, 1, 1, g_payload);
+}
+
+[shader("amplification")]
+[numthreads(1, 1, 1)]
+void main_task_none()
+{
+    g_payload.far_corner = 3.0;
+    DispatchMesh(0, 0, 0, g_payload);
+}
+
+[shader("mesh")]
+[outputtopology("triangle")]
+[numthreads(1, 1, 1)]
+void main_task_mesh(in payload TrianglePayload payload, out vertices MeshVertex vertices[3], out indices uint3 triangles[1])
+{
+    SetMeshOutputCounts(3, 1);
+    vertices[0].position = float4(-1.0, -1.0, 0.0, 1.0);
+    vertices[1].position = float4(payload.far_corner, -1.0, 0.0, 1.0);
+    vertices[2].position = float4(-1.0, payload.far_corner, 0.0, 1.0);
+    triangles[0] = uint3(0, 1, 2);
+}
+
+[shader("fragment")]
+float4 main_task_fragment() : SV_Target
+{
+    return float4(0.0, 1.0, 0.0, 1.0);
+}
+)";
+
+/**
+ * A geometry stage that turns one point into the triangle covering the target. The vertex shader reads no
+ * input and puts its one vertex at the origin, so everything the target ends up holding was emitted by the
+ * geometry shader.
+ */
+constexpr const char* k_geometry_source = R"(
+struct VertexOutput
+{
+    float4 position : SV_Position;
+};
+
+[shader("vertex")]
+VertexOutput main_geometry_vertex()
+{
+    VertexOutput output;
+    output.position = float4(0.0, 0.0, 0.0, 1.0);
+    return output;
+}
+
+[shader("geometry")]
+[maxvertexcount(3)]
+void main_geometry(point VertexOutput input[1], inout TriangleStream<VertexOutput> stream)
+{
+    VertexOutput corner;
+    corner.position = float4(-1.0, -1.0, 0.0, 1.0);
+    stream.Append(corner);
+    corner.position = float4(3.0, -1.0, 0.0, 1.0);
+    stream.Append(corner);
+    corner.position = float4(-1.0, 3.0, 0.0, 1.0);
+    stream.Append(corner);
+    stream.RestartStrip();
+}
+
+[shader("fragment")]
+float4 main_geometry_fragment() : SV_Target
+{
+    return float4(0.0, 1.0, 0.0, 1.0);
+}
+)";
+
+/**
+ * The two tessellation stages over a patch of three control points, with every factor at one so the patch
+ * comes out as the one triangle it went in as. A patch list cannot be rasterized without these stages, so
+ * anything on the target says both of them ran.
+ */
+constexpr const char* k_tessellation_source = R"(
+struct VertexOutput
+{
+    float4 position : SV_Position;
+};
+
+struct PatchConstants
+{
+    float edges[3] : SV_TessFactor;
+    float inside : SV_InsideTessFactor;
+};
+
+[shader("vertex")]
+VertexOutput main_tessellation_vertex(float2 position : POSITION)
+{
+    VertexOutput output;
+    output.position = float4(position, 0.0, 1.0);
+    return output;
+}
+
+PatchConstants main_tessellation_constants(InputPatch<VertexOutput, 3> patch)
+{
+    PatchConstants constants;
+    constants.edges[0] = 1.0;
+    constants.edges[1] = 1.0;
+    constants.edges[2] = 1.0;
+    constants.inside = 1.0;
+    return constants;
+}
+
+[shader("hull")]
+[domain("tri")]
+[partitioning("integer")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(3)]
+[patchconstantfunc("main_tessellation_constants")]
+VertexOutput main_tessellation_control(InputPatch<VertexOutput, 3> patch, uint index : SV_OutputControlPointID)
+{
+    return patch[index];
+}
+
+[shader("domain")]
+[domain("tri")]
+VertexOutput main_tessellation_evaluation(PatchConstants constants, float3 weights : SV_DomainLocation,
+                                          const OutputPatch<VertexOutput, 3> patch)
+{
+    VertexOutput output;
+    output.position = patch[0].position * weights.x + patch[1].position * weights.y + patch[2].position * weights.z;
+    return output;
+}
+
+[shader("fragment")]
+float4 main_tessellation_fragment() : SV_Target
+{
+    return float4(0.0, 1.0, 0.0, 1.0);
+}
+)";
+
+/** The pipeline desc every stage case starts from: no culling, one colour attachment of the given format. */
+Forge::GraphicsPipelineDesc MakeStagePipelineDesc(PixelFormat format)
+{
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(format);
+    return pipeline_desc;
+}
+
+}  // namespace
+
+/**
+ * The positive half of the task stage. The mesh case above proves a mesh shader draws; this is the stage in
+ * front of it deciding how many mesh workgroups run and what they are told.
+ */
+TEST_CASE("Forge a task shader in front of a mesh one", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_features{.mesh_shader = true, .task_shader = true};
+    if (!CanCreateDevice(k_features))
+    {
+        SKIP("This device has no task shaders.");
+    }
+    ForgeFixture fixture(k_features);
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader task_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_task_source, {.entry_point = "main_task", .cache = GetShaderCache()}));
+    const Forge::Shader mesh_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_task_source, {.entry_point = "main_task_mesh", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_task_source, {.entry_point = "main_task_fragment", .cache = GetShaderCache()}));
+
+    SECTION("The stage reflection reports a task shader")
+    {
+        REQUIRE(task_shader.GetShaderStage() == ShaderTypeBits::Task);
+        REQUIRE(task_shader.GetNativeShaderStage() == VK_SHADER_STAGE_TASK_BIT_EXT);
+        REQUIRE(task_shader.GetInputs().IsEmpty());
+    }
+    SECTION("The mesh stage draws the triangle the task stage described")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeStagePipelineDesc(k_format);
+        pipeline_desc.task_shader = task_shader;
+        pipeline_desc.mesh_shader = mesh_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               // One task workgroup; how many mesh ones is the
+                                                               // task shader's decision.
+                                                               REQUIRE(command_buffer.CmdDrawMeshTasks(1) == ErrorCode::Success);
+                                                           });
+        // The far corner of the triangle comes out of the payload. Zeros there would leave a triangle over
+        // the bottom left quarter of the target, which is what this tells apart from the whole of it.
+        REQUIRE(CountCovered(pixels, k_side) == k_side * k_side);
+    }
+    SECTION("A task stage that dispatches no mesh workgroups draws nothing")
+    {
+        const Forge::Shader none_shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_task_source, {.entry_point = "main_task_none", .cache = GetShaderCache()}));
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeStagePipelineDesc(k_format);
+        pipeline_desc.task_shader = none_shader;
+        pipeline_desc.mesh_shader = mesh_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDrawMeshTasks(1) == ErrorCode::Success);
+                                                           });
+        REQUIRE(CountCovered(pixels, k_side) == 0);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a geometry shader draw", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_features{.geometry_shader = true};
+    if (!CanCreateDevice(k_features))
+    {
+        SKIP("This device has no geometry shaders.");
+    }
+    ForgeFixture fixture(k_features);
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_geometry_source, {.entry_point = "main_geometry_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader geometry_shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_geometry_source, {.entry_point = "main_geometry", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_geometry_source, {.entry_point = "main_geometry_fragment", .cache = GetShaderCache()}));
+
+    SECTION("The stage reflection reports a geometry shader")
+    {
+        REQUIRE(geometry_shader.GetShaderStage() == ShaderTypeBits::Geometry);
+        REQUIRE(geometry_shader.GetNativeShaderStage() == VK_SHADER_STAGE_GEOMETRY_BIT);
+        // What a geometry shader reads comes from the stage before it, not from a vertex buffer.
+        REQUIRE(geometry_shader.GetInputs().IsEmpty());
+    }
+    SECTION("One point in becomes the triangle the geometry shader emitted")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeStagePipelineDesc(k_format);
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.geometry_shader = geometry_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.topology = PrimitiveTopology::Point;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               // One vertex and no vertex buffer: the vertex
+                                                               // shader reads nothing.
+                                                               REQUIRE(command_buffer.CmdDraw(1) == ErrorCode::Success);
+                                                           });
+        // A point covers at most one texel; the whole target says the geometry stage replaced it.
+        REQUIRE(CountCovered(pixels, k_side) == k_side * k_side);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a tessellation draw", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_features{.tessellation_shader = true};
+    if (!CanCreateDevice(k_features))
+    {
+        SKIP("This device has no tessellation shaders.");
+    }
+    ForgeFixture fixture(k_features);
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_tessellation_source, {.entry_point = "main_tessellation_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader control_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_tessellation_source, {.entry_point = "main_tessellation_control", .cache = GetShaderCache()}));
+    const Forge::Shader evaluation_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_tessellation_source, {.entry_point = "main_tessellation_evaluation", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_tessellation_source, {.entry_point = "main_tessellation_fragment", .cache = GetShaderCache()}));
+    const Forge::Buffer vertices = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                              Opal::AsBytes(k_fullscreen_vertices)));
+
+    /** The desc of a pipeline with both stages over one patch of three, which the refusals each break one way. */
+    auto make_tessellation_desc = [&]
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeStagePipelineDesc(k_format);
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.tessellation_control_shader = control_shader;
+        pipeline_desc.tessellation_evaluation_shader = evaluation_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.topology = PrimitiveTopology::Patch;
+        pipeline_desc.patch_control_points = 3;
+        pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+        return pipeline_desc;
+    };
+
+    SECTION("The stage reflection reports the two tessellation stages")
+    {
+        REQUIRE(control_shader.GetShaderStage() == ShaderTypeBits::TessellationControl);
+        REQUIRE(control_shader.GetNativeShaderStage() == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+        REQUIRE(control_shader.GetInputs().IsEmpty());
+        REQUIRE(evaluation_shader.GetShaderStage() == ShaderTypeBits::TessellationEvaluation);
+        REQUIRE(evaluation_shader.GetNativeShaderStage() == VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+        REQUIRE(evaluation_shader.GetInputs().IsEmpty());
+    }
+    SECTION("A patch of three goes through both stages and comes out as its triangle")
+    {
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, make_tessellation_desc()));
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels =
+            RenderRaster(fixture, color, k_side,
+                         [&](Forge::CommandBuffer& command_buffer)
+                         {
+                             REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                             REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                         });
+        REQUIRE(CountCovered(pixels, k_side) == k_side * k_side);
+    }
+    SECTION("A control shader without an evaluation shader is refused")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = make_tessellation_desc();
+        pipeline_desc.tessellation_evaluation_shader = {};
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, pipeline_desc).HasValue());
+    }
+    SECTION("The tessellation stages with a topology other than Patch are refused")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = make_tessellation_desc();
+        pipeline_desc.topology = PrimitiveTopology::Triangle;
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, pipeline_desc).HasValue());
+    }
+    SECTION("The Patch topology without the tessellation stages is refused")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = make_tessellation_desc();
+        pipeline_desc.tessellation_control_shader = {};
+        pipeline_desc.tessellation_evaluation_shader = {};
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, pipeline_desc).HasValue());
+    }
+    SECTION("A patch of no control points, or of more than the device tessellates, is refused")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = make_tessellation_desc();
+        pipeline_desc.patch_control_points = 0;
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, pipeline_desc).HasValue());
+        pipeline_desc.patch_control_points = fixture.device.GetPhysicalDevice().GetProperties().limits.maxTessellationPatchSize + 1;
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, pipeline_desc).HasValue());
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
+ * Every stage behind a device feature, asked of a device that enabled none of them. The SPIR-V of each
+ * declares the capability, and the check is Forge's rather than the layer's, so this passes with no
+ * validation message at all.
+ */
+TEST_CASE("Forge a shader of a stage the device did not enable is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    REQUIRE_FALSE(fixture.device.GetFeatures().geometry_shader);
+    REQUIRE_FALSE(fixture.device.GetFeatures().tessellation_shader);
+    REQUIRE_FALSE(fixture.device.GetFeatures().mesh_shader);
+    REQUIRE_FALSE(fixture.device.GetFeatures().task_shader);
+
+    struct Case
+    {
+        const char* source;
+        const char* entry_point;
+    };
+    const Case cases[] = {{k_geometry_source, "main_geometry"},
+                          {k_tessellation_source, "main_tessellation_control"},
+                          {k_tessellation_source, "main_tessellation_evaluation"},
+                          {k_task_source, "main_task_mesh"},
+                          {k_task_source, "main_task"}};
+    for (const Case& test_case : cases)
+    {
+        INFO("entry point " << test_case.entry_point);
+        const Opal::Expected<Forge::Shader, ErrorCode> shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, test_case.source, {.entry_point = test_case.entry_point, .cache = GetShaderCache()});
+        REQUIRE_FALSE(shader.HasValue());
+        REQUIRE(shader.GetError() == ErrorCode::InvalidArgument);
+    }
+    // The stages every device has are still accepted by the same device.
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_geometry_source, {.entry_point = "main_geometry_vertex", .cache = GetShaderCache()}));
+    REQUIRE(vertex_shader.GetShaderStage() == ShaderTypeBits::Vertex);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
