@@ -255,7 +255,22 @@ as the average of the clear and the draw - a value one sample per texel cannot p
 `standardSampleLocations` for the coverage of a half-covered texel and skips that section where the device
 places its samples elsewhere. The resolve that ends a dynamic rendering pass -
 `VkRenderingAttachmentInfo::resolveImageView` - is not wrapped and not tested; a depth resolve needs it.
-Item 21 is untouched. The suite now stands at 109 cases and 17620 assertions.
+The suite then stood at 109 cases and 17620 assertions.
+
+**Item 21 is done** on 2026-09-22, in two commits, and it changed Forge more than the test asked: geometry
+and tessellation had a device feature each and nothing else - no `ShaderTypeBits` value, no slot in
+`GraphicsPipelineDesc`, and a module of either stage was refused as one Forge does not model. Both stages are
+now wrapped - `Geometry`, `TessellationControl` and `TessellationEvaluation` in `ShaderTypeBits`,
+`PrimitiveTopology::Patch`, and the three shader slots and `patch_control_points` on the desc - with the
+pairing rules refused at the desc: two tessellation stages or none, `Patch` exactly when they are there, a
+patch size inside the device limit, and no such stage on a mesh pipeline. `Shader::Create` also refuses a
+module of any stage whose feature the device did not enable, mesh and task included; the SPIR-V declares the
+capability, and the layer only reported it at module creation in Vulkan's words. Four cases: a task stage
+that hands the mesh stage its payload and one that dispatches nothing, a geometry stage turning one point
+into the triangle covering the target, both tessellation stages over one patch of three with every factor at
+one, and every gated stage refused on the default device. Slang 2026.10.2 compiled `amplification`, `hull`
+and `domain` entry points to SPIR-V without a fight. The suite now stands at 113 cases and 17773 assertions.
+Bucket C is complete.
 
 Six of them changed Forge, each in its own `fix` or `feat` commit ahead of the test that found it:
 
