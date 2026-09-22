@@ -360,6 +360,54 @@ struct SplitCopy
     }
 };
 
+/**
+ * A square colour texture read back whole, tightly packed. The layout defaults to TransferSource, which is
+ * where every one of these cases leaves its texture; a case that samples its own readback afterward hands
+ * ShaderReadOnly instead.
+ */
+Opal::DynamicArray<u8> ReadColorPixels(ForgeFixture& fixture, Forge::Texture& texture, i32 side,
+                                       Forge::ImageLayout layout = Forge::ImageLayout::TransferSource)
+{
+    Opal::DynamicArray<u8> pixels(side * side * 4);
+    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, layout) == ErrorCode::Success);
+    return pixels;
+}
+
+/** A source and a destination texture whose formats differ in texel size, for RecordMismatchedFormatCopy. */
+struct MismatchedFormatTextures
+{
+    Forge::Texture source;
+    Forge::Texture destination;
+};
+
+MismatchedFormatTextures MakeMismatchedFormatTextures(const Forge::Device& device)
+{
+    constexpr Forge::TextureUsageBits k_transfer_usage =
+        Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
+    return {ForgeTest::Unwrap(Forge::Texture::Create(
+                device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_transfer_usage})),
+            ForgeTest::Unwrap(Forge::Texture::Create(
+                device, {.format = PixelFormat::R16G16B16A16_SFLOAT, .width = 4, .height = 4, .usage = k_transfer_usage}))};
+}
+
+/**
+ * Records and ends one command buffer copying between two mismatched texel sizes, which breaks a rule the
+ * guards do not check and the validation layer does - the one way in this file to provoke exactly one
+ * validation error at record time. Never submitted: work the layer rejects while recording is undefined
+ * behaviour once it runs.
+ */
+void RecordMismatchedFormatCopy(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& source,
+                                Forge::Texture& destination)
+{
+    const Forge::TextureCopyRegion region;
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, queue));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdCopyTexture(source, destination, {&region, 1}) == ErrorCode::Success);
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
+}
+
 }  // namespace
 
 /**
@@ -476,24 +524,14 @@ TEST_CASE("Forge context desc", "[forge]")
             ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc()));
         Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
 
-        // Copying between two formats of different texel size is what the debug-names case above uses to
-        // provoke one validation error at record time; recorded three times over, it provokes three.
-        constexpr Forge::TextureUsageBits k_transfer_usage =
-            Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
-        Forge::Texture source = ForgeTest::Unwrap(
-            Forge::Texture::Create(device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_transfer_usage}));
-        Forge::Texture destination = ForgeTest::Unwrap(Forge::Texture::Create(
-            device, {.format = PixelFormat::R16G16B16A16_SFLOAT, .width = 4, .height = 4, .usage = k_transfer_usage}));
-        const Forge::TextureCopyRegion region;
+        // Copying between two formats of different texel size is what "Forge debug names reach the
+        // validation layer" below uses to provoke one validation error at record time; recorded three times
+        // over, it provokes three.
+        MismatchedFormatTextures textures = MakeMismatchedFormatTextures(device);
         constexpr i32 k_error_count = 3;
         for (i32 i = 0; i < k_error_count; ++i)
         {
-            Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, queue));
-            REQUIRE(command_buffer.Begin() == ErrorCode::Success);
-            REQUIRE(command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource) == ErrorCode::Success);
-            REQUIRE(command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
-            REQUIRE(command_buffer.CmdCopyTexture(source, destination, {&region, 1}) == ErrorCode::Success);
-            REQUIRE(command_buffer.End() == ErrorCode::Success);
+            RecordMismatchedFormatCopy(device, queue, textures.source, textures.destination);
         }
 
         REQUIRE(context.GetDebugMessages().GetSize() == 1);
@@ -834,9 +872,7 @@ TEST_CASE("Forge a bitmap uploaded into a texture", "[forge]")
         // usage above has to allow.
         REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::ShaderReadOnly);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::ShaderReadOnly) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, texture, k_side, Forge::ImageLayout::ShaderReadOnly);
         REQUIRE(CountMismatches({bitmap.GetData(), bitmap.GetTotalSize()}, {pixels.GetData(), pixels.GetSize()}) == 0);
     }
     SECTION("Generating the mips gives the texture the whole chain")
@@ -1065,27 +1101,16 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
         SKIP("This build has no debug utils, so there is nothing to name and nothing to report.");
     }
 
-    constexpr Forge::TextureUsageBits k_transfer_usage =
-        Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
-    Forge::Texture source = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                          {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_transfer_usage}));
-    Forge::Texture destination = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                               {.format = PixelFormat::R16G16B16A16_SFLOAT, .width = 4, .height = 4, .usage = k_transfer_usage}));
-    Forge::SetDebugName(fixture.device, source, "probe-source-texture");
-    Forge::SetDebugName(fixture.device, destination, "probe-destination-texture");
+    MismatchedFormatTextures textures = MakeMismatchedFormatTextures(fixture.device);
+    Forge::SetDebugName(fixture.device, textures.source, "probe-source-texture");
+    Forge::SetDebugName(fixture.device, textures.destination, "probe-destination-texture");
 
     // Copying between two formats of different texel size breaks a rule the guards do not check and the
     // validation layer does, which is what makes it a way to read back what the layer calls these two images.
     // The layer checks this while the command is recorded, so the command buffer is thrown away rather than
     // submitted: handing the driver work that breaks the specification is undefined behaviour, and it took
     // the next test down with it when this did.
-    const Forge::TextureCopyRegion region;
-    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
-    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
-    REQUIRE(command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource) == ErrorCode::Success);
-    REQUIRE(command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
-    REQUIRE(command_buffer.CmdCopyTexture(source, destination, {&region, 1}) == ErrorCode::Success);
-    REQUIRE(command_buffer.End() == ErrorCode::Success);
+    RecordMismatchedFormatCopy(fixture.device, fixture.GetQueue(), textures.source, textures.destination);
 
     const Opal::StringUtf8 errors = fixture.GetValidationErrors();
     INFO(*errors);
@@ -2682,11 +2707,9 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
                         REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         // Left in TransferSource rather than the ShaderReadOnly this defaults to: that layout needs the
         // Sampled usage, and this texture is an attachment nothing ever samples.
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
         // Zero and one are the only channel values a UNORM format converts exactly, so this compares
         // what was cleared rather than how the driver rounds.
         for (i32 i = 0; i < pixels.GetSize(); i += 4)
@@ -2810,9 +2833,7 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
                                    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                                }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
         for (i32 i = 0; i < pixels.GetSize(); i += 4)
         {
             REQUIRE(static_cast<i32>(pixels[i]) == 0);
@@ -2914,9 +2935,7 @@ TEST_CASE("Forge color write mask", "[forge]")
                         REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
         return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
     };
 
@@ -3172,11 +3191,8 @@ struct HalvesFixture
                                    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                                }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
         // Left in TransferSource:
-        REQUIRE(Forge::ReadBackTexture(forge.device, GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
-        return pixels;
+        return ReadColorPixels(forge, color, k_side);
     }
 
     template <typename RecordDraw>
@@ -3888,9 +3904,7 @@ TEST_CASE("Forge multisampled draw resolved to one sample", "[forge]")
                         REQUIRE(command_buffer.CmdResolveTexture(multisampled, resolved, {&whole, 1}) == ErrorCode::Success);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), resolved, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, resolved, k_side);
 
         // The draw writes green with alpha zero over a clear of black with alpha one, so a texel half inside the
         // geometry averages to the middle in both channels and one outside keeps the clear. Half of 255 is not
@@ -4108,9 +4122,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
                         REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
         return Result(Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]});
     };
 
@@ -5141,9 +5153,7 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                               // Forge tracks the layout per subresource itself, so the move has to carry that
                               // array; a readback transitions the texture and then asks where it ended up.
                               REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
-                              Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-                              REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0,
-                                                     Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+                              const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, texture, k_side);
                               REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
                           });
 
@@ -5536,9 +5546,7 @@ TEST_CASE("Forge blits", "[forge]")
                                 ErrorCode::Success);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, destination, k_side);
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, k_seed);
         for (i32 y = 0; y < k_side; ++y)
         {
@@ -5571,9 +5579,7 @@ TEST_CASE("Forge blits", "[forge]")
                                 ErrorCode::Success);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, destination, k_side);
         // Read back as the bytes of a BGRA image, so the red the source wrote is now the third byte. A blit
         // that had copied rather than converted would leave it first, which is what separates this from
         // CmdCopyTexture.
@@ -6131,9 +6137,7 @@ TEST_CASE("Forge barrier batches", "[forge]")
         RequireComputeWrote(copied, k_element_count);
         // The texture barrier in the same batch moved the texture, which is what makes this readback legal.
         REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, texture, k_side);
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 33);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     }
@@ -6163,9 +6167,7 @@ TEST_CASE("Forge barrier batches", "[forge]")
         {
             INFO("texture " << i);
             REQUIRE(ForgeTest::Unwrap(textures[i].GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
-            Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-            REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), textures[i], pixels, 0,
-                                   Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+            const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, textures[i], k_side);
             const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, static_cast<u8>(60 + i));
             REQUIRE(CountMismatches(expected, pixels) == 0);
         }
@@ -6189,9 +6191,7 @@ TEST_CASE("Forge barrier batches", "[forge]")
                                                             .flags = Forge::DependencyFlagBits::ByRegion}) == ErrorCode::Success);
                     }) == ErrorCode::Success);
         REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, texture, k_side);
         const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, 44);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     }
@@ -6228,9 +6228,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
                 ErrorCode::Success);
         REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == expected_layout);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, texture, k_side);
         REQUIRE(CountMismatches(expected, pixels) == 0);
     };
 
@@ -6799,10 +6797,7 @@ Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color
                     record(command_buffer);
                     REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                 }) == ErrorCode::Success);
-    Opal::DynamicArray<u8> pixels(side * side * 4);
-    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-            ErrorCode::Success);
-    return pixels;
+    return ReadColorPixels(fixture, color, side);
 }
 
 /** What one call to RenderWithDepth leaves behind: the colour attachment and the depth attachment, both read back. */
@@ -6848,9 +6843,7 @@ DepthPassResult RenderWithDepth(ForgeFixture& fixture, Forge::Texture& color, Fo
                 }) == ErrorCode::Success);
 
     DepthPassResult result;
-    result.pixels = Opal::DynamicArray<u8>(side * side * 4);
-    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, result.pixels, 0, Forge::ImageLayout::TransferSource) ==
-            ErrorCode::Success);
+    result.pixels = ReadColorPixels(fixture, color, side);
     Opal::DynamicArray<u8> depth_bytes(side * side * static_cast<i32>(sizeof(f32)));
     REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, depth_bytes, 0, Forge::ImageLayout::TransferSource) ==
             ErrorCode::Success);
@@ -7769,10 +7762,7 @@ TEST_CASE("Forge push constants read by two stages", "[forge]")
             });
         REQUIRE(submit_status == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
-        return pixels;
+        return ReadColorPixels(fixture, color, k_side);
     };
 
     /** The four channels of one texel of that readback. */
@@ -7896,10 +7886,7 @@ TEST_CASE("Forge attachment load and store operations", "[forge]")
                         record_pass(command_buffer, second);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
-        return pixels;
+        return ReadColorPixels(fixture, color, k_side);
     };
 
     /** The four channels of one texel of that readback. */
@@ -8537,10 +8524,7 @@ TEST_CASE("Forge stencil testing", "[forge]")
                 REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
             }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
-        return pixels;
+        return ReadColorPixels(fixture, color, k_side);
     };
 
     SECTION("A second draw lands only where the first allowed it")
@@ -8692,10 +8676,7 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
                 REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
             }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
-        return pixels;
+        return ReadColorPixels(fixture, color, k_side);
     };
 
     /** Which texels the paint reached: green where it landed, the red clear where it did not. */
@@ -8799,10 +8780,7 @@ TEST_CASE("Forge blending", "[forge]")
                         REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
                         REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                     }) == ErrorCode::Success);
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
-        return pixels;
+        return ReadColorPixels(fixture, color, k_side);
     };
 
     /** The same equation on the CPU, in the floats the device works in, rounded back to a byte at the end. */
@@ -9372,9 +9350,7 @@ TEST_CASE("Forge storage image writes", "[forge]")
                            }) == ErrorCode::Success);
     REQUIRE(ForgeTest::Unwrap(storage.GetCurrentLayout()) == Forge::ImageLayout::General);
 
-    Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), storage, pixels, 0, Forge::ImageLayout::TransferSource) ==
-            ErrorCode::Success);
+    const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, storage, k_side);
     for (i32 y = 0; y < k_side; ++y)
     {
         for (i32 x = 0; x < k_side; ++x)
@@ -9888,9 +9864,7 @@ TEST_CASE("Forge a draw that reads a descriptor set", "[forge]")
                         REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
                     }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
         Opal::DynamicArray<Texel> columns(k_side);
         for (i32 column = 0; column < k_side; ++column)
         {
