@@ -219,9 +219,15 @@ and the compile-error codes, `CommandBuffer::Reset` and `Begin(false)`, the Fram
 error paths, `VkResultToErrorCode`, the buffer edges, the physical device helpers, the `SetDebugName` loop,
 the swap chain modes.
 
-**In progress**, one commit per item: 18 (`VkResultToErrorCode`), 20 (the physical device queue family
-helpers), 5 (`Shader::FromSource`), and 6 (`CommandBuffer::Reset` and `Begin(false)`) are done. 13, 16, 17,
-19, 22, 23 remain.
+**Done** on 2026-09-22, one commit per item, full `[forge]` and `[forge-window]` set green after every one.
+22 (`SetDebugName`) covers the 13 headless overloads only - `SwapChain` and `FrameContext` need a window and
+were left alone since window-test.cpp already builds both in cases of its own; worth a follow-up if this is
+ever revisited. 23 covers a present mode other than Fifo and `depth_pixel_format`; `AcquireTexture` called
+twice without a `Present` was left out on purpose - it hands `vkAcquireNextImageKHR` a hardcoded
+`UINT64_MAX` with no way to shorten it from here, so a surface reporting too few swap chain images would
+hang the run instead of failing it. `collect_debug_messages = false` (part of 17) is not independently
+testable under this repo's required `RNDR_FORGE_VALIDATION=ON` configure, which forces message collection on
+regardless of the desc.
 
 ### Bucket C: new shaders, Vulkan semantics, likely Forge changes
 
