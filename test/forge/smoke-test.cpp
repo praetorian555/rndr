@@ -7164,9 +7164,15 @@ Opal::DynamicArray<u8> MakeTwoTexelRow()
     return bytes;
 }
 
-/** Uploads bytes into one mip level of a texture and leaves it where a shader can read it. */
+/**
+ * Uploads bytes into one mip level of a texture and leaves it where a shader can read it.
+ *
+ * @param reader The stage that samples the texture afterwards. Compute by default, since that is what most
+ *        of the cases here dispatch; a draw that samples in its fragment stage has to say so, or the barrier
+ *        names a stage the read never happens in and the layer has nothing to object to.
+ */
 void UploadMip(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels,
-               u32 mip_level)
+               u32 mip_level, Forge::PipelineStageBits reader = Forge::PipelineStageBits::ComputeShader)
 {
     const Forge::Buffer staging = ForgeTest::Unwrap(
         Forge::Buffer::Create(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels));
@@ -7178,8 +7184,8 @@ void UploadMip(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Te
                                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) ==
                                                ErrorCode::Success);
                                        REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1}) == ErrorCode::Success);
-                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToShaderRead(
-                                                   texture, Forge::PipelineStageBits::ComputeShader)) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToShaderRead(texture, reader)) ==
+                                               ErrorCode::Success);
                                    }) == ErrorCode::Success);
 }
 
@@ -7630,6 +7636,204 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
                                                           .array_layer_count = 4,
                                                           .usage = Forge::TextureUsageBits::Sampled,
                                                           .view_type = Forge::TextureViewType::Cube}).HasValue());
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/**
+ * A fullscreen triangle whose texture coordinates come out of a constant buffer and whose colour comes out
+ * of a sampled texture, so one draw exercises a descriptor set from both graphics stages at once. The two
+ * bindings are read by different stages on purpose: a layout that named the wrong stage would leave one of
+ * them unreadable where it is used.
+ */
+constexpr const char* k_textured_draw_source = R"(
+struct UvTransform
+{
+    float2 scale;
+    float2 bias;
+};
+
+[[vk::binding(0, 0)]] ConstantBuffer<UvTransform> transform;
+[[vk::binding(1, 0)]] Sampler2D albedo;
+
+struct VertexOutput
+{
+    float4 position : SV_Position;
+    float2 uv : TEXCOORD0;
+};
+
+[shader("vertex")]
+VertexOutput main_textured_vertex(float2 position : POSITION)
+{
+    VertexOutput output;
+    output.position = float4(position, 0.0, 1.0);
+    output.uv = (position * 0.5 + 0.5) * transform.scale + transform.bias;
+    return output;
+}
+
+[shader("fragment")]
+float4 main_textured_fragment(VertexOutput input) : SV_Target
+{
+    return albedo.SampleLevel(input.uv, 0.0);
+}
+)";
+
+/** What the constant buffer of that shader holds. Two float2, which std140 packs at 0 and 8 as written. */
+struct UvTransform
+{
+    Vector2f scale{1.0f, 1.0f};
+    Vector2f bias{0.0f, 0.0f};
+};
+
+/** The two texels of MakeTwoTexelRow, as a draw that sampled one of them whole reads back. */
+constexpr Texel k_left_texel{255, 0, 0, 255};
+constexpr Texel k_right_texel{0, 255, 0, 255};
+
+}  // namespace
+
+TEST_CASE("Forge a draw that reads a descriptor set", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_textured_draw_source, {.entry_point = "main_textured_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_textured_draw_source, {.entry_point = "main_textured_fragment", .cache = GetShaderCache()}));
+
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::ConstantBuffer, 4) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
+    pool_desc.max_sets = 4;
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::ConstantBuffer, 1, ShaderTypeBits::Vertex) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(k_format);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    const Forge::Buffer vertices = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                              Opal::AsBytes(k_fullscreen_vertices)));
+
+    /** Two texels, red then green, sampled in the fragment stage rather than in a dispatch. */
+    Forge::Texture row = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                 {.format = k_format,
+                                                                  .width = 2,
+                                                                  .height = 1,
+                                                                  .usage = Forge::TextureUsageBits::Sampled |
+                                                                           Forge::TextureUsageBits::TransferDestination}));
+    const Opal::DynamicArray<u8> row_pixels = MakeTwoTexelRow();
+    UploadMip(fixture.device, fixture.GetQueue(), row, {row_pixels.GetData(), row_pixels.GetSize()}, 0,
+              Forge::PipelineStageBits::FragmentShader);
+
+    const Forge::Sampler nearest =
+        ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
+
+    /**
+     * Draw the triangle with that transform in the constant buffer and hand back the four columns of the
+     * first row. The target is four texels wide and the texture two, so a column lands on the left texel
+     * when the coordinate the vertex stage computed is below a half and on the right one above it: the four
+     * values say what the vertex stage read out of the constant buffer and what the fragment stage sampled
+     * with it.
+     */
+    auto draw_with = [&](const UvTransform& transform)
+    {
+        const Forge::Buffer transform_buffer = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = sizeof(UvTransform), .usage = Forge::BufferUsageBits::ConstantBuffer},
+                                  Opal::AsBytes(transform)));
+
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, transform_buffer) == ErrorCode::Success);
+        REQUIRE(set.Update(1, row, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+
+        Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                       {.format = k_format,
+                                                                        .width = k_side,
+                                                                        .height = k_side,
+                                                                        .usage = Forge::TextureUsageBits::ColorAttachment |
+                                                                                 Forge::TextureUsageBits::TransferSource}));
+
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        // Cleared to blue, which the shader never writes: a texel that comes back blue is one
+                        // the draw did not reach.
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f}}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        // The same call the dispatch cases make. The bind point comes off the pipeline, so
+                        // this is the one line that says a set can be bound for graphics at all.
+                        REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        Opal::DynamicArray<Texel> columns(k_side);
+        for (i32 column = 0; column < k_side; ++column)
+        {
+            const i32 texel = column * 4;
+            columns[column] = Texel{static_cast<i32>(pixels[texel]), static_cast<i32>(pixels[texel + 1]),
+                                    static_cast<i32>(pixels[texel + 2]), static_cast<i32>(pixels[texel + 3])};
+        }
+        return columns;
+    };
+
+    SECTION("A set bound at the graphics bind point feeds the vertex and the fragment stage")
+    {
+        // The identity transform: the left half of the target samples the left texel and the right half the
+        // right one.
+        const Opal::DynamicArray<Texel> columns = draw_with({});
+        for (i32 column = 0; column < k_side; ++column)
+        {
+            INFO("column " << column << " rgba " << columns[column].r << " " << columns[column].g << " " << columns[column].b << " "
+                           << columns[column].a);
+            REQUIRE(columns[column] == (column < 2 ? k_left_texel : k_right_texel));
+        }
+    }
+    SECTION("What the constant buffer holds is what the vertex stage computed with")
+    {
+        // The same draw with the coordinate mirrored, which only the constant buffer says. Every column comes
+        // back as the other texel, so nothing here could have been produced by a stage that ignored the set.
+        const Opal::DynamicArray<Texel> columns = draw_with({.scale = {-1.0f, 1.0f}, .bias = {1.0f, 0.0f}});
+        for (i32 column = 0; column < k_side; ++column)
+        {
+            INFO("column " << column << " rgba " << columns[column].r << " " << columns[column].g << " " << columns[column].b << " "
+                           << columns[column].a);
+            REQUIRE(columns[column] == (column < 2 ? k_right_texel : k_left_texel));
+        }
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
