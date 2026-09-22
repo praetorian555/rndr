@@ -672,6 +672,78 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyTexture(const Texture& source
     return ErrorCode::Success;
 }
 
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdResolveTexture(const Texture& source, Texture& destination,
+                                                              Opal::ArrayView<const TextureCopyRegion> regions)
+{
+    if (regions.IsEmpty())
+    {
+        return ErrorCode::Success;
+    }
+    RNDR_FORGE_CHECK(ValidateTextureUsage(source, TextureUsageBits::TransferSource, "source", "Texture resolve"));
+    RNDR_FORGE_CHECK(ValidateTextureUsage(destination, TextureUsageBits::TransferDestination, "destination", "Texture resolve"));
+    // A resolve is what turns samples into texels, so a source with one sample has nothing to resolve and a
+    // destination with more than one has nowhere to put the average. Vulkan wants the two formats equal as
+    // well; it converts nothing on the way, the way a copy does not.
+    if (source.GetDesc().sample_count == SampleCount::Count1)
+    {
+        RNDR_LOG_ERROR("Forge: Texture resolve needs a source texture with more than one sample");
+        return ErrorCode::InvalidArgument;
+    }
+    if (destination.GetDesc().sample_count != SampleCount::Count1)
+    {
+        RNDR_LOG_ERROR("Forge: Texture resolve needs a destination texture with one sample");
+        return ErrorCode::InvalidArgument;
+    }
+    if (source.GetDesc().format != destination.GetDesc().format)
+    {
+        RNDR_LOG_ERROR("Forge: Texture resolve needs the source and the destination texture in the same format");
+        return ErrorCode::InvalidArgument;
+    }
+    Opal::DynamicArray<VkImageResolve> resolve_regions(regions.GetSize());
+    for (i32 i = 0; i < regions.GetSize(); ++i)
+    {
+        const TextureCopyRegion& region = regions[i];
+        // The extent is resolved against the source and then checked against the destination, the way a copy
+        // does, so a zero extent means the rest of the source mip level and still has to fit where it is going.
+        const Opal::Expected<VkExtent3D, ErrorCode> extent_result =
+            ResolveTextureRegion(source, region.source, region.source_offset, region.extent, "source", "Texture resolve");
+        if (!extent_result.HasValue())
+        {
+            return extent_result.GetError();
+        }
+        const VkExtent3D extent = extent_result.GetValue();
+        const Vector3i resolved_extent{static_cast<i32>(extent.width), static_cast<i32>(extent.height), static_cast<i32>(extent.depth)};
+        const Opal::Expected<VkExtent3D, ErrorCode> destination_extent = ResolveTextureRegion(
+            destination, region.destination, region.destination_offset, resolved_extent, "destination", "Texture resolve");
+        if (!destination_extent.HasValue())
+        {
+            return destination_extent.GetError();
+        }
+        resolve_regions[i] = {
+            .srcSubresource = ToVkSubresourceLayers(region.source, source.GetDesc().format),
+            .srcOffset = {.x = region.source_offset.x, .y = region.source_offset.y, .z = region.source_offset.z},
+            .dstSubresource = ToVkSubresourceLayers(region.destination, destination.GetDesc().format),
+            .dstOffset = {.x = region.destination_offset.x, .y = region.destination_offset.y, .z = region.destination_offset.z},
+            .extent = extent};
+    }
+    const Opal::Expected<ImageLayout, ErrorCode> source_layout =
+        ResolveTransferLayout(source, regions, &TextureCopyRegion::source, true, "source", "Texture resolve");
+    if (!source_layout.HasValue())
+    {
+        return source_layout.GetError();
+    }
+    const Opal::Expected<ImageLayout, ErrorCode> destination_layout =
+        ResolveTransferLayout(destination, regions, &TextureCopyRegion::destination, false, "destination", "Texture resolve");
+    if (!destination_layout.HasValue())
+    {
+        return destination_layout.GetError();
+    }
+    vkCmdResolveImage(m_native_command_buffer, source.GetNativeImage(), static_cast<VkImageLayout>(source_layout.GetValue()),
+                      destination.GetNativeImage(), static_cast<VkImageLayout>(destination_layout.GetValue()),
+                      static_cast<u32>(resolve_regions.GetSize()), resolve_regions.GetData());
+    return ErrorCode::Success;
+}
+
 static Opal::Optional<VkFilter> ToVkFilter(Rndr::ImageFilter filter)
 {
     switch (filter)

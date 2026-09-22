@@ -352,6 +352,22 @@ public:
     [[nodiscard]] ErrorCode CmdCopyTexture(const Texture& source, Texture& destination, Opal::ArrayView<const TextureCopyRegion> regions);
 
     /**
+     * Average the samples of a multisampled texture into a texture with one sample, which is the only way
+     * out of a multisampled colour attachment: it cannot be copied, blitted or read back, and a shader has
+     * to fetch it one sample at a time.
+     *
+     * A resolve names regions the way a copy does, so it takes the same region type. Both textures have to
+     * share a format, the source has to carry more than one sample and the destination exactly one - all
+     * three are refused here rather than found out by the validation layer.
+     * @param source Multisampled texture to read. Needs TextureUsageBits::TransferSource.
+     * @param destination Texture with one sample to write into. Needs TextureUsageBits::TransferDestination.
+     * @param regions Regions to resolve, each naming one mip level on either side. The layouts come off the
+     *        two textures, the way CmdCopyTexture reads them.
+     */
+    [[nodiscard]] ErrorCode CmdResolveTexture(const Texture& source, Texture& destination,
+                                              Opal::ArrayView<const TextureCopyRegion> regions);
+
+    /**
      * Stretch regions of one texture into another, resampling and converting on the way. The formats need not
      * match, which is what separates this from CmdCopyTexture, but both have to support being blitted - a
      * format that cannot is refused rather than being found out by the validation layer.

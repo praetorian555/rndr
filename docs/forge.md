@@ -292,7 +292,7 @@ finding everything that touches a texture is one grep, not two.
 
 **Anything that takes, holds or hands out a `Forge::Texture` says texture.** `TextureBarrier` and its
 presets, `CmdTextureBarrier`, `CmdCopyBufferToTexture`, `CmdCopyTextureToBuffer`, `CmdCopyTexture`,
-`CmdBlitTexture` and their region types, `DescriptorSetUpdateBinding::TextureInfo`, and the whole swap chain
+`CmdBlitTexture`, `CmdResolveTexture` and their region types, `DescriptorSetUpdateBinding::TextureInfo`, and the whole swap chain
 surface - `AcquireTexture` returning an `AcquiredTexture`, `GetCurrentColorTexture`, `GetColorTexture`,
 `GetDepthTexture`, `HasAcquiredTexture`, `GetCurrentTextureIndex`.
 
