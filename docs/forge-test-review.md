@@ -108,6 +108,9 @@ In rough order of value.
 
 ## What is redundant
 
+**Done in bucket A** (2026-09-22): everything in this section was removed or folded into a shared helper.
+It stays as the record of what went and why.
+
 Sections that assert something another case already asserts:
 
 - **"Forge buffer survives a move"** (337) is inside the lifetime Buffer contract (4267), which also reads
@@ -154,6 +157,8 @@ Duplicated code, which costs the same as duplicated tests when something changes
 
 ## Stale wording and hygiene
 
+The first two bullets and the doc drift were fixed in bucket A; the driver workaround and the cost stand.
+
 - **"throws".** 53 section titles and about 63 comments in the tests say a call throws, as do four header
   comments: descriptor-set.hpp:293 and :298, swap-chain.hpp:173, synchronization.hpp:295. Nothing has
   thrown since `c163506`. "Is refused" or "reports" is what they mean.
@@ -189,6 +194,12 @@ found.
 **Sonnet 5, low effort.** Every change here copies a pattern already in the file and needs no Vulkan
 judgment. One session, one or two commits. The risk is breaking a shared setup when deleting a section, so
 run the full `[forge]` and `[forge-window]` set after.
+
+**Done** on 2026-09-22 in five commits, one per bullet below, each built and run against the full Forge set
+on the way. The suite went from 87 cases and 16112 assertions to 89 cases and 15075: two smoke cases and 17
+sections gone, four sections promoted to cases, and about 400 lines of setup folded into `CanCreateDevice`,
+`REQUIRE_NO_VALIDATION_ERROR_IN`, `MakeAddressPipeline`, `MakeWipedOutput`, `RequireComputeWrote` and
+`SplitCopy` at the top of `smoke-test.cpp`.
 
 - Rename "throws" in the 53 section titles, the ~63 comments and the 4 header comments.
 - Delete the sections and cases listed under "What is redundant".

@@ -197,9 +197,9 @@ area, as while minimized, has no swap chain at all; `swap_chain.IsValid()` says 
 does not want to spin should idle for a frame.
 
 Anything the application keeps one of per frame in flight - a uniform buffer, a descriptor set - is indexed
-by `frame_context.GetFrameIndex()`. `EndFrame` takes the layout the texture was left in, defaulting to
-`ImageLayout::ColorAttachment`, and passing `ImageLayout::Present` skips the transition for a frame that
-already made it.
+by `frame_context.GetFrameIndex()`. `EndFrame` moves the texture to `ImageLayout::Present` from whatever
+layout the frame left it in, which the texture tracks, and leaves a frame that already made that transition
+alone.
 
 Work that happens once rather than per frame - uploading a mesh, generating mips - does not belong in this
 loop. `ImmediateSubmit` from `rndr/forge/transfer.hpp` records, submits and waits in one call.
