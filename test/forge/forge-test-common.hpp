@@ -136,14 +136,20 @@ inline bool IsEnvironmentFlagSet(const char* name)
 
 }  // namespace ForgeTest
 
-/** Fails the test with the text of the messages when the validation layer reported an error. */
-#define REQUIRE_NO_VALIDATION_ERROR(fixture)                                        \
-    do                                                                              \
-    {                                                                               \
-        const Opal::StringUtf8 validation_errors = (fixture).GetValidationErrors(); \
-        INFO(*validation_errors);                                                   \
-        REQUIRE((fixture).GetValidationErrorCount() == 0);                          \
+/**
+ * Fails the test with the text of the messages when the validation layer reported an error through this
+ * context. For a case that builds its own context rather than a fixture.
+ */
+#define REQUIRE_NO_VALIDATION_ERROR_IN(context)                                                 \
+    do                                                                                          \
+    {                                                                                           \
+        const Opal::StringUtf8 validation_errors = ForgeTest::CollectValidationErrors(context); \
+        INFO(*validation_errors);                                                               \
+        REQUIRE(ForgeTest::CountValidationErrors(context) == 0);                                \
     } while (false)
+
+/** The same for a fixture, which is a context with a device on it. */
+#define REQUIRE_NO_VALIDATION_ERROR(fixture) REQUIRE_NO_VALIDATION_ERROR_IN((fixture).context)
 
 /**
  * The same check, with the device released first, so that an object nobody destroyed is named rather than

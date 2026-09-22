@@ -814,7 +814,5 @@ TEST_CASE("Forge device created before any surface presents to one that arrives 
         frame_context.Destroy();
     }
 
-    const u32 validation_errors = ForgeTest::CountValidationErrors(context);
-    INFO(ForgeTest::CollectValidationErrors(context).GetData());
-    REQUIRE(validation_errors == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }

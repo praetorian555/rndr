@@ -145,31 +145,32 @@ struct ForgeFixture
 };
 
 /**
- * Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails.
+ * Whether a device asking for these features and queues can be created on this machine. The one question
+ * every probe in this file asks - a feature the device lacks, a queue family it has not got, an extension a
+ * feature pulls in. Forge reports rather than falling back when asked for what is not there, so a fixture
+ * that could not be built is the answer, and a case skips on it the way the whole file skips on a machine
+ * with no device.
  *
- * This rests on EnumeratePhysicalDevices reporting NoGraphicsDevice when it finds none. While it handed back
- * an empty list, the probe below reached `physical_devices[0]` on it and read off the end of the array - so
- * the one machine this function exists for is the one machine it did not work on.
+ * Built and thrown away on every call. Catch2 re-runs a case body per section, so a case that asks at the
+ * top pays a device creation per section, which is what every case already pays for its fixture.
  */
-bool IsForgeAvailable()
+bool CanCreateDevice(const Forge::DeviceFeatures& features = {}, const ForgeQueues& queues = {})
 {
-    static const bool available = []
-    {
-        const ForgeFixture probe;
-        return probe.status == ErrorCode::Success;
-    }();
-    return available;
+    const ForgeFixture probe(features, queues);
+    return probe.status == ErrorCode::Success;
 }
 
 /**
- * Whether this machine offers the optional queue families, since one family that does everything is a legal
- * device and Forge reports rather than falling back to the graphics queue when asked for a family it has not
- * got. Tests about those families skip on such a machine the way the whole file skips on one with no device.
+ * Whether this machine has a Vulkan device at all, so a machine without one skips rather than fails.
+ *
+ * This rests on EnumeratePhysicalDevices reporting NoGraphicsDevice when it finds none. While it handed back
+ * an empty list, the probe reached `physical_devices[0]` on it and read off the end of the array - so the
+ * one machine this function exists for is the one machine it did not work on.
  */
-bool AreQueuesAvailable(const ForgeQueues& queues)
+bool IsForgeAvailable()
 {
-    const ForgeFixture probe({}, queues);
-    return probe.status == ErrorCode::Success;
+    static const bool available = CanCreateDevice();
+    return available;
 }
 
 /**
@@ -182,9 +183,9 @@ bool IsSoftwareDevice()
 {
     static const bool software = []
     {
-        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
-        const Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
-        return devices[0].GetProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+        const ForgeFixture probe;
+        return probe.status == ErrorCode::Success &&
+               probe.device.GetPhysicalDevice().GetProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
     }();
     return software;
 }
@@ -222,6 +223,103 @@ i32 CountMismatches(Opal::ArrayView<const u8> expected, Opal::ArrayView<const u8
     }
     return mismatches;
 }
+
+/** The compute pipeline k_compute_source needs, which pushes the address it writes through. */
+Forge::Pipeline MakeAddressPipeline(const Forge::Device& device, const Forge::Shader& shader)
+{
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.push_constant_ranges.PushBack(
+        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+    return ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
+}
+
+/**
+ * A storage buffer of that many u32, readable by the host and addressable by a shader, wiped so nothing a
+ * previous run left in it can pass for a dispatch that ran.
+ */
+Forge::Buffer MakeWipedOutput(const Forge::Device& device, i32 element_count)
+{
+    Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = element_count * sizeof(u32),
+                                                                            .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                                            .host_access = Forge::HostAccess::Random,
+                                                                            .use_device_address = true}));
+    const Opal::DynamicArray<u8> zeros(element_count * sizeof(u32));
+    REQUIRE(output.Update(zeros) == ErrorCode::Success);
+    return output;
+}
+
+/** Every element k_compute_source wrote into the buffer, read back and compared against what the shader computes. */
+void RequireComputeWrote(const Forge::Buffer& output, i32 element_count)
+{
+    Opal::DynamicArray<u32> values(element_count);
+    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+    for (i32 i = 0; i < element_count; ++i)
+    {
+        INFO("element " << i);
+        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
+    }
+}
+
+/**
+ * One buffer filled by two command buffers, a half each, which is what the submit cases drive through the
+ * queue in whichever batches they are about: a batch that dropped either one shows as half the buffer
+ * missing rather than as nothing at all. Both command buffers are recorded and ended here, so a case only
+ * decides how they are submitted and then asks whether both halves arrived.
+ */
+struct SplitCopy
+{
+    static constexpr i32 k_size = 64;
+
+    Opal::DynamicArray<u8> first_half = MakeBytes(k_size, 5);
+    Opal::DynamicArray<u8> second_half = MakeBytes(k_size, 90);
+    Forge::Buffer source_a;
+    Forge::Buffer source_b;
+    Forge::Buffer destination;
+    Forge::CommandBuffer first;
+    Forge::CommandBuffer second;
+    /** The same two as the one-element batches a SubmitDesc takes. */
+    Opal::Ref<const Forge::CommandBuffer> first_batch[1];
+    Opal::Ref<const Forge::CommandBuffer> second_batch[1];
+
+    explicit SplitCopy(ForgeFixture& fixture)
+    {
+        constexpr Forge::BufferUsageBits k_both_ways =
+            Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
+        source_a = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half));
+        source_b = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half));
+        destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size * 2, .usage = k_both_ways}));
+        const Opal::DynamicArray<u8> zeros(k_size * 2);
+        REQUIRE(destination.Update(zeros) == ErrorCode::Success);
+
+        first = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        second = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        const Forge::BufferCopyRegion first_region{.source_offset = 0, .destination_offset = 0, .size = k_size};
+        const Forge::BufferCopyRegion second_region{.source_offset = 0, .destination_offset = k_size, .size = k_size};
+        REQUIRE(first.Begin() == ErrorCode::Success);
+        REQUIRE(first.CmdCopyBuffer(source_a, destination, {&first_region, 1}) == ErrorCode::Success);
+        REQUIRE(first.End() == ErrorCode::Success);
+        REQUIRE(second.Begin() == ErrorCode::Success);
+        REQUIRE(second.CmdCopyBuffer(source_b, destination, {&second_region, 1}) == ErrorCode::Success);
+        REQUIRE(second.End() == ErrorCode::Success);
+        first_batch[0] = Opal::Ref<const Forge::CommandBuffer>(first);
+        second_batch[0] = Opal::Ref<const Forge::CommandBuffer>(second);
+    }
+
+    /** Both halves in the destination, which is what every way of submitting the two has to end up with. */
+    void RequireWholeBufferCopied(ForgeFixture& fixture) const
+    {
+        Opal::DynamicArray<u8> read_back(k_size * 2);
+        REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back) == ErrorCode::Success);
+        for (i32 i = 0; i < k_size; ++i)
+        {
+            REQUIRE(read_back[i] == first_half[i]);
+            REQUIRE(read_back[k_size + i] == second_half[i]);
+        }
+    }
+};
 
 }  // namespace
 
@@ -263,7 +361,7 @@ TEST_CASE("Forge context and device", "[forge]")
     Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc()));
     REQUIRE(device.IsValid());
     REQUIRE(ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)).IsValid());
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 TEST_CASE("Forge context outlives a second one", "[forge]")
@@ -608,43 +706,20 @@ TEST_CASE("Forge batched submit", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     ForgeFixture fixture;
-    constexpr i32 k_size = 64;
-    const Opal::DynamicArray<u8> first_half = MakeBytes(k_size, 5);
-    const Opal::DynamicArray<u8> second_half = MakeBytes(k_size, 90);
-    const Opal::DynamicArray<u8> zeros(k_size * 2);
-
-    constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
-    const Forge::Buffer source_a = ForgeTest::Unwrap(
-        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half));
-    const Forge::Buffer source_b = ForgeTest::Unwrap(
-        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half));
-    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size * 2, .usage = k_both_ways}));
-    REQUIRE(destination.Update(zeros) == ErrorCode::Success);
-
-    // One command buffer per half, so a batch that dropped either one would show as half the buffer missing.
-    Forge::CommandBuffer first = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
-    Forge::CommandBuffer second = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
-    const Forge::BufferCopyRegion first_region{.source_offset = 0, .destination_offset = 0, .size = k_size};
-    const Forge::BufferCopyRegion second_region{.source_offset = 0, .destination_offset = k_size, .size = k_size};
-    REQUIRE(first.Begin() == ErrorCode::Success);
-    REQUIRE(first.CmdCopyBuffer(source_a, destination, {&first_region, 1}) == ErrorCode::Success);
-    REQUIRE(first.End() == ErrorCode::Success);
-    REQUIRE(second.Begin() == ErrorCode::Success);
-    REQUIRE(second.CmdCopyBuffer(source_b, destination, {&second_region, 1}) == ErrorCode::Success);
-    REQUIRE(second.End() == ErrorCode::Success);
+    const SplitCopy copy(fixture);
 
     SECTION("Two command buffers in one batch, with a fence")
     {
         const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
-        const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(first),
-                                                                Opal::Ref<const Forge::CommandBuffer>(second)};
+        const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(copy.first),
+                                                                Opal::Ref<const Forge::CommandBuffer>(copy.second)};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {batch, 2}, .fence = fence}) == ErrorCode::Success);
         REQUIRE(fence.Wait() == ErrorCode::Success);
     }
     SECTION("The same batch without a fence, waited on through the queue")
     {
-        const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(first),
-                                                                Opal::Ref<const Forge::CommandBuffer>(second)};
+        const Opal::Ref<const Forge::CommandBuffer> batch[2] = {Opal::Ref<const Forge::CommandBuffer>(copy.first),
+                                                                Opal::Ref<const Forge::CommandBuffer>(copy.second)};
         REQUIRE(fixture.GetQueue().Submit({.command_buffers = {batch, 2}}) == ErrorCode::Success);
         REQUIRE(fixture.GetQueue().WaitIdle() == ErrorCode::Success);
     }
@@ -652,23 +727,16 @@ TEST_CASE("Forge batched submit", "[forge]")
     {
         const Forge::Semaphore semaphore = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
-        const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
-        const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
         const Forge::SemaphoreSubmit signal{.semaphore = semaphore, .stages = Forge::PipelineStageBits::Transfer};
         const Forge::SemaphoreSubmit wait{.semaphore = semaphore, .stages = Forge::PipelineStageBits::Transfer};
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
+                ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
                 ErrorCode::Success);
         REQUIRE(fence.Wait() == ErrorCode::Success);
     }
 
-    Opal::DynamicArray<u8> read_back(k_size * 2);
-    REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back) == ErrorCode::Success);
-    for (i32 i = 0; i < k_size; ++i)
-    {
-        REQUIRE(read_back[i] == first_half[i]);
-        REQUIRE(read_back[k_size + i] == second_half[i]);
-    }
+    copy.RequireWholeBufferCopied(fixture);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
@@ -679,45 +747,8 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     ForgeFixture fixture;
-    constexpr i32 k_size = 64;
-    const Opal::DynamicArray<u8> first_half = MakeBytes(k_size, 5);
-    const Opal::DynamicArray<u8> second_half = MakeBytes(k_size, 90);
-    const Opal::DynamicArray<u8> zeros(k_size * 2);
-
-    constexpr Forge::BufferUsageBits k_both_ways = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination;
-    const Forge::Buffer source_a = ForgeTest::Unwrap(
-        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, first_half));
-    const Forge::Buffer source_b = ForgeTest::Unwrap(
-        Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, second_half));
-    const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size * 2, .usage = k_both_ways}));
-    REQUIRE(destination.Update(zeros) == ErrorCode::Success);
-
-    // The same split copy the batched submit case uses: one command buffer per half, so a batch that dropped
-    // either one would show up as half the buffer missing rather than as nothing at all.
-    Forge::CommandBuffer first = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
-    Forge::CommandBuffer second = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
-    const Forge::BufferCopyRegion first_region{.source_offset = 0, .destination_offset = 0, .size = k_size};
-    const Forge::BufferCopyRegion second_region{.source_offset = 0, .destination_offset = k_size, .size = k_size};
-    REQUIRE(first.Begin() == ErrorCode::Success);
-    REQUIRE(first.CmdCopyBuffer(source_a, destination, {&first_region, 1}) == ErrorCode::Success);
-    REQUIRE(first.End() == ErrorCode::Success);
-    REQUIRE(second.Begin() == ErrorCode::Success);
-    REQUIRE(second.CmdCopyBuffer(source_b, destination, {&second_region, 1}) == ErrorCode::Success);
-    REQUIRE(second.End() == ErrorCode::Success);
-    const Opal::Ref<const Forge::CommandBuffer> first_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(first)};
-    const Opal::Ref<const Forge::CommandBuffer> second_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(second)};
-
-    // Both halves in the destination, which is what every section that submits has to end up with.
-    auto require_whole_buffer_copied = [&]()
-    {
-        Opal::DynamicArray<u8> read_back(k_size * 2);
-        REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), destination, read_back) == ErrorCode::Success);
-        for (i32 i = 0; i < k_size; ++i)
-        {
-            REQUIRE(read_back[i] == first_half[i]);
-            REQUIRE(read_back[k_size + i] == second_half[i]);
-        }
-    };
+    // The same split copy the batched submit case drives, submitted here against the value side of a timeline.
+    const SplitCopy copy(fixture);
 
     SECTION("A fresh timeline starts at its initial value and the host can raise it")
     {
@@ -758,11 +789,11 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
         const Forge::SemaphoreSubmit signal{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
         const Forge::SemaphoreSubmit wait{.semaphore = timeline, .stages = Forge::PipelineStageBits::Transfer, .value = 1};
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.first_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.second_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
                 ErrorCode::Success);
         REQUIRE(fence.Wait() == ErrorCode::Success);
-        require_whole_buffer_copied();
+        copy.RequireWholeBufferCopied(fixture);
     }
     SECTION("The host waits on a value the device signals, with no fence anywhere")
     {
@@ -770,13 +801,13 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
             ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
         const Forge::SemaphoreSubmit first_signal{.semaphore = timeline, .value = 1};
         const Forge::SemaphoreSubmit second_signal{.semaphore = timeline, .value = 2};
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
                 ErrorCode::Success);
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
                 ErrorCode::Success);
         REQUIRE(timeline.Wait(2) == ErrorCode::Success);
         REQUIRE(ForgeTest::Unwrap(timeline.GetValue()) == 2);
-        require_whole_buffer_copied();
+        copy.RequireWholeBufferCopied(fixture);
     }
     SECTION("WaitForAll over two timelines returns once both have been signalled")
     {
@@ -786,15 +817,15 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
             ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
         const Forge::SemaphoreSubmit first_signal{.semaphore = first_timeline, .value = 1};
         const Forge::SemaphoreSubmit second_signal{.semaphore = second_timeline, .value = 1};
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.first_batch, 1}, .signal_semaphores = {&first_signal, 1}}) ==
                 ErrorCode::Success);
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.second_batch, 1}, .signal_semaphores = {&second_signal, 1}}) ==
                 ErrorCode::Success);
         const Forge::SemaphoreWait waits[2] = {{.semaphore = first_timeline, .value = 1}, {.semaphore = second_timeline, .value = 1}};
         REQUIRE(Forge::Semaphore::WaitForAll({waits, 2}) == ErrorCode::Success);
         REQUIRE(ForgeTest::Unwrap(first_timeline.GetValue()) == 1);
         REQUIRE(ForgeTest::Unwrap(second_timeline.GetValue()) == 1);
-        require_whole_buffer_copied();
+        copy.RequireWholeBufferCopied(fixture);
     }
     SECTION("The host side of a timeline is refused on a binary semaphore")
     {
@@ -808,7 +839,7 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
     {
         const Forge::Semaphore binary = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
         const Forge::SemaphoreSubmit signal{.semaphore = binary, .value = 1};
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
                 ErrorCode::InvalidArgument);
     }
     SECTION("A timeline signalled with zero is refused, since no signal can reach it")
@@ -816,11 +847,11 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         const Forge::Semaphore timeline =
             ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
         const Forge::SemaphoreSubmit signal{.semaphore = timeline, .value = 0};
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.first_batch, 1}, .signal_semaphores = {&signal, 1}}) ==
                 ErrorCode::InvalidArgument);
         // A wait for zero is legal and trivially satisfied, so only the signal side is turned away.
         const Forge::SemaphoreSubmit wait{.semaphore = timeline, .value = 0};
-        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {first_batch, 1}, .wait_semaphores = {&wait, 1}}) == ErrorCode::Success);
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {copy.first_batch, 1}, .wait_semaphores = {&wait, 1}}) == ErrorCode::Success);
         REQUIRE(fixture.GetQueue().WaitIdle() == ErrorCode::Success);
     }
     SECTION("A signal that does not raise the count is refused")
@@ -1025,14 +1056,7 @@ TEST_CASE("Forge device features", "[forge]")
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
 
-    Opal::StringUtf8 report;
-    for (const Forge::DebugMessage& message : context.GetDebugMessages())
-    {
-        report += message.text;
-        report += Opal::StringUtf8("\n");
-    }
-    INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 TEST_CASE("Forge physical device selection", "[forge]")
@@ -1091,7 +1115,7 @@ TEST_CASE("Forge physical device selection", "[forge]")
         REQUIRE(Forge::FindPhysicalDevice(devices, desc).HasValue());
     }
 
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 /** Writes into the second buffer of a bound array, so which descriptor was written is visible in the result. */
@@ -1150,11 +1174,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
         // ever written, so partially bound is doing something too.
         Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, k_used_descriptors));
 
-        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
-                                      .usage = Forge::BufferUsageBits::StorageBuffer,
-                                      .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
+        Forge::Buffer output = MakeWipedOutput(device, k_element_count);
 
         // Only descriptor 1 of the array is written. Descriptor 0 is left alone, which is what
         // PartiallyBound allows and what the shader stays away from.
@@ -1216,14 +1236,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
         REQUIRE_FALSE(Forge::DescriptorSet::Create(plain_pool, layout, k_used_descriptors).HasValue());
     }
 
-    Opal::StringUtf8 report;
-    for (const Forge::DebugMessage& message : context.GetDebugMessages())
-    {
-        report += message.text;
-        report += Opal::StringUtf8("\n");
-    }
-    INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 constexpr const char* k_bindless_texture_source = R"(
@@ -1322,11 +1335,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         // Three of the four, so the variable count is doing something.
         Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, k_used_descriptors));
 
-        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
-                                      .usage = Forge::BufferUsageBits::StorageBuffer,
-                                      .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
+        Forge::Buffer output = MakeWipedOutput(device, k_element_count);
 
         const Forge::Texture texture_one = make_texture(k_red_at_one);
         const Forge::Texture texture_two = make_texture(k_red_at_two);
@@ -1382,14 +1391,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         REQUIRE(descriptor_set.Update(0, output, 0, Forge::k_whole_buffer, 1) != ErrorCode::Success);
     }
 
-    Opal::StringUtf8 report;
-    for (const Forge::DebugMessage& message : context.GetDebugMessages())
-    {
-        report += message.text;
-        report += Opal::StringUtf8("\n");
-    }
-    INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 constexpr const char* k_bindless_constant_source = R"(
@@ -1458,11 +1460,7 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(device, layout_desc));
     Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
 
-    Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_element_count * sizeof(u32),
-                                  .usage = Forge::BufferUsageBits::StorageBuffer,
-                                  .host_access = Forge::HostAccess::Random}));
-    const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-    REQUIRE(output.Update(zeros) == ErrorCode::Success);
+    Forge::Buffer output = MakeWipedOutput(device, k_element_count);
 
     // One constant register each, which is the smallest a constant buffer is laid out in.
     auto make_params = [&](u32 value)
@@ -1502,14 +1500,7 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
         REQUIRE(values[i] == expected);
     }
 
-    Opal::StringUtf8 report;
-    for (const Forge::DebugMessage& message : context.GetDebugMessages())
-    {
-        report += message.text;
-        report += Opal::StringUtf8("\n");
-    }
-    INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 TEST_CASE("Forge barrier vocabulary", "[forge]")
@@ -1824,11 +1815,7 @@ TEST_CASE("Forge timestamp queries", "[forge]")
                                                 .use_device_address = true}));
     const Forge::Shader compute_shader = ForgeTest::Unwrap(
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
-    Forge::ComputePipelineDesc pipeline_desc;
-    pipeline_desc.shader = compute_shader;
-    pipeline_desc.push_constant_ranges.PushBack(
-        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+    const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, compute_shader);
     const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
 
     // The dispatch every measurement below wraps, so what differs between them is only how it is timed.
@@ -2034,11 +2021,7 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
     }
     SECTION("A buffer written the short way reaches the shader")
     {
-        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
-                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
 
         Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
         REQUIRE(set.Update(0, output) == ErrorCode::Success);
@@ -2531,35 +2514,6 @@ Opal::DynamicArray<u8> ToIndexBytes(const u32* indices, i32 count, IndexSize ind
     return bytes;
 }
 
-/**
- * Whether the first physical device has 8-bit indices, under either of the two names the extension has, so a
- * device that has neither skips rather than fails. One context for the whole binary: enumerating is cheap and
- * creating a device is what this suite spends its time on.
- */
-bool IsIndexTypeUint8Supported()
-{
-    static const bool supported = []
-    {
-        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
-        const Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
-        return devices[0].IsExtensionSupported(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME) ||
-               devices[0].IsExtensionSupported(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME);
-    }();
-    return supported;
-}
-
-/** What the first physical device supports of the core features, for a case that has to skip without one. */
-VkPhysicalDeviceFeatures GetFirstPhysicalDeviceFeatures()
-{
-    static const VkPhysicalDeviceFeatures features = []
-    {
-        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
-        const Opal::DynamicArray<Forge::PhysicalDevice> devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
-        return devices[0].GetFeatures();
-    }();
-    return features;
-}
-
 /** Everything the two-halves target is rendered with, built once per case. */
 struct HalvesFixture
 {
@@ -2708,7 +2662,8 @@ TEST_CASE("Forge indexed draws", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const bool has_uint8 = IsIndexTypeUint8Supported();
+    // Under either of the two names the extension has, which Device::Create looks for on its own.
+    const bool has_uint8 = CanCreateDevice({.index_type_uint8 = true});
     HalvesFixture halves({.index_type_uint8 = has_uint8});
 
     // The one draw every section below makes, with the index buffer built at the given width. Both offsets are
@@ -2782,12 +2737,11 @@ TEST_CASE("Forge indirect draws", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const VkPhysicalDeviceFeatures device_features = GetFirstPhysicalDeviceFeatures();
-    if (device_features.drawIndirectFirstInstance == VK_FALSE)
+    if (!CanCreateDevice({.draw_indirect_first_instance = true}))
     {
         SKIP("This device cannot start an indirect draw at a non-zero instance.");
     }
-    const bool has_multi_draw = device_features.multiDrawIndirect == VK_TRUE;
+    const bool has_multi_draw = CanCreateDevice({.multi_draw_indirect = true, .draw_indirect_first_instance = true});
     HalvesFixture halves({.multi_draw_indirect = has_multi_draw, .draw_indirect_first_instance = true});
 
     const Forge::Shader write_draws =
@@ -2805,15 +2759,6 @@ TEST_CASE("Forge indirect draws", "[forge]")
                                                     .host_access = Forge::HostAccess::None,
                                                     .use_device_address = true}));
 
-    auto make_write_pipeline = [&](const Forge::Shader& writer)
-    {
-        Forge::ComputePipelineDesc pipeline_desc;
-        pipeline_desc.shader = writer;
-        pipeline_desc.push_constant_ranges.PushBack(
-            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        return ForgeTest::Unwrap(Forge::Pipeline::Create(halves.forge.device, pipeline_desc));
-    };
-
     // Dispatches the writer over the command buffer, then orders that write against the indirect read.
     auto record_write = [&](const Forge::Pipeline& write_pipeline)
     {
@@ -2830,7 +2775,7 @@ TEST_CASE("Forge indirect draws", "[forge]")
 
     SECTION("An indirect draw runs the command a compute shader wrote")
     {
-        const Forge::Pipeline write_pipeline = make_write_pipeline(write_draws);
+        const Forge::Pipeline write_pipeline = MakeAddressPipeline(halves.forge.device, write_draws);
         const Opal::DynamicArray<u8> pixels =
             halves.Render(record_write(write_pipeline),
                           [&](Forge::CommandBuffer& command_buffer)
@@ -2849,7 +2794,7 @@ TEST_CASE("Forge indirect draws", "[forge]")
         {
             SKIP("This device cannot read more than one indirect command per call.");
         }
-        const Forge::Pipeline write_pipeline = make_write_pipeline(write_draws);
+        const Forge::Pipeline write_pipeline = MakeAddressPipeline(halves.forge.device, write_draws);
         const Opal::DynamicArray<u8> pixels =
             halves.Render(record_write(write_pipeline),
                           [&](Forge::CommandBuffer& command_buffer)
@@ -2867,7 +2812,7 @@ TEST_CASE("Forge indirect draws", "[forge]")
         const Opal::DynamicArray<u8> index_bytes = ToIndexBytes(k_half_indices + 6, 6, IndexSize::uint32);
         const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(halves.forge.device,
                                     {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
-        const Forge::Pipeline write_pipeline = make_write_pipeline(write_indexed_draw);
+        const Forge::Pipeline write_pipeline = MakeAddressPipeline(halves.forge.device, write_indexed_draw);
         const Opal::DynamicArray<u8> pixels =
             halves.Render(record_write(write_pipeline),
                           [&](Forge::CommandBuffer& command_buffer)
@@ -2901,16 +2846,8 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
     const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
 
-    auto make_pipeline = [&](const Forge::Shader& shader)
-    {
-        Forge::ComputePipelineDesc pipeline_desc;
-        pipeline_desc.shader = shader;
-        pipeline_desc.push_constant_ranges.PushBack(
-            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
-    };
-    const Forge::Pipeline write_pipeline = make_pipeline(write_dispatch);
-    const Forge::Pipeline compute_pipeline = make_pipeline(compute_shader);
+    const Forge::Pipeline write_pipeline = MakeAddressPipeline(fixture.device, write_dispatch);
+    const Forge::Pipeline compute_pipeline = MakeAddressPipeline(fixture.device, compute_shader);
 
     // Device-only, so the group counts cannot have come from the host.
     const Forge::Buffer group_counts = ForgeTest::Unwrap(Forge::Buffer::Create(
@@ -2920,19 +2857,8 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
          .host_access = Forge::HostAccess::None,
          .use_device_address = true}));
 
-    auto make_output = [&]
-    {
-        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
-                                              .usage = Forge::BufferUsageBits::StorageBuffer,
-                                              .host_access = Forge::HostAccess::Random,
-                                              .use_device_address = true}));
-        // Wiped first, so nothing left behind can pass for a dispatch that ran.
-        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
-        return output;
-    };
-    const Forge::Buffer indirect_output = make_output();
-    const Forge::Buffer direct_output = make_output();
+    const Forge::Buffer indirect_output = MakeWipedOutput(fixture.device, k_element_count);
+    const Forge::Buffer direct_output = MakeWipedOutput(fixture.device, k_element_count);
 
     const VkDeviceAddress group_counts_address = group_counts.GetNativeDeviceAddress();
     const VkDeviceAddress indirect_address = indirect_output.GetNativeDeviceAddress();
@@ -3918,29 +3844,8 @@ void CheckLifetimeContract(const char* type_name, Make&& make, CheckWorks&& chec
     REQUIRE_FALSE(move_assigned.IsValid());
 }
 
-/** The compute pipeline k_compute_source needs, which pushes the address it writes through. */
-Forge::Pipeline MakeAddressPipeline(const Forge::Device& device, const Forge::Shader& shader)
-{
-    Forge::ComputePipelineDesc pipeline_desc;
-    pipeline_desc.shader = shader;
-    pipeline_desc.push_constant_ranges.PushBack(
-        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    return ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
-}
-
-/** A wiped buffer of k_lifetime_elements, so nothing left in it can pass for a dispatch that ran. */
+/** How many elements the lifetime dispatches write. Small, since what they check is that the write happened at all. */
 constexpr i32 k_lifetime_elements = 64;
-
-Forge::Buffer MakeWipedOutput(const Forge::Device& device)
-{
-    Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = k_lifetime_elements * sizeof(u32),
-                                  .usage = Forge::BufferUsageBits::StorageBuffer,
-                                  .host_access = Forge::HostAccess::Random,
-                                  .use_device_address = true}));
-    const Opal::DynamicArray<u8> zeros(k_lifetime_elements * sizeof(u32));
-    REQUIRE(output.Update(zeros) == ErrorCode::Success);
-    return output;
-}
 
 /** Dispatch the address pipeline over one buffer and check every element it should have written. */
 void RequireDispatchWrites(const Forge::Device& device, Forge::DeviceQueue& queue, const Forge::Pipeline& pipeline,
@@ -3955,13 +3860,7 @@ void RequireDispatchWrites(const Forge::Device& device, Forge::DeviceQueue& queu
                                        ErrorCode::Success);
                                REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
                            }) == ErrorCode::Success);
-    Opal::DynamicArray<u32> values(k_lifetime_elements);
-    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
-    for (i32 i = 0; i < k_lifetime_elements; ++i)
-    {
-        INFO("element " << i);
-        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
-    }
+    RequireComputeWrote(output, k_lifetime_elements);
 }
 
 }  // namespace
@@ -4018,7 +3917,7 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
                           {
                               // Allocating is what needs the VMA allocator, which is one of the two members
                               // Device's move used to drop; the other was the enabled extension list.
-                              const Forge::Buffer buffer = MakeWipedOutput(device);
+                              const Forge::Buffer buffer = MakeWipedOutput(device, k_lifetime_elements);
                               REQUIRE(buffer.IsValid());
                               REQUIRE(device.GetNativeDevice() != VK_NULL_HANDLE);
                               REQUIRE(device.GetPhysicalDevice().IsValid());
@@ -4046,14 +3945,7 @@ TEST_CASE("Forge empty state and moves of the device stack", "[forge]")
     // The device goes before the check, because vkDestroyDevice is what names a queue's command pool that a
     // move assignment leaked. The context outlives it, so the message is still collected.
     device.Destroy();
-    Opal::StringUtf8 report;
-    for (const Forge::DebugMessage& message : context.GetDebugMessages())
-    {
-        report += message.text;
-        report += Opal::StringUtf8("\n");
-    }
-    INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 TEST_CASE("Forge empty state and moves of the resources", "[forge]")
@@ -4143,7 +4035,7 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                               REQUIRE(shader.GetShaderStage() == ShaderTypeBits::Compute);
                               REQUIRE(shader.GetEntryPoint() == Opal::StringUtf8("main_compute"));
                               const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, shader);
-                              const Forge::Buffer output = MakeWipedOutput(fixture.device);
+                              const Forge::Buffer output = MakeWipedOutput(fixture.device, k_lifetime_elements);
                               RequireDispatchWrites(fixture.device, fixture.GetQueue(), pipeline, output);
                           });
 
@@ -4156,7 +4048,7 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                               // constant the dispatch depends on goes through the layout.
                               REQUIRE(pipeline.GetNativePipelineLayout() != VK_NULL_HANDLE);
                               REQUIRE(pipeline.GetBindPoint() == VK_PIPELINE_BIND_POINT_COMPUTE);
-                              const Forge::Buffer output = MakeWipedOutput(fixture.device);
+                              const Forge::Buffer output = MakeWipedOutput(fixture.device, k_lifetime_elements);
                               RequireDispatchWrites(fixture.device, fixture.GetQueue(), pipeline, output);
                           });
 
@@ -4225,7 +4117,7 @@ TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
                           [&](Forge::DescriptorSet& set)
                           {
                               REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
-                              const Forge::Buffer output = MakeWipedOutput(fixture.device);
+                              const Forge::Buffer output = MakeWipedOutput(fixture.device, k_lifetime_elements);
                               REQUIRE(set.Update(0, output) == ErrorCode::Success);
                               REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                                      [&](Forge::CommandBuffer& command_buffer)
@@ -4848,11 +4740,7 @@ TEST_CASE("Forge barrier batches", "[forge]")
         // against the texture transition beside it, and the readback says both halves arrived.
         const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
-        Forge::ComputePipelineDesc pipeline_desc;
-        pipeline_desc.shader = compute_shader;
-        pipeline_desc.push_constant_ranges.PushBack(
-            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+        const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, compute_shader);
 
         const Forge::Buffer written = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
                                                      .usage = Forge::BufferUsageBits::StorageBuffer |
@@ -4890,13 +4778,7 @@ TEST_CASE("Forge barrier batches", "[forge]")
                 REQUIRE(command_buffer.CmdCopyBuffer(written, copied) == ErrorCode::Success);
             }) == ErrorCode::Success);
 
-        Opal::DynamicArray<u32> values(k_element_count);
-        REQUIRE(copied.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
-        for (i32 i = 0; i < k_element_count; ++i)
-        {
-            INFO("element " << i);
-            REQUIRE(values[i] == static_cast<u32>(i) + 1000);
-        }
+        RequireComputeWrote(copied, k_element_count);
         // The texture barrier in the same batch moved the texture, which is what makes this readback legal.
         REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferSource);
         Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
@@ -5049,11 +4931,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
         // copy would be free to land before the dispatch finished reading.
         const Forge::Shader compute_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
-        Forge::ComputePipelineDesc pipeline_desc;
-        pipeline_desc.shader = compute_shader;
-        pipeline_desc.push_constant_ranges.PushBack(
-            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+        const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, compute_shader);
 
         constexpr i32 k_element_count = 64;
         const Opal::DynamicArray<u8> replacement = MakeBytes(k_element_count * sizeof(u32), 13);
@@ -5122,17 +5000,7 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
                 }) == ErrorCode::Success);
     REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::Present);
 
-    Opal::StringUtf8 report;
-    for (const Forge::DebugMessage& message : context.GetDebugMessages())
-    {
-        if (message.severity == Forge::DebugMessageSeverity::Error && !!(message.types & Forge::DebugMessageTypeBits::Validation))
-        {
-            report += message.text;
-            report += Opal::StringUtf8("\n");
-        }
-    }
-    INFO(*report);
-    REQUIRE(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation).GetValue() == 0);
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
 TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
@@ -5174,16 +5042,6 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
                                                .host_access = Forge::HostAccess::Random},
                               {reinterpret_cast<const u8*>(input_values.GetData()), input_values.GetSize() * sizeof(u32)}));
 
-    auto make_wiped_output = [&]
-    {
-        Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
-                                              .usage = Forge::BufferUsageBits::StorageBuffer,
-                                              .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
-        return output;
-    };
-
     auto require_doubled = [&](const Forge::Buffer& output)
     {
         Opal::DynamicArray<u32> values(k_element_count);
@@ -5199,7 +5057,7 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
     {
         Forge::DescriptorSet first = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, first_layout));
         Forge::DescriptorSet second = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, second_layout));
-        const Forge::Buffer output = make_wiped_output();
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
         REQUIRE(first.Update(0, input) == ErrorCode::Success);
         REQUIRE(second.Update(0, output) == ErrorCode::Success);
 
@@ -5220,7 +5078,7 @@ TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
         // ignored first_set would overwrite set zero and the shader would read its output as its input.
         Forge::DescriptorSet first = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, first_layout));
         Forge::DescriptorSet second = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, second_layout));
-        const Forge::Buffer output = make_wiped_output();
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
         REQUIRE(first.Update(0, input) == ErrorCode::Success);
         REQUIRE(second.Update(0, output) == ErrorCode::Success);
 
@@ -5472,8 +5330,7 @@ TEST_CASE("Forge fill modes", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const VkPhysicalDeviceFeatures device_features = GetFirstPhysicalDeviceFeatures();
-    const bool has_wireframe = device_features.fillModeNonSolid == VK_TRUE;
+    const bool has_wireframe = CanCreateDevice({.fill_mode_non_solid = true});
     ForgeFixture fixture({.fill_mode_non_solid = has_wireframe});
     constexpr i32 k_side = 16;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
@@ -5938,8 +5795,7 @@ TEST_CASE("Forge depth clamp", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const VkPhysicalDeviceFeatures device_features = GetFirstPhysicalDeviceFeatures();
-    const bool has_depth_clamp = device_features.depthClamp == VK_TRUE;
+    const bool has_depth_clamp = CanCreateDevice({.depth_clamp = true});
     ForgeFixture fixture({.depth_clamp = has_depth_clamp});
     constexpr i32 k_side = 4;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
@@ -7315,11 +7171,7 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
     /** Bind one set, dispatch through it, and check the shader wrote what it should have. */
     auto require_set_works = [&](Forge::DescriptorSet& set)
     {
-        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
-                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
         REQUIRE(set.Update(0, output) == ErrorCode::Success);
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
@@ -7392,7 +7244,7 @@ TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     constexpr ForgeQueues k_queues{.async_compute = true};
-    if (!AreQueuesAvailable(k_queues))
+    if (!CanCreateDevice({}, k_queues))
     {
         SKIP("This device has no async compute family.");
     }
@@ -7404,20 +7256,11 @@ TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
 
     constexpr i32 k_element_count = 256;
     constexpr i32 k_group_size = 64;
-    const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
-                                                .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                .host_access = Forge::HostAccess::Random,
-                                                .use_device_address = true}));
-    const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-    REQUIRE(output.Update(zeros) == ErrorCode::Success);
+    const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
 
     const Forge::Shader compute_shader = ForgeTest::Unwrap(
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
-    Forge::ComputePipelineDesc pipeline_desc;
-    pipeline_desc.shader = compute_shader;
-    pipeline_desc.push_constant_ranges.PushBack(
-        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+    const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, compute_shader);
     const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
 
     // The command buffer comes out of the pool of the queue it is submitted to, which is the part a queue of
@@ -7431,12 +7274,7 @@ TEST_CASE("Forge a dispatch on the async compute queue", "[forge]")
                                REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
                            }) == ErrorCode::Success);
 
-    Opal::DynamicArray<u32> values(k_element_count);
-    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
-    for (i32 i = 0; i < k_element_count; ++i)
-    {
-        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
-    }
+    RequireComputeWrote(output, k_element_count);
 
     SECTION("Timestamps on that family are read with its own valid bits")
     {
@@ -7485,7 +7323,7 @@ TEST_CASE("Forge transfers on the dedicated transfer queue", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     constexpr ForgeQueues k_queues{.dedicated_transfer = true};
-    if (!AreQueuesAvailable(k_queues))
+    if (!CanCreateDevice({}, k_queues))
     {
         SKIP("This device has no dedicated transfer family.");
     }
@@ -7555,7 +7393,7 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     constexpr ForgeQueues k_queues{.async_compute = true};
-    if (!AreQueuesAvailable(k_queues))
+    if (!CanCreateDevice({}, k_queues))
     {
         SKIP("This device has no async compute family.");
     }
@@ -7583,11 +7421,7 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
 
     const Forge::Shader compute_shader = ForgeTest::Unwrap(
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
-    Forge::ComputePipelineDesc pipeline_desc;
-    pipeline_desc.shader = compute_shader;
-    pipeline_desc.push_constant_ranges.PushBack(
-        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+    const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, compute_shader);
     const VkDeviceAddress shared_address = shared.GetNativeDeviceAddress();
 
     // The release half, on the family that wrote the buffer. Its destination stages and access are empty:
@@ -7632,12 +7466,7 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
             ErrorCode::Success);
     REQUIRE(fence.Wait() == ErrorCode::Success);
 
-    Opal::DynamicArray<u32> values(k_element_count);
-    REQUIRE(host_visible.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
-    for (i32 i = 0; i < k_element_count; ++i)
-    {
-        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
-    }
+    RequireComputeWrote(host_visible, k_element_count);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
@@ -8615,19 +8444,6 @@ Vector4f BorderColorValue(BorderColor border_color)
     }
 }
 
-/** Whether this machine offers the feature ImageAddressMode::MirrorOnce needs. */
-bool IsMirrorClampToEdgeAvailable()
-{
-    static const bool available = []
-    {
-        // The fixture reports through status rather than asserting, and a device asked for a feature it does
-        // not have is what leaves a code there.
-        const ForgeFixture probe({.sampler_mirror_clamp_to_edge = true});
-        return probe.status == ErrorCode::Success;
-    }();
-    return available;
-}
-
 }  // namespace
 
 /**
@@ -8650,7 +8466,7 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    const bool has_mirror_once = IsMirrorClampToEdgeAvailable();
+    const bool has_mirror_once = CanCreateDevice({.sampler_mirror_clamp_to_edge = true});
     INFO("MIRROR_CLAMP_TO_EDGE available: " << has_mirror_once);
     ForgeFixture fixture({.sampler_mirror_clamp_to_edge = has_mirror_once});
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
@@ -9155,11 +8971,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
                                                     .use_device_address = true}));
         const Forge::Shader shader =
             ForgeTest::Unwrap(Forge::Shader::FromSpirvInMemory(fixture.device, spirv_view, {.entry_point = "main_compute"}));
-        Forge::ComputePipelineDesc pipeline_desc;
-        pipeline_desc.shader = shader;
-        pipeline_desc.push_constant_ranges.PushBack(
-            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+        const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, shader);
         const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                [&](Forge::CommandBuffer& command_buffer)
@@ -9169,12 +8981,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
                                                                    Opal::AsBytes(output_address)) == ErrorCode::Success);
                                    REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
                                }) == ErrorCode::Success);
-        Opal::DynamicArray<u32> values(k_element_count);
-        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
-        for (i32 i = 0; i < k_element_count; ++i)
-        {
-            REQUIRE(values[i] == static_cast<u32>(i) + 1000);
-        }
+        RequireComputeWrote(output, k_element_count);
     }
     SECTION("An entry point the module does not hold is refused")
     {
@@ -9639,17 +9446,6 @@ float4 main_mesh_fragment() : SV_Target
 }
 )";
 
-/** Whether this machine can create a device with the mesh shader stage on it. */
-bool IsMeshShaderAvailable()
-{
-    static const bool available = []
-    {
-        const ForgeFixture probe({.mesh_shader = true});
-        return probe.status == ErrorCode::Success;
-    }();
-    return available;
-}
-
 }  // namespace
 
 /**
@@ -9663,7 +9459,7 @@ TEST_CASE("Forge a mesh shader draw", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    if (!IsMeshShaderAvailable())
+    if (!CanCreateDevice({.mesh_shader = true}))
     {
         SKIP("This device has no VK_EXT_mesh_shader.");
     }
