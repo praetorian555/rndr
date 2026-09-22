@@ -264,6 +264,37 @@ void RequireComputeWrote(const Forge::Buffer& output, i32 element_count)
 }
 
 /**
+ * Uploads bytes into one mip level of a texture, every array layer of that level packed one after another.
+ *
+ * @param reader The stage that reads the texture afterwards, which is the barrier the upload closes with.
+ *        Compute by default, since that is what most of the cases here dispatch; a draw that samples in its
+ *        fragment stage has to say so, or the barrier names a stage the read never happens in and the layer
+ *        has nothing to object to. PipelineStageBits::None leaves the texture in TransferDestination, which
+ *        is where a texture nothing samples belongs - ShaderReadOnly is a layout an image without the Sampled
+ *        usage cannot be in.
+ */
+void UploadMip(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels,
+               u32 mip_level, Forge::PipelineStageBits reader = Forge::PipelineStageBits::ComputeShader)
+{
+    const Forge::Buffer staging = ForgeTest::Unwrap(
+        Forge::Buffer::Create(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels));
+    const Forge::BufferTextureCopyRegion region{
+        .texture_subresource = {.mip_level = mip_level, .array_layer_count = texture.GetDesc().array_layer_count}};
+    REQUIRE(Forge::ImmediateSubmit(device, queue,
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) ==
+                                               ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1}) == ErrorCode::Success);
+                                       if (reader != Forge::PipelineStageBits::None)
+                                       {
+                                           REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToShaderRead(texture, reader)) ==
+                                                   ErrorCode::Success);
+                                       }
+                                   }) == ErrorCode::Success);
+}
+
+/**
  * One buffer filled by two command buffers, a half each, which is what the submit cases drive through the
  * queue in whichever batches they are about: a batch that dropped either one shows as half the buffer
  * missing rather than as nothing at all. Both command buffers are recorded and ended here, so a case only
@@ -5495,6 +5526,208 @@ TEST_CASE("Forge copies from a texture into a buffer", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+namespace
+{
+
+/** Pixels whose every texel differs from every other, so a copy that shifted or mirrored shows up. */
+Opal::DynamicArray<u8> MakeTexelGradient(i32 width, i32 height, i32 layer_count = 1)
+{
+    Opal::DynamicArray<u8> pixels(width * height * layer_count * 4);
+    for (i32 texel = 0; texel < width * height * layer_count; ++texel)
+    {
+        pixels[texel * 4 + 0] = static_cast<u8>(texel * 16 + 1);
+        pixels[texel * 4 + 1] = static_cast<u8>(255 - texel * 16);
+        pixels[texel * 4 + 2] = static_cast<u8>(texel * 8 + 3);
+        pixels[texel * 4 + 3] = 255;
+    }
+    return pixels;
+}
+
+/** Every texel of a level, one colour, for a destination whose untouched parts have to be recognisable. */
+Opal::DynamicArray<u8> MakeFlatPixels(i32 texel_count, u8 red, u8 green, u8 blue)
+{
+    Opal::DynamicArray<u8> pixels(texel_count * 4);
+    for (i32 texel = 0; texel < texel_count; ++texel)
+    {
+        pixels[texel * 4 + 0] = red;
+        pixels[texel * 4 + 1] = green;
+        pixels[texel * 4 + 2] = blue;
+        pixels[texel * 4 + 3] = 255;
+    }
+    return pixels;
+}
+
+}  // namespace
+
+TEST_CASE("Forge copies one texture into another", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr Forge::TextureUsageBits k_both_ways = Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
+
+    /** A copy of the regions given, with both textures barriered into the layouts a copy reads them in. */
+    auto copy_regions = [&](Forge::Texture& source, Forge::Texture& destination, Opal::ArrayView<const Forge::TextureCopyRegion> regions)
+    {
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdTextureBarrier(
+                                                       Forge::TextureBarrier::ToTransferDestination(destination)) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdCopyTexture(source, destination, regions) == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+    };
+
+    SECTION("A whole mip level arrives texel for texel")
+    {
+        const Opal::DynamicArray<u8> source_pixels = MakeTexelGradient(k_side, k_side);
+        Forge::Texture source = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = k_both_ways}));
+        UploadMip(fixture.device, fixture.GetQueue(), source, {source_pixels.GetData(), source_pixels.GetSize()}, 0,
+                  Forge::PipelineStageBits::None);
+        Forge::Texture destination = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = k_both_ways}));
+
+        // A zero extent is the rest of the source level, which for a region starting at the origin is all
+        // of it.
+        const Forge::TextureCopyRegion region{};
+        copy_regions(source, destination, {&region, 1});
+
+        Opal::DynamicArray<u8> read_back(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, read_back, 0,
+                                       Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+        REQUIRE(CountMismatches({source_pixels.GetData(), source_pixels.GetSize()}, {read_back.GetData(), read_back.GetSize()}) == 0);
+    }
+    SECTION("A sub box lands at the offset the destination names")
+    {
+        // The top right quarter of the source into the bottom left quarter of the destination. Both offsets
+        // differ and neither is zero, so a copy that ignored one of them lands somewhere this can see.
+        const Opal::DynamicArray<u8> source_pixels = MakeTexelGradient(k_side, k_side);
+        Forge::Texture source = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = k_both_ways}));
+        UploadMip(fixture.device, fixture.GetQueue(), source, {source_pixels.GetData(), source_pixels.GetSize()}, 0,
+                  Forge::PipelineStageBits::None);
+
+        const Opal::DynamicArray<u8> filler = MakeFlatPixels(k_side * k_side, 7, 7, 7);
+        Forge::Texture destination = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = k_both_ways}));
+        UploadMip(fixture.device, fixture.GetQueue(), destination, {filler.GetData(), filler.GetSize()}, 0,
+                  Forge::PipelineStageBits::None);
+
+        constexpr i32 k_box = k_side / 2;
+        const Forge::TextureCopyRegion region{
+            .source_offset = {k_box, 0, 0}, .destination_offset = {0, k_box, 0}, .extent = {k_box, k_box, 1}};
+        copy_regions(source, destination, {&region, 1});
+
+        Opal::DynamicArray<u8> read_back(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, read_back, 0,
+                                       Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                INFO("texel " << x << " " << y);
+                const i32 destination_texel = (y * k_side + x) * 4;
+                const bool inside_box = x < k_box && y >= k_box;
+                if (inside_box)
+                {
+                    const i32 source_texel = ((y - k_box) * k_side + x + k_box) * 4;
+                    REQUIRE(read_back[destination_texel + 0] == source_pixels[source_texel + 0]);
+                    REQUIRE(read_back[destination_texel + 1] == source_pixels[source_texel + 1]);
+                    REQUIRE(read_back[destination_texel + 2] == source_pixels[source_texel + 2]);
+                }
+                else
+                {
+                    REQUIRE(static_cast<i32>(read_back[destination_texel + 0]) == 7);
+                    REQUIRE(static_cast<i32>(read_back[destination_texel + 1]) == 7);
+                    REQUIRE(static_cast<i32>(read_back[destination_texel + 2]) == 7);
+                }
+            }
+        }
+    }
+    SECTION("The mip level is named on each side of the copy")
+    {
+        // The whole of the source's top level into the second level of the destination, which is the same
+        // size. A copy that took the level from the wrong side would be copying between a 4 and a 2.
+        constexpr i32 k_half = k_side / 2;
+        const Opal::DynamicArray<u8> source_pixels = MakeTexelGradient(k_half, k_half);
+        Forge::Texture source = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_format, .width = k_half, .height = k_half, .usage = k_both_ways}));
+        UploadMip(fixture.device, fixture.GetQueue(), source, {source_pixels.GetData(), source_pixels.GetSize()}, 0,
+                  Forge::PipelineStageBits::None);
+
+        Forge::Texture destination = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format, .width = k_side, .height = k_side, .mip_level_count = 2, .usage = k_both_ways}));
+        const Opal::DynamicArray<u8> top_filler = MakeFlatPixels(k_side * k_side, 9, 9, 9);
+        UploadMip(fixture.device, fixture.GetQueue(), destination, {top_filler.GetData(), top_filler.GetSize()}, 0,
+                  Forge::PipelineStageBits::None);
+        const Opal::DynamicArray<u8> second_filler = MakeFlatPixels(k_half * k_half, 9, 9, 9);
+        UploadMip(fixture.device, fixture.GetQueue(), destination, {second_filler.GetData(), second_filler.GetSize()}, 1,
+                  Forge::PipelineStageBits::None);
+
+        const Forge::TextureCopyRegion region{.destination = {.mip_level = 1}};
+        copy_regions(source, destination, {&region, 1});
+
+        Opal::DynamicArray<u8> second_level(k_half * k_half * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, second_level, 1,
+                                       Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+        REQUIRE(CountMismatches({source_pixels.GetData(), source_pixels.GetSize()}, {second_level.GetData(), second_level.GetSize()}) == 0);
+
+        // And the level beside it is the filler still, so the copy went to the level it named and not to
+        // whichever one the destination starts at.
+        Opal::DynamicArray<u8> top_level(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, top_level, 0,
+                                       Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+        REQUIRE(CountMismatches({top_filler.GetData(), top_filler.GetSize()}, {top_level.GetData(), top_level.GetSize()}) == 0);
+    }
+    SECTION("One array layer is copied into another")
+    {
+        // Two layers on each side, and the copy crosses them: the second layer of the source into the first
+        // of the destination. The layers of the source differ from one another, so a copy that took layer
+        // zero comes back as the wrong half.
+        const Opal::DynamicArray<u8> source_pixels = MakeTexelGradient(k_side, k_side, 2);
+        Forge::Texture source = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format,
+                             .width = k_side,
+                             .height = k_side,
+                             .array_layer_count = 2,
+                             .usage = k_both_ways,
+                             .view_type = Forge::TextureViewType::Texture2DArray}));
+        UploadMip(fixture.device, fixture.GetQueue(), source, {source_pixels.GetData(), source_pixels.GetSize()}, 0,
+                  Forge::PipelineStageBits::None);
+
+        const Opal::DynamicArray<u8> filler = MakeFlatPixels(k_side * k_side * 2, 5, 5, 5);
+        Forge::Texture destination = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format,
+                             .width = k_side,
+                             .height = k_side,
+                             .array_layer_count = 2,
+                             .usage = k_both_ways,
+                             .view_type = Forge::TextureViewType::Texture2DArray}));
+        UploadMip(fixture.device, fixture.GetQueue(), destination, {filler.GetData(), filler.GetSize()}, 0,
+                  Forge::PipelineStageBits::None);
+
+        const Forge::TextureCopyRegion region{.source = {.first_array_layer = 1}, .destination = {.first_array_layer = 0}};
+        copy_regions(source, destination, {&region, 1});
+
+        // Both layers come back at once, packed one after the other, which is what a readback of a mip level
+        // of an array hands over.
+        const i32 layer_size = k_side * k_side * 4;
+        Opal::DynamicArray<u8> read_back(layer_size * 2);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), destination, read_back, 0,
+                                       Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+        REQUIRE(CountMismatches({source_pixels.GetData() + layer_size, layer_size}, {read_back.GetData(), layer_size}) == 0);
+        REQUIRE(CountMismatches({filler.GetData() + layer_size, layer_size}, {read_back.GetData() + layer_size, layer_size}) == 0);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge mip level sizes", "[forge]")
 {
     // No device: GetMipLevelSize reads a desc and nothing else, so this is the one case here that needs
@@ -7530,31 +7763,6 @@ Opal::DynamicArray<u8> MakeTwoTexelRow()
     bytes[6] = 0;
     bytes[7] = 255;
     return bytes;
-}
-
-/**
- * Uploads bytes into one mip level of a texture and leaves it where a shader can read it.
- *
- * @param reader The stage that samples the texture afterwards. Compute by default, since that is what most
- *        of the cases here dispatch; a draw that samples in its fragment stage has to say so, or the barrier
- *        names a stage the read never happens in and the layer has nothing to object to.
- */
-void UploadMip(const Forge::Device& device, Forge::DeviceQueue& queue, Forge::Texture& texture, Opal::ArrayView<const u8> pixels,
-               u32 mip_level, Forge::PipelineStageBits reader = Forge::PipelineStageBits::ComputeShader)
-{
-    const Forge::Buffer staging = ForgeTest::Unwrap(
-        Forge::Buffer::Create(device, {.size = pixels.GetSize(), .usage = Forge::BufferUsageBits::TransferSource}, pixels));
-    const Forge::BufferTextureCopyRegion region{
-        .texture_subresource = {.mip_level = mip_level, .array_layer_count = texture.GetDesc().array_layer_count}};
-    REQUIRE(Forge::ImmediateSubmit(device, queue,
-                                   [&](Forge::CommandBuffer& command_buffer)
-                                   {
-                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(texture)) ==
-                                               ErrorCode::Success);
-                                       REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, texture, {&region, 1}) == ErrorCode::Success);
-                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToShaderRead(texture, reader)) ==
-                                               ErrorCode::Success);
-                                   }) == ErrorCode::Success);
 }
 
 }  // namespace
