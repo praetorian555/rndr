@@ -6320,13 +6320,15 @@ Vector2f TexelCentre(i32 side, i32 x, i32 y)
 Opal::Expected<Forge::Pipeline, ErrorCode> MakeRasterPipeline(const Forge::Device& device, const Forge::Shader& vertex_shader,
                                                               const Forge::Shader& fragment_shader, PixelFormat format,
                                                               const Forge::RasterizerDesc& rasterizer,
-                                                              PrimitiveTopology topology = PrimitiveTopology::Triangle)
+                                                              PrimitiveTopology topology = PrimitiveTopology::Triangle,
+                                                              Forge::DynamicStateBits dynamic_state = Forge::DynamicStateBits::None)
 {
     Forge::GraphicsPipelineDesc pipeline_desc;
     pipeline_desc.vertex_shader = vertex_shader;
     pipeline_desc.fragment_shader = fragment_shader;
     pipeline_desc.rasterizer = rasterizer;
     pipeline_desc.topology = topology;
+    pipeline_desc.dynamic_state = dynamic_state;
     pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
     REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
     pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
@@ -6568,6 +6570,85 @@ TEST_CASE("Forge topologies", "[forge]")
         REQUIRE(IsCovered(pixels, k_side, 1, 1));
         REQUIRE(IsCovered(pixels, k_side, 5, 2));
         REQUIRE(IsCovered(pixels, k_side, 3, 6));
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge wide lines", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_wide_lines{.wide_lines = true};
+    if (!CanCreateDevice(k_wide_lines))
+    {
+        SKIP("This device draws lines one pixel wide only.");
+    }
+    ForgeFixture fixture(k_wide_lines);
+    constexpr i32 k_side = 8;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr i32 k_line_row = 4;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
+
+    // Along the centres of one row, the way the topology case draws it, so a line one pixel wide lands on
+    // that row and the width is the only thing that moves the rest.
+    const Vector2f left = TexelCentre(k_side, 0, k_line_row);
+    const Vector2f right = TexelCentre(k_side, k_side - 1, k_line_row);
+    const f32 line_vertices[] = {left.x, left.y, right.x, right.y};
+    const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(
+        fixture.device, {.size = sizeof(line_vertices), .usage = Forge::BufferUsageBits::VertexBuffer}, Opal::AsBytes(line_vertices)));
+    const Forge::Pipeline pipeline =
+        ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None},
+                                             PrimitiveTopology::Line, Forge::DynamicStateBits::LineWidth));
+
+    /** Which rows the line covered when drawn that wide. */
+    auto rows_covered = [&](f32 width)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdSetLineWidth(width) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(2) == ErrorCode::Success);
+                                                           });
+        Opal::DynamicArray<i32> rows;
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                if (IsCovered(pixels, k_side, x, y))
+                {
+                    rows.PushBack(y);
+                    break;
+                }
+            }
+        }
+        return rows;
+    };
+
+    const Opal::DynamicArray<i32> thin = rows_covered(1.0f);
+    REQUIRE(thin.GetSize() == 1);
+    REQUIRE(thin[0] == k_line_row);
+
+    // Three pixels wide, which a device with the feature draws as a band centred on the line. How the band
+    // is placed is the driver's to decide - the rule covers a rectangle around the segment and the rounding
+    // at its edges is not pinned down - so this asks for more rows than the thin line had, all of them
+    // within one of it, rather than naming the three.
+    const Opal::DynamicArray<i32> wide = rows_covered(3.0f);
+    REQUIRE(wide.GetSize() > thin.GetSize());
+    for (i32 i = 0; i < wide.GetSize(); ++i)
+    {
+        INFO("covered row " << wide[i]);
+        REQUIRE(wide[i] >= k_line_row - 1);
+        REQUIRE(wide[i] <= k_line_row + 1);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -7314,6 +7395,253 @@ TEST_CASE("Forge depth testing", "[forge]")
             REQUIRE(static_cast<i32>(result.pixels[i * 4 + 1]) == 0);
         }
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/** The depth format the bias cases render into, and the one depth every draw below starts from. */
+constexpr PixelFormat k_bias_depth_format = PixelFormat::D32_SFLOAT;
+constexpr f32 k_bias_quad_depth = 0.5f;
+
+/**
+ * A constant factor big enough that the bias it produces is worth measuring. Vulkan scales it by the
+ * smallest difference the depth format resolves near the primitive, which for a float depth around a half is
+ * about six times ten to the minus eight - so a factor of a hundred thousand moves the depth by a few
+ * thousandths and a factor of one would move it by nothing a test could see.
+ */
+constexpr f32 k_bias_constant_factor = 100000.0f;
+
+}  // namespace
+
+TEST_CASE("Forge depth bias", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+    const Forge::Buffer quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(k_bias_quad_depth));
+    const Vector4f draw_color = ByteColor(0, 255, 0, 255);
+
+    /** A pipeline that always writes depth, with whatever bias state the case is about. */
+    auto make_pipeline = [&](const Forge::RasterizerDesc& rasterizer, Forge::DynamicStateBits dynamic_state)
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_color_format);
+        pipeline_desc.rasterizer = rasterizer;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.dynamic_state = dynamic_state;
+        pipeline_desc.depth_stencil.depth_test_enabled = true;
+        pipeline_desc.depth_stencil.depth_write_enabled = true;
+        pipeline_desc.depth_stencil.depth_comparator = Comparator::Always;
+        pipeline_desc.depth_attachment_format = k_bias_depth_format;
+        return Forge::Pipeline::Create(fixture.device, pipeline_desc);
+    };
+
+    /**
+     * Draw the quad once and hand back the depth it left. The quad is flat and faces the viewer, so its
+     * slope is zero and the constant factor is the only term of the bias that can move anything.
+     */
+    auto depth_after_draw = [&](const Forge::Pipeline& pipeline, auto&& before_draw)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                        {.format = k_bias_depth_format,
+                                                                         .width = k_side,
+                                                                         .height = k_side,
+                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                                                                  Forge::TextureUsageBits::TransferSource}));
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) ==
+                                ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f}}},
+                            .depth_attachment = Forge::RenderingAttachmentDesc{
+                                .texture = depth,
+                                .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                .store_operation = Forge::AttachmentStoreOperation::Store,
+                                .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        before_draw(command_buffer);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(draw_color)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> depth_bytes(k_side * k_side * sizeof(f32));
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, depth_bytes, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        f32 first_depth = 0.0f;
+        memcpy(&first_depth, depth_bytes.GetData(), sizeof(f32));
+        return first_depth;
+    };
+
+    auto no_setup = [](Forge::CommandBuffer&) {};
+
+    SECTION("A quad drawn without bias lands at the depth it was given")
+    {
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(make_pipeline({}, Forge::DynamicStateBits::None));
+        REQUIRE(depth_after_draw(pipeline, no_setup) == Catch::Approx(k_bias_quad_depth).margin(0.0001));
+    }
+    SECTION("A constant bias moves the depth in the direction of its sign")
+    {
+        const Forge::Pipeline pushed_back = ForgeTest::Unwrap(make_pipeline(
+            {.depth_bias_enabled = true, .depth_bias_constant_factor = k_bias_constant_factor}, Forge::DynamicStateBits::None));
+        const f32 further = depth_after_draw(pushed_back, no_setup);
+        INFO("depth with a positive bias " << further);
+        REQUIRE(further > k_bias_quad_depth + 0.0005f);
+        REQUIRE(further < 1.0f);
+
+        const Forge::Pipeline pulled_forward = ForgeTest::Unwrap(make_pipeline(
+            {.depth_bias_enabled = true, .depth_bias_constant_factor = -k_bias_constant_factor}, Forge::DynamicStateBits::None));
+        const f32 nearer = depth_after_draw(pulled_forward, no_setup);
+        INFO("depth with a negative bias " << nearer);
+        REQUIRE(nearer < k_bias_quad_depth - 0.0005f);
+        REQUIRE(nearer > 0.0f);
+    }
+    SECTION("A pipeline that leaves the bias dynamic takes it from the command")
+    {
+        // The desc carries no factor at all, so a depth that moved is the command's doing and nothing else.
+        const Forge::Pipeline pipeline =
+            ForgeTest::Unwrap(make_pipeline({.depth_bias_enabled = true}, Forge::DynamicStateBits::DepthBias));
+        const f32 unbiased = depth_after_draw(pipeline, [](Forge::CommandBuffer& command_buffer)
+                                              { REQUIRE(command_buffer.CmdSetDepthBias(0.0f) == ErrorCode::Success); });
+        INFO("depth with a dynamic bias of zero " << unbiased);
+        REQUIRE(unbiased == Catch::Approx(k_bias_quad_depth).margin(0.0001));
+
+        const f32 biased = depth_after_draw(pipeline,
+                                            [](Forge::CommandBuffer& command_buffer) {
+                                                REQUIRE(command_buffer.CmdSetDepthBias(k_bias_constant_factor) == ErrorCode::Success);
+                                            });
+        INFO("depth with a dynamic bias " << biased);
+        REQUIRE(biased > k_bias_quad_depth + 0.0005f);
+    }
+    SECTION("A bias clamp on a device without the feature is refused")
+    {
+        // The static counterpart of the CmdSetDepthBias guard: the fixture asked for no features, and a
+        // non-zero clamp is one.
+        REQUIRE_FALSE(fixture.device.GetFeatures().depth_bias_clamp);
+        REQUIRE_FALSE(make_pipeline({.depth_bias_enabled = true,
+                                     .depth_bias_constant_factor = k_bias_constant_factor,
+                                     .depth_bias_clamp = 0.001f},
+                                    Forge::DynamicStateBits::None)
+                          .HasValue());
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a clamped depth bias", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_bias_clamp{.depth_bias_clamp = true};
+    if (!CanCreateDevice(k_bias_clamp))
+    {
+        SKIP("This device cannot clamp the depth bias.");
+    }
+    ForgeFixture fixture(k_bias_clamp);
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr f32 k_clamp = 0.002f;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+    const Forge::Buffer quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(k_bias_quad_depth));
+    const Vector4f draw_color = ByteColor(0, 255, 0, 255);
+
+    /** The same draw as the case above, with the clamp the pipeline was built with. */
+    auto depth_with_clamp = [&](f32 clamp)
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_color_format);
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.rasterizer.depth_bias_enabled = true;
+        // Far more bias than the clamp allows, so what comes back is the clamp rather than the factor.
+        pipeline_desc.rasterizer.depth_bias_constant_factor = 10.0f * k_bias_constant_factor;
+        pipeline_desc.rasterizer.depth_bias_clamp = clamp;
+        pipeline_desc.depth_stencil.depth_test_enabled = true;
+        pipeline_desc.depth_stencil.depth_write_enabled = true;
+        pipeline_desc.depth_stencil.depth_comparator = Comparator::Always;
+        pipeline_desc.depth_attachment_format = k_bias_depth_format;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                        {.format = k_bias_depth_format,
+                                                                         .width = k_side,
+                                                                         .height = k_side,
+                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                                                                  Forge::TextureUsageBits::TransferSource}));
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) ==
+                                ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f}}},
+                            .depth_attachment = Forge::RenderingAttachmentDesc{
+                                .texture = depth,
+                                .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                .store_operation = Forge::AttachmentStoreOperation::Store,
+                                .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(draw_color)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> depth_bytes(k_side * k_side * sizeof(f32));
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, depth_bytes, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        f32 first_depth = 0.0f;
+        memcpy(&first_depth, depth_bytes.GetData(), sizeof(f32));
+        return first_depth;
+    };
+
+    // Unclamped, the bias is large enough to push the quad to the far end of the range. The clamp is the
+    // largest bias allowed, so the same draw through it stops a couple of thousandths past where it started.
+    const f32 unclamped = depth_with_clamp(0.0f);
+    INFO("depth with no clamp " << unclamped);
+    const f32 clamped = depth_with_clamp(k_clamp);
+    INFO("depth with a clamp of " << k_clamp << " is " << clamped);
+    REQUIRE(clamped < unclamped);
+    REQUIRE(clamped > k_bias_quad_depth);
+    REQUIRE(clamped <= k_bias_quad_depth + k_clamp + 0.0001f);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
