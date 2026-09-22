@@ -13,6 +13,7 @@
 #include "opal/container/in-place-array.h"
 #include "opal/exceptions.h"
 
+#include "rndr/bitmap.hpp"
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/command-buffer.hpp"
 #include "rndr/forge/debug.hpp"
@@ -747,6 +748,159 @@ TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
         Opal::DynamicArray<u8> too_small(4);
         REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, too_small, 0,
                                        Forge::ImageLayout::TransferDestination) != ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/** A bitmap of that size whose every pixel differs from every other, so a copy that shifted shows up. */
+Bitmap MakeGradientBitmap(i32 width, i32 height)
+{
+    Opal::DynamicArray<u8> pixels(width * height * 4);
+    for (i32 pixel = 0; pixel < width * height; ++pixel)
+    {
+        pixels[pixel * 4 + 0] = static_cast<u8>(pixel * 16);
+        pixels[pixel * 4 + 1] = static_cast<u8>(255 - pixel * 16);
+        pixels[pixel * 4 + 2] = static_cast<u8>(pixel * 8);
+        pixels[pixel * 4 + 3] = 255;
+    }
+    return ForgeTest::Unwrap(Bitmap::Create(width, height, 1, PixelFormat::R8G8B8A8_UNORM, 1, {pixels.GetData(), pixels.GetSize()}));
+}
+
+}  // namespace
+
+TEST_CASE("Forge a bitmap uploaded into a texture", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+
+    SECTION("The texture takes its extent, format and pixels from the bitmap")
+    {
+        // The desc says nothing about the size or the format on purpose: the bitmap is what those come from,
+        // and a desc that repeated them would hide a path that read the wrong one.
+        const Bitmap bitmap = MakeGradientBitmap(k_side, k_side);
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, fixture.GetQueue(), bitmap,
+            {.usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferSource}));
+
+        REQUIRE(texture.GetDesc().width == static_cast<u32>(k_side));
+        REQUIRE(texture.GetDesc().height == static_cast<u32>(k_side));
+        REQUIRE(texture.GetDesc().mip_level_count == 1);
+        REQUIRE(texture.GetDesc().format == bitmap.GetPixelFormat());
+        // The upload leaves it where a shader reads it, which is what the sample relies on and what the
+        // usage above has to allow.
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::ShaderReadOnly);
+
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::ShaderReadOnly) ==
+                ErrorCode::Success);
+        REQUIRE(CountMismatches({bitmap.GetData(), bitmap.GetTotalSize()}, {pixels.GetData(), pixels.GetSize()}) == 0);
+    }
+    SECTION("Generating the mips gives the texture the whole chain")
+    {
+        if (!fixture.device.GetPhysicalDevice().SupportsBlit(PixelFormat::R8G8B8A8_UNORM, true) ||
+            !fixture.device.GetPhysicalDevice().SupportsBlit(PixelFormat::R8G8B8A8_UNORM, false))
+        {
+            SKIP("This device cannot blit R8G8B8A8_UNORM, so it cannot generate mips for one.");
+        }
+        // One colour everywhere, so every level below the first has to hold that colour whichever way the
+        // driver filters it down.
+        Opal::DynamicArray<u8> flat(k_side * k_side * 4);
+        for (i32 pixel = 0; pixel < k_side * k_side; ++pixel)
+        {
+            flat[pixel * 4 + 0] = 10;
+            flat[pixel * 4 + 1] = 200;
+            flat[pixel * 4 + 2] = 30;
+            flat[pixel * 4 + 3] = 255;
+        }
+        const Bitmap bitmap =
+            ForgeTest::Unwrap(Bitmap::Create(k_side, k_side, 1, PixelFormat::R8G8B8A8_UNORM, 1, {flat.GetData(), flat.GetSize()}));
+
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, fixture.GetQueue(), bitmap, {.usage = Forge::TextureUsageBits::Sampled}, true));
+        // Four texels across is three levels, and the bitmap carried one of them.
+        REQUIRE(texture.GetDesc().mip_level_count == 3);
+
+        for (u32 mip_level = 1; mip_level < 3; ++mip_level)
+        {
+            const i32 side = k_side >> mip_level;
+            Opal::DynamicArray<u8> pixels(side * side * 4);
+            REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, mip_level,
+                                           Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+            for (i32 pixel = 0; pixel < side * side; ++pixel)
+            {
+                INFO("mip level " << mip_level << " pixel " << pixel);
+                REQUIRE(static_cast<i32>(pixels[pixel * 4 + 0]) == 10);
+                REQUIRE(static_cast<i32>(pixels[pixel * 4 + 1]) == 200);
+                REQUIRE(static_cast<i32>(pixels[pixel * 4 + 2]) == 30);
+            }
+        }
+    }
+    SECTION("The copy command reads the mip levels out of the bitmap")
+    {
+        // The overload that takes a bitmap rather than a list of regions: where each level sits in the buffer
+        // is the bitmap's to say. The two levels are given colours with no channel in common, so a level
+        // copied from the wrong offset comes back as the other one.
+        Bitmap bitmap = ForgeTest::Unwrap(Bitmap::Create(k_side, k_side, 1, PixelFormat::R8G8B8A8_UNORM, 2));
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                bitmap.SetPixel(x, y, 0, 0, Vector4f{1.0f, 0.0f, 0.0f, 1.0f});
+            }
+        }
+        for (i32 y = 0; y < k_side / 2; ++y)
+        {
+            for (i32 x = 0; x < k_side / 2; ++x)
+            {
+                bitmap.SetPixel(x, y, 0, 1, Vector4f{0.0f, 1.0f, 0.0f, 1.0f});
+            }
+        }
+
+        const Forge::Buffer staging = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = bitmap.GetTotalSize(), .usage = Forge::BufferUsageBits::TransferSource},
+            {bitmap.GetData(), bitmap.GetTotalSize()}));
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                          {.format = PixelFormat::R8G8B8A8_UNORM,
+                                                                           .width = k_side,
+                                                                           .height = k_side,
+                                                                           .mip_level_count = 2,
+                                                                           .usage = Forge::TextureUsageBits::TransferDestination |
+                                                                                    Forge::TextureUsageBits::TransferSource}));
+
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdTextureBarrier(
+                                                       Forge::TextureBarrier::ToTransferDestination(texture)) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, bitmap, texture) == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> top(k_side * k_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, top, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        for (i32 pixel = 0; pixel < k_side * k_side; ++pixel)
+        {
+            INFO("top level pixel " << pixel);
+            REQUIRE(static_cast<i32>(top[pixel * 4 + 0]) == 255);
+            REQUIRE(static_cast<i32>(top[pixel * 4 + 1]) == 0);
+        }
+
+        Opal::DynamicArray<u8> bottom((k_side / 2) * (k_side / 2) * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, bottom, 1, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        for (i32 pixel = 0; pixel < (k_side / 2) * (k_side / 2); ++pixel)
+        {
+            INFO("second level pixel " << pixel);
+            REQUIRE(static_cast<i32>(bottom[pixel * 4 + 0]) == 0);
+            REQUIRE(static_cast<i32>(bottom[pixel * 4 + 1]) == 255);
+        }
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
