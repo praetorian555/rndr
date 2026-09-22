@@ -290,6 +290,13 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
         RNDR_LOG_ERROR("Forge: a cube view needs an array layer count that is a multiple of six, got {}", m_desc.array_layer_count);
         return ErrorCode::InvalidArgument;
     }
+    // More than one cube under one view is a feature of its own, and a device that does not have it rejects
+    // the view rather than taking it and reading the first cube.
+    if (m_desc.view_type == TextureViewType::CubeArray && !device.GetFeatures().image_cube_array)
+    {
+        RNDR_LOG_ERROR("Forge: a cube array view needs the device created with DeviceFeatures::image_cube_array");
+        return ErrorCode::InvalidArgument;
+    }
 
     RNDR_FORGE_TRANSLATE(image_type, ToVkImageType(m_desc.dimension), "TextureDesc::dimension");
     RNDR_FORGE_TRANSLATE(sample_count, ToVkSampleCount(m_desc.sample_count), "TextureDesc::sample_count");

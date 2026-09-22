@@ -77,6 +77,8 @@ struct DeviceFeatures
     bool sampler_mirror_clamp_to_edge = false;
     /** BC compressed texture formats. */
     bool texture_compression_bc = false;
+    /** Views of TextureViewType::CubeArray, which a texture naming one is refused without. */
+    bool image_cube_array = false;
 
     // Shaders.
     bool shader_int16 = false;

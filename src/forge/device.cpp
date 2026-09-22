@@ -136,6 +136,7 @@ struct FeatureChain
         features2.features.drawIndirectFirstInstance = features.draw_indirect_first_instance;
         features2.features.samplerAnisotropy = features.sampler_anisotropy;
         features2.features.textureCompressionBC = features.texture_compression_bc;
+        features2.features.imageCubeArray = features.image_cube_array;
         features2.features.shaderInt16 = features.shader_int16;
         features2.features.shaderInt64 = features.shader_int64;
         features2.features.shaderFloat64 = features.shader_float64;
@@ -254,6 +255,7 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.draw_indirect_first_instance, core.drawIndirectFirstInstance, "draw_indirect_first_instance");
     require(requested.sampler_anisotropy, core.samplerAnisotropy, "sampler_anisotropy");
     require(requested.texture_compression_bc, core.textureCompressionBC, "texture_compression_bc");
+    require(requested.image_cube_array, core.imageCubeArray, "image_cube_array");
     require(requested.shader_int16, core.shaderInt16, "shader_int16");
     require(requested.shader_int64, core.shaderInt64, "shader_int64");
     require(requested.shader_float64, core.shaderFloat64, "shader_float64");
