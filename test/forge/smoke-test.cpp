@@ -2709,26 +2709,35 @@ TEST_CASE("Forge indexed draws", "[forge]")
         REQUIRE_HALF_COLOR(pixels, true, k_instance_one);
         REQUIRE_HALF_COLOR(pixels, false, k_untouched);
     }
-    SECTION("An 8-bit index buffer on a device without the feature is refused")
-    {
-        // The index type is a plain enum value in a core call, so nothing but this check stands between a
-        // device that never enabled the extension and an index type it does not accept.
-        ForgeFixture plain;
-        const Opal::DynamicArray<u8> index_bytes =
-            ToIndexBytes(k_half_indices, static_cast<i32>(std::size(k_half_indices)), IndexSize::uint8);
-        const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(
-            plain.device, {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
-        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(plain.device, plain.GetQueue()));
-        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
-        REQUIRE_FALSE(plain.device.GetFeatures().index_type_uint8);
-        REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint8) != ErrorCode::Success);
-        // The two widths that need no extension still bind on the same command buffer.
-        REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint16) == ErrorCode::Success);
-        REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32) == ErrorCode::Success);
-        REQUIRE(command_buffer.End() == ErrorCode::Success);
-        REQUIRE_NO_VALIDATION_ERROR(plain);
-    }
     REQUIRE_NO_VALIDATION_ERROR(halves.forge);
+}
+
+/**
+ * A case of its own rather than a section of the one above, because it needs a device that was created
+ * without the feature the one above may have asked for - and a second fixture inside a section is two live
+ * contexts, which docs/forge.md allows and asks nobody to rely on.
+ */
+TEST_CASE("Forge an 8-bit index buffer on a device without the feature is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // The index type is a plain enum value in a core call, so nothing but this check stands between a device
+    // that never enabled the extension and an index type it does not accept.
+    ForgeFixture fixture;
+    REQUIRE_FALSE(fixture.device.GetFeatures().index_type_uint8);
+    const Opal::DynamicArray<u8> index_bytes = ToIndexBytes(k_half_indices, static_cast<i32>(std::size(k_half_indices)), IndexSize::uint8);
+    const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(
+        fixture.device, {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint8) != ErrorCode::Success);
+    // The two widths that need no extension still bind on the same command buffer.
+    REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint16) == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32) == ErrorCode::Success);
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
 TEST_CASE("Forge indirect draws", "[forge]")
@@ -5383,23 +5392,29 @@ TEST_CASE("Forge fill modes", "[forge]")
         REQUIRE(wireframe_covered > 0);
         REQUIRE(wireframe_covered < solid_covered);
     }
-    SECTION("A wireframe on a device without the feature is refused")
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a wireframe on a device without the feature is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
     {
-        // The polygon mode is a plain enum in the create info, so without this the device is handed a mode
-        // it never agreed to and the validation layer is the only thing that notices.
-        ForgeFixture plain({.fill_mode_non_solid = false});
-        const Forge::Shader plain_vertex = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
-            plain.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
-        const Forge::Shader plain_fragment = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
-            plain.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
-        REQUIRE_FALSE(MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
-                                             {.fill_mode = FillMode::Wireframe, .cull_mode = Face::None}).HasValue());
-        // Solid on the same device is fine, so what threw was the fill mode and not the pipeline.
-        const Forge::Pipeline solid_pipeline = ForgeTest::Unwrap(MakeRasterPipeline(plain.device, plain_vertex, plain_fragment, k_format,
-                                                                  {.cull_mode = Face::None}));
-        REQUIRE(solid_pipeline.IsValid());
-        REQUIRE_NO_VALIDATION_ERROR(plain);
+        SKIP("No Vulkan device on this machine.");
     }
+    // The polygon mode is a plain enum in the create info, so without this the device is handed a mode it
+    // never agreed to and the validation layer is the only thing that notices.
+    ForgeFixture fixture({.fill_mode_non_solid = false});
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
+    REQUIRE_FALSE(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format,
+                                     {.fill_mode = FillMode::Wireframe, .cull_mode = Face::None}).HasValue());
+    // Solid on the same device is fine, so what was refused was the fill mode and not the pipeline.
+    const Forge::Pipeline solid_pipeline =
+        ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None}));
+    REQUIRE(solid_pipeline.IsValid());
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
@@ -5841,16 +5856,22 @@ TEST_CASE("Forge depth clamp", "[forge]")
         }
         REQUIRE(is_drawn(true));
     }
-    SECTION("Clamping on a device without the feature is refused")
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge depth clamping on a device without the feature is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
     {
-        ForgeFixture plain({.depth_clamp = false});
-        const Forge::Shader plain_vertex = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
-            plain.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()}));
-        const Forge::Shader plain_fragment = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
-            plain.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()}));
-        REQUIRE_FALSE(MakeDepthPipeline(plain.device, plain_vertex, plain_fragment, k_format, PixelFormat::Undefined, true).HasValue());
-        REQUIRE_NO_VALIDATION_ERROR(plain);
+        SKIP("No Vulkan device on this machine.");
     }
+    ForgeFixture fixture({.depth_clamp = false});
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_depth_position_source, {.entry_point = "main_depth_fragment", .cache = GetShaderCache()}));
+    REQUIRE_FALSE(MakeDepthPipeline(fixture.device, vertex_shader, fragment_shader, k_format, PixelFormat::Undefined, true).HasValue());
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
@@ -8629,24 +8650,30 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
             }
         }
     }
-    SECTION("MirrorOnce without the feature is refused rather than reaching the driver")
-    {
-        // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device
-        // that did not enable it is undefined. Forge refused nothing here until the mode had a test.
-        ForgeFixture plain_fixture;
-        REQUIRE_FALSE(Forge::Sampler::Create(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorOnce}).HasValue());
-        REQUIRE_FALSE(Forge::Sampler::Create(plain_fixture.device, {.address_mode_v = ImageAddressMode::MirrorOnce}).HasValue());
-        REQUIRE_FALSE(Forge::Sampler::Create(plain_fixture.device, {.address_mode_w = ImageAddressMode::MirrorOnce}).HasValue());
-        // The other four modes are what every device does, so none of them is refused on the same device.
-        const Forge::Sampler unaffected =
-            ForgeTest::Unwrap(Forge::Sampler::Create(plain_fixture.device, {.address_mode_u = ImageAddressMode::MirrorRepeat}));
-        REQUIRE(unaffected.IsValid());
-        REQUIRE_NO_VALIDATION_ERROR(plain_fixture);
-    }
     if (!has_mirror_once)
     {
         WARN("This device has no samplerMirrorClampToEdge, so ImageAddressMode::MirrorOnce went unchecked.");
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge MirrorOnce on a device without the feature is refused rather than reaching the driver", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device that
+    // did not enable it is undefined. Forge refused nothing here until the mode had a test.
+    ForgeFixture fixture;
+    REQUIRE_FALSE(fixture.device.GetFeatures().sampler_mirror_clamp_to_edge);
+    REQUIRE_FALSE(Forge::Sampler::Create(fixture.device, {.address_mode_u = ImageAddressMode::MirrorOnce}).HasValue());
+    REQUIRE_FALSE(Forge::Sampler::Create(fixture.device, {.address_mode_v = ImageAddressMode::MirrorOnce}).HasValue());
+    REQUIRE_FALSE(Forge::Sampler::Create(fixture.device, {.address_mode_w = ImageAddressMode::MirrorOnce}).HasValue());
+    // The other four modes are what every device does, so none of them is refused on the same device.
+    const Forge::Sampler unaffected =
+        ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.address_mode_u = ImageAddressMode::MirrorRepeat}));
+    REQUIRE(unaffected.IsValid());
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
