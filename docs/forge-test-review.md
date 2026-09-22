@@ -242,3 +242,26 @@ the graphics draw with a descriptor set, multiple colour attachments, multisampl
 path, `CmdCopyTexture` headless, texture ownership transfer, `Load` keeping contents, depth bias, the
 read-only depth layout, texture views and shapes, push constants at an offset and across two stages, narrow
 and wide specialization constants, task shaders and the other stages.
+
+**The Opus items are done** on 2026-09-22 - 1, 2, 4, 7, 8, 9, 10, 11, 12, 14, 15 and both halves of 13 -
+one commit per item, with the full `[forge]` and `[forge-window]` set green after each. Items 3 and 21 are
+Fable's and are untouched. The suite went from 89 cases and 15075 assertions to 108 and 17539.
+
+Six of them changed Forge, each in its own `fix` or `feat` commit ahead of the test that found it:
+
+- A graphics pipeline naming more colour attachment formats than blend states, or blend states that differ
+  between attachments on a device without `independent_blend`, is refused instead of reaching the driver.
+- A non-zero `RasterizerDesc::depth_bias_clamp` on a device without `depth_bias_clamp` is refused, which
+  `CmdSetDepthBias` already did for the dynamic half.
+- A pass naming a stencil attachment on a texture other than its depth one is refused. Vulkan wants one
+  image where both are present, so a stencil texture of its own only works in a pass with no depth
+  attachment - the header said otherwise and now says this.
+- `DeviceFeatures::image_cube_array` and `DeviceFeatures::update_unused_while_pending_descriptors` are new:
+  `TextureViewType::CubeArray` and `DescriptorBindingFlagBits::UpdateUnusedWhilePending` were both reachable
+  from a desc and neither had the Vulkan feature behind it enabled.
+
+Two things worth knowing for whoever picks the rest up. A `REQUIRE` around a recorder lambda that grows past
+about sixteen thousand characters fails to compile - the macro stringizes what it is given - so the two-pass
+cases keep the submit in a variable and assert on that. And a barrier preset that lands in
+`DepthStencilReadOnly` names the fragment stage and a shader read, which is what a texture about to be
+sampled wants and not what a depth test does; the read-only depth case writes that barrier out by hand.
