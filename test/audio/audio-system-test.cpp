@@ -24,7 +24,8 @@ namespace
 
 constexpr u32 k_rate = 48000;
 
-Opal::ScopePtr<AudioSystem> CreateSystemOrSkip(const AudioSystemDesc& desc = {})
+/** Answers an empty pointer on the one machine a run is allowed to skip over, and fails on every other. */
+Opal::ScopePtr<AudioSystem> CreateSystemOrEmpty(const AudioSystemDesc& desc = {})
 {
     Opal::Expected<Opal::ScopePtr<AudioSystem>, ErrorCode> result = AudioSystem::Create(desc);
     if (result.HasValue())
@@ -41,7 +42,6 @@ Opal::ScopePtr<AudioSystem> CreateSystemOrSkip(const AudioSystemDesc& desc = {})
     {
         FAIL("RNDR_TEST_REQUIRE_AUDIO is set and this machine has no audio output");
     }
-    SKIP("No audio output on this machine.");
     return {};
 }
 
@@ -80,7 +80,11 @@ bool WaitForSoundToEnd(const AudioSystem& audio, SoundHandle sound, u32 timeout_
 
 TEST_CASE("Audio system opens and closes the device", "[audio-device]")
 {
-    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
+    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrEmpty();
+    if (!audio)
+    {
+        SKIP("No audio output on this machine.");
+    }
     REQUIRE(audio.IsValid());
     REQUIRE(audio->GetSampleRate() == k_rate);
     REQUIRE(audio->GetActiveVoiceCount() == 0);
@@ -89,7 +93,11 @@ TEST_CASE("Audio system opens and closes the device", "[audio-device]")
 
 TEST_CASE("Audio system plays a sound to the end", "[audio-device]")
 {
-    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
+    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrEmpty();
+    if (!audio)
+    {
+        SKIP("No audio output on this machine.");
+    }
     const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 1, 440.0f, k_rate / 10, 0.2f));
     REQUIRE(audio->IsClipValid(tone));
 
@@ -106,7 +114,11 @@ TEST_CASE("Audio system plays a sound to the end", "[audio-device]")
 
 TEST_CASE("Audio system takes control calls while a sound plays", "[audio-device]")
 {
-    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
+    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrEmpty();
+    if (!audio)
+    {
+        SKIP("No audio output on this machine.");
+    }
     const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 2, 330.0f, k_rate / 4, 0.2f));
     const SoundHandle sound = audio->Play(tone, {.pan = -0.5f, .loop = true});
     REQUIRE(sound.IsValid());
@@ -132,7 +144,11 @@ TEST_CASE("Audio system takes control calls while a sound plays", "[audio-device
 
 TEST_CASE("Audio system shuts down promptly with a sound still playing", "[audio-device]")
 {
-    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
+    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrEmpty();
+    if (!audio)
+    {
+        SKIP("No audio output on this machine.");
+    }
     const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 4, 0.2f));
     REQUIRE(audio->Play(tone, {.loop = true}).IsValid());
     SleepMilliseconds(100);
@@ -145,7 +161,11 @@ TEST_CASE("Audio system shuts down promptly with a sound still playing", "[audio
 
 TEST_CASE("Audio system destroys a clip out from under a sound", "[audio-device]")
 {
-    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
+    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrEmpty();
+    if (!audio)
+    {
+        SKIP("No audio output on this machine.");
+    }
     const AudioClipHandle tone = CreateClipOrFail(*audio, AudioTest::MakeSineClip(k_rate, 1, 220.0f, k_rate / 4, 0.2f));
     const SoundHandle sound = audio->Play(tone, {.loop = true});
     SleepMilliseconds(50);
@@ -161,7 +181,11 @@ TEST_CASE("Audio system destroys a clip out from under a sound", "[audio-device]
 
 TEST_CASE("Audio system reports bad input without throwing from Play", "[audio-device]")
 {
-    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrSkip();
+    Opal::ScopePtr<AudioSystem> audio = CreateSystemOrEmpty();
+    if (!audio)
+    {
+        SKIP("No audio output on this machine.");
+    }
     const Opal::Expected<AudioClipHandle, ErrorCode> missing = audio->LoadClip("does-not-exist.wav");
     REQUIRE_FALSE(missing.HasValue());
     REQUIRE(missing.GetError() == ErrorCode::FileNotFound);

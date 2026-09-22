@@ -2,6 +2,8 @@
 
 #include <catch2/catch2.hpp>
 
+#include "catch-no-exceptions.hpp"
+
 #include "opal/container/expected.h"
 #include "opal/container/ref.h"
 #include "opal/container/scope-ptr.h"

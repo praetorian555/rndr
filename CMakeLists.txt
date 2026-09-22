@@ -91,6 +91,7 @@ if (${RNDR_BUILD_TESTS})
             test/camera-test.cpp
             test/frames-per-second-counter-test.cpp
             test/input-test.cpp
+            test/catch-no-exceptions.cpp
             extern/catch2/src/catch_amalgamated.cpp)
     if (${RNDR_CANVAS})
         list(APPEND RNDR_TEST_FILES
@@ -118,6 +119,11 @@ if (${RNDR_BUILD_TESTS})
     add_executable(rndr-test ${RNDR_TEST_FILES})
     rndr_deploy_runtime(rndr-test)
     target_include_directories(rndr-test PRIVATE src)
+    # test/ holds the Catch2 macro replacements the no-exceptions build needs, shared by every suite.
+    target_include_directories(rndr-test PRIVATE test)
+    # Catch2 leaves Catch::throw_exception undefined under this flag so the binary can supply its own, which
+    # test/catch-no-exceptions.cpp does. Without it Catch2 terminates where that function is called.
+    target_compile_definitions(rndr-test PRIVATE CATCH_CONFIG_DISABLE_EXCEPTIONS_CUSTOM_HANDLER)
     # SYSTEM keeps the vendored Catch2 (and glad) headers out of the -Werror surface; GCC and
     # Clang do not report warnings whose location is a system header.
     target_include_directories(rndr-test SYSTEM PRIVATE extern/catch2/include)

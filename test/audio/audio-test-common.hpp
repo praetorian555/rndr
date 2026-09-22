@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "catch-no-exceptions.hpp"
+
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 

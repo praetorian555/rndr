@@ -58,6 +58,13 @@ Catch2, single `rndr-test` binary, run a subset by tag:
 Tags in use: `[input]` `[canvas]` `[mesh]` `[bitmap]` `[fps]` `[init]` `[forge]` `[forge-window]` `[audio]`
 `[audio-device]`.
 
+Catch2 aborts a test case by throwing and this binary has no exceptions, so `test/catch-no-exceptions.hpp`
+replaces `SKIP` with one that records the same result and leaves by returning. It therefore only works in
+the test case body - inside a helper or a lambda it returns from that, and no compiler will say so.
+`REQUIRE` and `FAIL` keep the throw: too much of the suite asserts inside helpers that return a value, and
+such a helper has nothing to return once the assertion fails. A failing assertion therefore ends the run
+after reporting itself, and the cases after it do not run.
+
 `[forge]` is headless and runs anywhere a Vulkan device exists. `[forge-window]` needs a window system
 as well, opens an offscreen window and presents to it, and covers `Surface`, `SwapChain` and
 `FrameContext`. Both skip rather than fail on a machine that cannot run them, so a run that found no
