@@ -3534,6 +3534,28 @@ TEST_CASE("Forge blend state per colour attachment", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge CmdDraw with a non-zero first vertex and first instance", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    HalvesFixture halves;
+
+    // The right half is vertices 6 through 11 of the unindexed buffer; first_vertex is what has to reach
+    // past the left half to draw it. first_instance is what picks which entry of the per-instance binding
+    // the draw reads, the same as the two-halves cases prove through an offset into an index buffer instead.
+    const Opal::DynamicArray<u8> pixels = halves.Render(
+        [&](Forge::CommandBuffer& command_buffer)
+        {
+            REQUIRE(command_buffer.CmdBindVertexBuffer(halves.vertices, 0) == ErrorCode::Success);
+            REQUIRE(command_buffer.CmdDraw(6, 1, 6, 2) == ErrorCode::Success);
+        });
+    REQUIRE_HALF_COLOR(pixels, true, k_instance_three);
+    REQUIRE_HALF_COLOR(pixels, false, k_untouched);
+    REQUIRE_NO_VALIDATION_ERROR(halves.forge);
+}
+
 TEST_CASE("Forge indexed draws", "[forge]")
 {
     if (!IsForgeAvailable())
@@ -3691,6 +3713,37 @@ TEST_CASE("Forge indirect draws", "[forge]")
                           });
         // Both commands ran, and each fetched the instance its own first_instance named rather than one of
         // them deciding for both.
+        REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_three);
+    }
+    SECTION("A stride other than the default is honoured")
+    {
+        // The same two commands "An indirect draw runs the command a compute shader wrote" checks, written
+        // by the host this time and spaced twice as far apart as DrawIndirectCommand is wide. A call that
+        // still read them back to back would find the second one's padding instead of its data.
+        if (!has_multi_draw)
+        {
+            SKIP("This device cannot read more than one indirect command per call.");
+        }
+        constexpr u32 k_stride = 2 * sizeof(Forge::DrawIndirectCommand);
+        Opal::DynamicArray<u8> spaced(2 * k_stride);
+        for (u8& byte : spaced)
+        {
+            byte = 0;
+        }
+        const Forge::DrawIndirectCommand left{.vertex_count = 6, .instance_count = 1, .first_vertex = 0, .first_instance = 1};
+        const Forge::DrawIndirectCommand right{.vertex_count = 6, .instance_count = 1, .first_vertex = 6, .first_instance = 2};
+        memcpy(spaced.GetData(), &left, sizeof(left));
+        memcpy(spaced.GetData() + k_stride, &right, sizeof(right));
+        const Forge::Buffer spaced_commands = ForgeTest::Unwrap(Forge::Buffer::Create(
+            halves.forge.device, {.size = spaced.GetSize(), .usage = Forge::BufferUsageBits::IndirectBuffer}, spaced));
+
+        const Opal::DynamicArray<u8> pixels = halves.Render(
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdBindVertexBuffer(halves.vertices, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDrawIndirect(spaced_commands, 0, 2, k_stride) == ErrorCode::Success);
+            });
         REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
         REQUIRE_HALF_COLOR(pixels, true, k_instance_three);
     }
@@ -7212,6 +7265,81 @@ TEST_CASE("Forge topologies", "[forge]")
         REQUIRE(IsCovered(pixels, k_side, 5, 2));
         REQUIRE(IsCovered(pixels, k_side, 3, 6));
     }
+    SECTION("A line strip covers a bend a line list of the same vertices does not")
+    {
+        // Three vertices bent once: the first two share a row, the last two share a column. A list of three
+        // draws only the first pair - the third vertex has no partner - so it covers the row and nothing at
+        // the far corner. A strip draws both pairs, which is what reaches the far corner's row as well.
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+        constexpr i32 k_row_a = 2;
+        constexpr i32 k_row_b = 6;
+        // Strictly between the two rows, so it is covered only by the vertical segment and only when that
+        // segment is actually rasterized - not a matter of whether a line rule includes its own endpoint.
+        constexpr i32 k_row_between = 4;
+        const Vector2f v0 = TexelCentre(k_side, 0, k_row_a);
+        const Vector2f v1 = TexelCentre(k_side, k_side - 1, k_row_a);
+        const Vector2f v2 = TexelCentre(k_side, k_side - 1, k_row_b);
+        const f32 bend_vertices[] = {v0.x, v0.y, v1.x, v1.y, v2.x, v2.y};
+        const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                     {.size = sizeof(bend_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                     Opal::AsBytes(bend_vertices)));
+
+        auto draw_with = [&](PrimitiveTopology topology)
+        {
+            const Forge::Pipeline pipeline =
+                ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None},
+                                                     topology));
+            Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+            return RenderRaster(fixture, color, k_side,
+                                [&](Forge::CommandBuffer& command_buffer)
+                                {
+                                    REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                    REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                                    REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                                });
+        };
+
+        const Opal::DynamicArray<u8> list_pixels = draw_with(PrimitiveTopology::Line);
+        REQUIRE_FALSE(IsCovered(list_pixels, k_side, k_side - 1, k_row_between));
+
+        const Opal::DynamicArray<u8> strip_pixels = draw_with(PrimitiveTopology::LineStrip);
+        REQUIRE(IsCovered(strip_pixels, k_side, k_side - 1, k_row_between));
+    }
+    SECTION("A triangle strip fills the quad a triangle list of the same vertices only half covers")
+    {
+        // Four corners in strip order. A list of four draws only the first three - the fourth has no
+        // triangle of its own - which is half the quad; a strip draws both triangles the four corners make,
+        // which is the whole of it.
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+        constexpr f32 k_quad_vertices[] = {-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f};
+        const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                     {.size = sizeof(k_quad_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                     Opal::AsBytes(k_quad_vertices)));
+
+        auto draw_with = [&](PrimitiveTopology topology)
+        {
+            const Forge::Pipeline pipeline =
+                ForgeTest::Unwrap(MakeRasterPipeline(fixture.device, vertex_shader, fragment_shader, k_format, {.cull_mode = Face::None},
+                                                     topology));
+            Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+            return RenderRaster(fixture, color, k_side,
+                                [&](Forge::CommandBuffer& command_buffer)
+                                {
+                                    REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                    REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                                    REQUIRE(command_buffer.CmdDraw(4) == ErrorCode::Success);
+                                });
+        };
+
+        const i32 list_covered = CountCovered(draw_with(PrimitiveTopology::Triangle), k_side);
+        INFO("triangle list covered " << list_covered << " of " << k_side * k_side);
+        REQUIRE(list_covered < k_side * k_side);
+
+        const i32 strip_covered = CountCovered(draw_with(PrimitiveTopology::TriangleStrip), k_side);
+        REQUIRE(strip_covered == k_side * k_side);
+    }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
@@ -7347,35 +7475,89 @@ TEST_CASE("Forge instancing through a second vertex binding", "[forge]")
     pipeline_desc.color_attachment_formats.PushBack(k_format);
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
-    Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
-    const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
-                                                       [&](Forge::CommandBuffer& command_buffer)
-                                                       {
-                                                           REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                                           REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
-                                                           REQUIRE(command_buffer.CmdBindVertexBuffer(instance_buffer, 1) ==
-                                                                   ErrorCode::Success);
-                                                           REQUIRE(command_buffer.CmdDraw(6, 4) == ErrorCode::Success);
-                                                       });
-
-    // Each quarter carries the bits of its own instance value, so an instance that read the wrong entry of
-    // the second binding shows up as the wrong quarter rather than as a missing one.
-    for (i32 instance = 0; instance < 4; ++instance)
+    // Each quarter has to carry the bits of its own instance value, so an instance that read the wrong entry
+    // of the second binding shows up as the wrong quarter rather than as a missing one.
+    auto require_quadrants = [&](const Opal::DynamicArray<u8>& pixels)
     {
-        const u32 value = instances[instance].value;
-        const i32 first_x = instances[instance].offset_x == 0.0f ? 0 : k_half;
-        const i32 first_y = instances[instance].offset_y == 0.0f ? 0 : k_half;
-        for (i32 y = first_y; y < first_y + k_half; ++y)
+        for (i32 instance = 0; instance < 4; ++instance)
         {
-            for (i32 x = first_x; x < first_x + k_half; ++x)
+            const u32 value = instances[instance].value;
+            const i32 first_x = instances[instance].offset_x == 0.0f ? 0 : k_half;
+            const i32 first_y = instances[instance].offset_y == 0.0f ? 0 : k_half;
+            for (i32 y = first_y; y < first_y + k_half; ++y)
             {
-                const i32 base = (y * k_side + x) * 4;
-                INFO("instance " << instance << " texel " << x << "," << y);
-                REQUIRE(static_cast<i32>(pixels[base + 0]) == ((value & 1) != 0 ? 255 : 0));
-                REQUIRE(static_cast<i32>(pixels[base + 1]) == ((value & 2) != 0 ? 255 : 0));
-                REQUIRE(static_cast<i32>(pixels[base + 2]) == ((value & 4) != 0 ? 255 : 0));
+                for (i32 x = first_x; x < first_x + k_half; ++x)
+                {
+                    const i32 base = (y * k_side + x) * 4;
+                    INFO("instance " << instance << " texel " << x << "," << y);
+                    REQUIRE(static_cast<i32>(pixels[base + 0]) == ((value & 1) != 0 ? 255 : 0));
+                    REQUIRE(static_cast<i32>(pixels[base + 1]) == ((value & 2) != 0 ? 255 : 0));
+                    REQUIRE(static_cast<i32>(pixels[base + 2]) == ((value & 4) != 0 ? 255 : 0));
+                }
             }
         }
+    };
+
+    SECTION("Through CmdDraw")
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(instance_buffer, 1) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(6, 4) == ErrorCode::Success);
+                                                           });
+        require_quadrants(pixels);
+    }
+    SECTION("Through CmdDrawIndexed with an instance count above one")
+    {
+        // The identity index, so an indexed draw of the same six vertices lands exactly where CmdDraw put
+        // them - what is under test is instance_count on the indexed call, not a different shape.
+        constexpr u16 k_identity_indices[] = {0, 1, 2, 3, 4, 5};
+        const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = sizeof(k_identity_indices), .usage = Forge::BufferUsageBits::IndexBuffer},
+            Opal::AsBytes(k_identity_indices)));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(instance_buffer, 1) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint16) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDrawIndexed(6, 4) == ErrorCode::Success);
+                                                           });
+        require_quadrants(pixels);
+    }
+    SECTION("Through CmdDrawIndirect with an instance count above one")
+    {
+        // One command naming all four instances, host-written since the value under test is a field of the
+        // command rather than proof that a device wrote it - that half of indirect drawing has its own case.
+        const Forge::DrawIndirectCommand command{.vertex_count = 6, .instance_count = 4, .first_vertex = 0, .first_instance = 0};
+        const Forge::Buffer commands = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = sizeof(command), .usage = Forge::BufferUsageBits::IndirectBuffer}, Opal::AsBytes(command)));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(instance_buffer, 1) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDrawIndirect(commands, 0, 1) ==
+                                                                       ErrorCode::Success);
+                                                           });
+        require_quadrants(pixels);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
