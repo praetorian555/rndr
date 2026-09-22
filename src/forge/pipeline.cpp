@@ -433,6 +433,18 @@ Rndr::ErrorCode RequirePushConstantsCovered(Opal::ArrayView<const Rndr::Forge::P
     }
     return Rndr::ErrorCode::Success;
 }
+
+/**
+ * Whether two colour attachments blend the same way. What independent_blend buys is attachments that do
+ * not, so a device without it has to be handed states that agree.
+ */
+bool IsSameBlendState(const Rndr::Forge::ColorBlendDesc& lhs, const Rndr::Forge::ColorBlendDesc& rhs)
+{
+    return lhs.blend_enabled == rhs.blend_enabled && lhs.src_color_factor == rhs.src_color_factor &&
+           lhs.dst_color_factor == rhs.dst_color_factor && lhs.color_operation == rhs.color_operation &&
+           lhs.src_alpha_factor == rhs.src_alpha_factor && lhs.dst_alpha_factor == rhs.dst_alpha_factor &&
+           lhs.alpha_operation == rhs.alpha_operation && lhs.color_write_mask == rhs.color_write_mask;
+}
 }  // namespace
 
 Rndr::ErrorCode Rndr::Forge::Pipeline::CreatePipelineLayout(
@@ -845,6 +857,33 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
                 .reference = ds.back_reference,
             },
     };
+
+    // One blend state per colour attachment, which Vulkan reads by the colour attachment count rather than
+    // by the length of the array it was handed: a desc that names more formats than blend states has the
+    // driver read past what the caller wrote, and one that names fewer silently ignores the extra state.
+    if (desc.color_blend_attachments.GetSize() != desc.color_attachment_formats.GetSize())
+    {
+        RNDR_LOG_ERROR("Forge: a graphics pipeline needs one color blend attachment per color attachment format, and this one has {} "
+                       "against {}",
+                       desc.color_blend_attachments.GetSize(), desc.color_attachment_formats.GetSize());
+        return Result(ErrorCode::InvalidArgument);
+    }
+    // Without independent_blend a device has one blend state for every attachment, and the one it uses is
+    // the first: a desc whose attachments differ asks for something the device cannot do, and what it does
+    // instead is apply attachment zero to all of them.
+    if (!device.GetFeatures().independent_blend)
+    {
+        for (i32 i = 1; i < desc.color_blend_attachments.GetSize(); ++i)
+        {
+            if (!IsSameBlendState(desc.color_blend_attachments[0], desc.color_blend_attachments[i]))
+            {
+                RNDR_LOG_ERROR("Forge: color blend attachment {} differs from the first one, which needs the device created with "
+                               "DeviceFeatures::independent_blend",
+                               i);
+                return Result(ErrorCode::InvalidArgument);
+            }
+        }
+    }
 
     Opal::DynamicArray<VkPipelineColorBlendAttachmentState> color_blend_attachments;
     for (const auto& cb : desc.color_blend_attachments)
