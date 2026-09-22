@@ -9049,6 +9049,32 @@ Opal::DynamicArray<u8> MakeTwoTexelRow()
     return bytes;
 }
 
+/**
+ * The pool and the layout every sampling case below binds: one combined image sampler and one storage
+ * buffer, both compute visible. What differs between them is only how many sets they need at once.
+ */
+struct SampleHarness
+{
+    Forge::DescriptorPool pool;
+    Forge::DescriptorSetLayout layout;
+};
+
+SampleHarness MakeSampleHarness(const Forge::Device& device, u32 set_count)
+{
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, set_count) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, set_count) == ErrorCode::Success);
+    pool_desc.max_sets = set_count;
+    Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(device, pool_desc));
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(device, layout_desc));
+
+    return {std::move(pool), std::move(layout)};
+}
+
 }  // namespace
 
 TEST_CASE("Forge sampler filtering and addressing", "[forge]")
@@ -9063,16 +9089,9 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
     const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
 
-    Forge::DescriptorPoolDesc pool_desc;
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 8) == ErrorCode::Success);
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8) == ErrorCode::Success);
-    pool_desc.max_sets = 8;
-    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
-
-    Forge::DescriptorSetLayoutDesc layout_desc;
-    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    SampleHarness harness = MakeSampleHarness(fixture.device, 8);
+    Forge::DescriptorPool& pool = harness.pool;
+    Forge::DescriptorSetLayout& layout = harness.layout;
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
@@ -9379,16 +9398,9 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
     ForgeFixture fixture;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    Forge::DescriptorPoolDesc pool_desc;
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4) == ErrorCode::Success);
-    pool_desc.max_sets = 4;
-    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
-
-    Forge::DescriptorSetLayoutDesc layout_desc;
-    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    SampleHarness harness = MakeSampleHarness(fixture.device, 4);
+    Forge::DescriptorPool& pool = harness.pool;
+    Forge::DescriptorSetLayout& layout = harness.layout;
 
     const Forge::Sampler nearest =
         ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
@@ -9622,16 +9634,9 @@ TEST_CASE("Forge a cube array view", "[forge]")
     const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_cube_array_sample_source, {.entry_point = "main_sample_cube_array", .cache = GetShaderCache()}));
 
-    Forge::DescriptorPoolDesc pool_desc;
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4) == ErrorCode::Success);
-    pool_desc.max_sets = 4;
-    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
-
-    Forge::DescriptorSetLayoutDesc layout_desc;
-    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    SampleHarness harness = MakeSampleHarness(fixture.device, 4);
+    Forge::DescriptorPool& pool = harness.pool;
+    Forge::DescriptorSetLayout& layout = harness.layout;
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
@@ -11426,16 +11431,9 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
     const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
 
-    Forge::DescriptorPoolDesc pool_desc;
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 32) == ErrorCode::Success);
-    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 32) == ErrorCode::Success);
-    pool_desc.max_sets = 32;
-    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
-
-    Forge::DescriptorSetLayoutDesc layout_desc;
-    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
-    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    SampleHarness harness = MakeSampleHarness(fixture.device, 32);
+    Forge::DescriptorPool& pool = harness.pool;
+    Forge::DescriptorSetLayout& layout = harness.layout;
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
