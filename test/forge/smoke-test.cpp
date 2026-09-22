@@ -4144,6 +4144,146 @@ float4 main_vertex(PartialInput input) : SV_Position {
 }
 )";
 
+namespace
+{
+
+/**
+ * Two constants whose widths are not a word: one sixteen bits and one sixty four. Both are written into the
+ * output as plain words, the wide one in halves, so what comes back says how many bits of each value
+ * reached the shader.
+ */
+constexpr const char* k_odd_width_specialized_source = R"(
+[SpecializationConstant]
+const int16_t NARROW = 2;
+
+[SpecializationConstant]
+const int64_t WIDE = 5;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_odd_widths(uniform uint32_t *output)
+{
+    output[0] = (uint)NARROW;
+    output[1] = (uint)(WIDE & 0xFFFFFFFF);
+    output[2] = (uint)((WIDE >> 32) & 0xFFFFFFFF);
+}
+)";
+
+}  // namespace
+
+TEST_CASE("Forge specialization constants that are not a word wide", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_odd_widths{.shader_int16 = true, .shader_int64 = true};
+    if (!CanCreateDevice(k_odd_widths))
+    {
+        SKIP("This device has no sixteen or sixty four bit integers in shaders.");
+    }
+    ForgeFixture fixture(k_odd_widths);
+    constexpr i32 k_element_count = 4;
+
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_odd_width_specialized_source, {.entry_point = "main_odd_widths", .cache = GetShaderCache()}));
+
+    /** The reported constant of that name, which the sections read the declared width off. */
+    auto constant_named = [&](const char* name) -> const Forge::SpecializationConstantInfo*
+    {
+        const Opal::ArrayView<const Forge::SpecializationConstantInfo> constants = shader.GetSpecializationConstants();
+        for (i32 i = 0; i < constants.GetSize(); ++i)
+        {
+            if (constants[i].name == Opal::StringUtf8(name))
+            {
+                return &constants[i];
+            }
+        }
+        FAIL("the shader declares no specialization constant called " << name);
+        return nullptr;
+    };
+
+    /** Dispatch with the given values and hand back the three words the shader wrote, or what refused. */
+    auto dispatch_with = [&](Opal::ArrayView<const Forge::SpecializationConstant> values)
+        -> Opal::Expected<Opal::DynamicArray<u32>, ErrorCode>
+    {
+        using Result = Opal::Expected<Opal::DynamicArray<u32>, ErrorCode>;
+
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.push_constant_ranges.PushBack(
+            {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        for (i32 i = 0; i < values.GetSize(); ++i)
+        {
+            pipeline_desc.specialization.PushBack(Forge::SpecializationConstant{.name = values[i].name.Clone(), .value = values[i].value});
+        }
+        Opal::Expected<Forge::Pipeline, ErrorCode> pipeline_result = Forge::Pipeline::Create(fixture.device, pipeline_desc);
+        if (!pipeline_result.HasValue())
+        {
+            return Result(pipeline_result.GetError());
+        }
+
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
+        const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline_result.GetValue()) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline_result.GetValue(), ShaderTypeBits::Compute,
+                                                                Opal::AsBytes(output_address)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        Opal::DynamicArray<u32> values_read(k_element_count);
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values_read.GetData()), values_read.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+        return Result(std::move(values_read));
+    };
+
+    SECTION("The declared width is what reflection reports beside the type")
+    {
+        // Anything narrower than a word is reported as its 32 bit counterpart so a caller can write a plain
+        // integer for it, and byte_size is where the width it actually occupies survives.
+        const Forge::SpecializationConstantInfo* narrow = constant_named("NARROW");
+        REQUIRE(narrow->type == Forge::SpecializationType::Int32);
+        REQUIRE(narrow->byte_size == 2);
+
+        const Forge::SpecializationConstantInfo* wide = constant_named("WIDE");
+        REQUIRE(wide->type == Forge::SpecializationType::Int64);
+        REQUIRE(wide->byte_size == 8);
+    }
+    SECTION("A constant narrower than a word takes the value it was given")
+    {
+        const Forge::SpecializationConstant values[] = {{.name = "NARROW", .value = 1234}};
+        const Opal::DynamicArray<u32> written = ForgeTest::Unwrap(dispatch_with({values, 1}));
+        REQUIRE(written[0] == 1234u);
+        // And the constant nobody specialized keeps what the shader declared.
+        REQUIRE(written[1] == 5u);
+    }
+    SECTION("A sixty four bit constant arrives whole")
+    {
+        // A value with bits above the low word, which is the half a constant written as four bytes loses.
+        constexpr i64 k_wide_value = (i64{0x1234} << 32) | 0x5678ABCD;
+        const Forge::SpecializationConstant values[] = {{.name = "WIDE", .value = k_wide_value}};
+        const Opal::DynamicArray<u32> written = ForgeTest::Unwrap(dispatch_with({values, 1}));
+        REQUIRE(written[1] == 0x5678ABCDu);
+        REQUIRE(written[2] == 0x1234u);
+        REQUIRE(written[0] == 2u);
+    }
+    SECTION("A value too wide for the constant it is going into is refused")
+    {
+        // Forty thousand does not fit in a signed sixteen bit constant, and the type reflection reports for
+        // it is Int32 - so nothing but the byte size stands between this and a silent truncation.
+        const Forge::SpecializationConstant too_big[] = {{.name = "NARROW", .value = 40000}};
+        REQUIRE_FALSE(dispatch_with({too_big, 1}).HasValue());
+
+        // The largest value that does fit is accepted, so the check is the width and not the sign.
+        const Forge::SpecializationConstant fits[] = {{.name = "NARROW", .value = 32767}};
+        const Opal::DynamicArray<u32> written = ForgeTest::Unwrap(dispatch_with({fits, 1}));
+        REQUIRE(written[0] == 32767u);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge shader reflection", "[forge]")
 {
     if (!IsForgeAvailable())
