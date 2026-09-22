@@ -438,6 +438,72 @@ TEST_CASE("Forge swap chain matches the window it was built over", "[forge-windo
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
 
+TEST_CASE("Forge swap chain present mode and depth format", "[forge-window]")
+{
+    if (!IsForgeWindowAvailable())
+    {
+        SKIP("No window system with a Vulkan device that can present to it on this machine.");
+    }
+    ForgeWindowFixture fixture;
+    if (!SupportsSwapChainFormat(fixture))
+    {
+        SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
+    }
+
+    SECTION("A present mode other than Fifo, when the surface offers one, builds a working swap chain")
+    {
+        const Forge::SwapChainSupportDetails support = fixture.GetSupportDetails();
+        // Fifo is always there; the first of the other three the surface also lists is what this checks.
+        constexpr Forge::PresentMode k_candidates[] = {Forge::PresentMode::Mailbox, Forge::PresentMode::Immediate,
+                                                        Forge::PresentMode::FifoRelaxed};
+        constexpr VkPresentModeKHR k_native_candidates[] = {VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR,
+                                                            VK_PRESENT_MODE_FIFO_RELAXED_KHR};
+        Opal::Optional<Forge::PresentMode> chosen;
+        for (i32 i = 0; i < 3 && !chosen.HasValue(); ++i)
+        {
+            if (support.present_modes.Contains(k_native_candidates[i]))
+            {
+                chosen = k_candidates[i];
+            }
+        }
+        if (!chosen.HasValue())
+        {
+            SKIP("This surface offers no present mode besides Fifo.");
+        }
+
+        Forge::SwapChain swap_chain = ForgeTest::Unwrap(
+            Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format, .present_mode = *chosen}));
+        REQUIRE(swap_chain.IsValid());
+        REQUIRE(swap_chain.GetDesc().present_mode == *chosen);
+
+        // Present at least one frame through it, rather than only building it: the mode reaches
+        // vkCreateSwapchainKHR through a field nothing else here sets, so a wrong VkPresentModeKHR would
+        // still build a swap chain and only misbehave at present time.
+        Forge::FrameContext frame_context = ForgeTest::Unwrap(Forge::FrameContext::Create(
+            fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = 1}));
+        REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::Success);
+        RecordClearFrame(ForgeTest::Unwrap(frame_context.GetCommandBuffer()), ForgeTest::Unwrap(frame_context.GetColorTexture()), nullptr,
+                         swap_chain.GetExtent(), GetFrameColor(0), swap_chain.HasDepth() ? &swap_chain.GetDepthTexture() : nullptr);
+        REQUIRE(ForgeTest::Unwrap(frame_context.EndFrame()) == Forge::SwapChainStatus::Success);
+        REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
+
+        frame_context.Destroy();
+        swap_chain.Destroy();
+    }
+    SECTION("depth_pixel_format is the format the depth texture is created with")
+    {
+        // D16_UNORM rather than the D32_SFLOAT default - different enough that GetDesc().format catching the
+        // default instead would show up as a mismatch rather than as a coincidence.
+        constexpr PixelFormat k_depth_format = PixelFormat::D16_UNORM;
+        const Forge::SwapChain swap_chain = ForgeTest::Unwrap(Forge::SwapChain::Create(
+            fixture.device, fixture.surface, {.depth_pixel_format = k_depth_format, .pixel_format = k_swap_chain_format}));
+        REQUIRE(swap_chain.IsValid());
+        REQUIRE(swap_chain.HasDepth());
+        REQUIRE(swap_chain.GetDepthTexture().GetDesc().format == k_depth_format);
+    }
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
 TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[forge-window]")
 {
     if (!IsForgeWindowAvailable())
