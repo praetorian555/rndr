@@ -330,6 +330,28 @@ struct SplitCopy
  * REQUIRE_NO_VALIDATION_ERROR below asserts on nothing. A machine that is meant to have both says so through
  * RNDR_TEST_REQUIRE_VULKAN, and then this fails instead of the file going quiet.
  */
+TEST_CASE("Forge maps a VkResult to the error code it reports as", "[forge]")
+{
+    CHECK(Forge::VkResultToErrorCode(VK_SUCCESS) == ErrorCode::Success);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_OUT_OF_HOST_MEMORY) == ErrorCode::OutOfMemory);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_OUT_OF_DEVICE_MEMORY) == ErrorCode::OutOfMemory);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_OUT_OF_POOL_MEMORY) == ErrorCode::OutOfResources);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_FRAGMENTED_POOL) == ErrorCode::OutOfResources);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_FRAGMENTATION) == ErrorCode::OutOfResources);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_TOO_MANY_OBJECTS) == ErrorCode::OutOfResources);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_DEVICE_LOST) == ErrorCode::DeviceLost);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_SURFACE_LOST_KHR) == ErrorCode::DeviceLost);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_LAYER_NOT_PRESENT) == ErrorCode::FeatureNotSupported);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_EXTENSION_NOT_PRESENT) == ErrorCode::FeatureNotSupported);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_FEATURE_NOT_PRESENT) == ErrorCode::FeatureNotSupported);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_FORMAT_NOT_SUPPORTED) == ErrorCode::FeatureNotSupported);
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_INCOMPATIBLE_DRIVER) == ErrorCode::FeatureNotSupported);
+    // A failure this switch has no case for still has to read as a failure, not fall through to Success.
+    CHECK(Forge::VkResultToErrorCode(VK_ERROR_UNKNOWN) == ErrorCode::GraphicsAPIError);
+    // A non-error result this switch has no case for - a positive VK_INCOMPLETE, say - is not a failure.
+    CHECK(Forge::VkResultToErrorCode(VK_INCOMPLETE) == ErrorCode::Success);
+}
+
 TEST_CASE("Forge has the device the environment says it has to have", "[forge]")
 {
     if (!ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_REQUIRE_VULKAN"))
