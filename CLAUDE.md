@@ -27,6 +27,11 @@ Guessing at those produces code that compiles and is wrong.
 - [docs/audio.md](docs/audio.md) — `src/audio/` reports the same way and got there first. `Rndr::ErrorCode` is
   shared between the two, so a code added for one is visible to the other.
 
+- [docs/forge-test-review.md](docs/forge-test-review.md) — before touching `test/forge/`: what the suite
+  covers, the gaps in order of value, the sections that duplicate another, and the work split into buckets
+  by difficulty with a model and effort per bucket. Work down it one item per commit, buckets in order. Its
+  line numbers are pinned to a commit and drift; the case and section titles beside them do not.
+
 ## Building here
 
 There is no `CMakePresets.json`. Build directories in use: `build/msvc-debug`, `build/msvc-release`,
@@ -58,6 +63,15 @@ as well, opens an offscreen window and presents to it, and covers `Surface`, `Sw
 `FrameContext`. Both skip rather than fail on a machine that cannot run them, so a run that found no
 device looks like a run that passed - set `RNDR_TEST_REQUIRE_VULKAN=1` to make that a failure instead.
 
+A Forge case builds its own context and device through `ForgeFixture` (`ForgeWindowFixture` in the windowed
+file), skips through `IsForgeAvailable()` first, ends in a readback compared against a value worked out on
+the CPU, and closes with `REQUIRE_NO_VALIDATION_ERROR` - `_AT_TEARDOWN` when it has to catch an object that
+outlived the device. `ForgeTest::Unwrap` fails the case with the error code, so nothing checks `HasValue()`
+by hand. Shaders are Slang source in a `constexpr const char*` beside the case, compiled through
+`GetShaderCache()` so the per-section rerun does not recompile. A feature the machine may lack is probed and
+skipped, never assumed. Catch2 re-runs the case body once per `SECTION`, so anything built above the
+sections is built once per section.
+
 `[audio]` is headless and deterministic: decoders and the mixer driven directly. `[audio-device]` opens the real
 output endpoint and plays through it; it skips on a machine without one, and `RNDR_TEST_REQUIRE_AUDIO=1` makes that
 a failure. Read [docs/audio.md](docs/audio.md) before touching `src/audio/` - the thread split and the clip-lifetime
@@ -67,7 +81,8 @@ rule are the whole design.
 
 `type(Scope): Sentence-case subject`, imperative, no trailing period — e.g.
 `fix(Forge): Return descriptor sets to their pool`. Scopes are subsystems: `Forge`, `Canvas`, `Window`,
-`CMake`.
+`CMake`. A change to the tests alone is `test(Forge): Cover the bitmap upload path`; one that fixes what the
+test found is `fix(Forge): ...` in its own commit.
 
 Keep the body terse: a few lines on what changed and why, not a prose retelling of the diff. Do not cite
 task or issue numbers — they go stale the moment the list they refer to is renumbered, and the commit has to
