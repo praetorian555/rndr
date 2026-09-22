@@ -127,17 +127,20 @@ still pass today.
     readable off VMA. `InputAttachment` has no `DescriptorType` behind it and no way to read one in a
     dynamic rendering pass without `VK_KHR_dynamic_rendering_local_read`, so it is an API gap rather than a
     test gap - see the end of this document.
-14. **`SamplerDesc::lod_bias`.** Translated to `mipLodBias` at texture.cpp:536 and never set. The LOD clamp
-    section at 9078 has the two-level texture it needs: a bias of one with the clamp open reads the lower
-    level from a request for the upper one.
+14. ~~`SamplerDesc::lod_bias`.~~ Tried and struck on 2026-09-22: every shader in this file samples with
+    `SampleLevel`, an explicit LOD, and the specification only applies `mipLodBias` to the implicit LOD an
+    automatic `Sample` computes from screen-space derivatives - a compute shader has none, so nothing here
+    can make the bias move anything. Testing it wants a fragment-shader draw with a real mip chain and
+    varying derivatives, which is bucket C work, not a pattern to copy.
 15. **Pure functions in public headers with no direct test.** `ResolveAspectMask`, `IsDepthFormat`,
     `IsStencilFormat`, `ImageLayoutToString` in types.hpp and `VkResultToString` in vulkan-result.hpp.
     `ResolveAspectMask` decides the aspect of every copy on a depth or stencil format, and a table over the
     formats in `PixelFormat` costs nothing and needs no device, the way "Forge mip level sizes" (6020) and
     the `VkResult` mapping (366) need none.
-16. **The two instance extension queries.** `GraphicsContext::GetRequiredInstanceExtensions` and
-    `GetSupportedInstanceExtensions` are public statics with no caller in the suite. That the required list
-    is a subset of the supported one on this machine is the whole of what they can be asked.
+16. ~~The two instance extension queries.~~ Not a gap: `GetRequiredInstanceExtensions` and
+    `GetSupportedInstanceExtensions` are `private`, not public as this review first said - they exist for
+    `Create` to call and nothing outside `GraphicsContext` can reach them. Struck on 2026-09-22 after a test
+    for them failed to compile.
 17. **Readback of the depth aspect of a combined format.** `ImageAspectBits::Stencil` is named once
     (`ReadStencilValue`); `Depth` is never named, so a copy out of the depth aspect of `D24_UNORM_S8_UINT`
     is untested, and so is the size such a copy wants.

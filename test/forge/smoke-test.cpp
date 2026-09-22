@@ -439,6 +439,61 @@ TEST_CASE("Forge maps a VkResult to the error code it reports as", "[forge]")
     CHECK(Forge::VkResultToErrorCode(VK_INCOMPLETE) == ErrorCode::Success);
 }
 
+/**
+ * The pure functions of the public headers, none of which had a test: VkResultToString, IsDepthFormat,
+ * IsStencilFormat, ResolveAspectMask and ImageLayoutToString. Every one of them is a switch over a closed
+ * set with no device to reach, so what is checked is the table rather than anything Vulkan does with it.
+ */
+TEST_CASE("Forge pure functions of the public headers", "[forge]")
+{
+    SECTION("VkResultToString names the result rather than falling back to unknown")
+    {
+        CHECK(strcmp(Forge::VkResultToString(VK_SUCCESS), "VK_SUCCESS") == 0);
+        CHECK(strstr(Forge::VkResultToString(VK_ERROR_DEVICE_LOST), "VK_ERROR_DEVICE_LOST") != nullptr);
+        CHECK(strstr(Forge::VkResultToString(VK_ERROR_OUT_OF_DATE_KHR), "VK_ERROR_OUT_OF_DATE_KHR") != nullptr);
+        // A value this switch has no case for reads as unknown rather than as whichever case happens first.
+        CHECK(strcmp(Forge::VkResultToString(VK_ERROR_UNKNOWN), "Unknown VkResult.") == 0);
+    }
+    SECTION("IsDepthFormat and IsStencilFormat agree with the table each is a switch over")
+    {
+        CHECK(IsDepthFormat(PixelFormat::D32_SFLOAT));
+        CHECK(IsDepthFormat(PixelFormat::D16_UNORM_S8_UINT));
+        CHECK_FALSE(IsDepthFormat(PixelFormat::S8_UINT));
+        CHECK_FALSE(IsDepthFormat(PixelFormat::R8G8B8A8_UNORM));
+
+        CHECK(IsStencilFormat(PixelFormat::S8_UINT));
+        CHECK(IsStencilFormat(PixelFormat::D24_UNORM_S8_UINT));
+        CHECK_FALSE(IsStencilFormat(PixelFormat::D32_SFLOAT));
+        CHECK_FALSE(IsStencilFormat(PixelFormat::R8G8B8A8_UNORM));
+
+        // The combined formats carry both.
+        CHECK(IsDepthFormat(PixelFormat::D32_SFLOAT_S8_UINT));
+        CHECK(IsStencilFormat(PixelFormat::D32_SFLOAT_S8_UINT));
+    }
+    SECTION("ResolveAspectMask derives the aspect from the format only when none was named")
+    {
+        // An explicit mask passes through unchanged, whatever the format says.
+        CHECK(Forge::ResolveAspectMask(Forge::ImageAspectBits::Color, PixelFormat::D32_SFLOAT) == Forge::ImageAspectBits::Color);
+
+        // None derives it: colour for a format with neither, depth for a depth-only format, both for a
+        // combined one, and stencil alone for the one format that carries it without a depth aspect.
+        CHECK(Forge::ResolveAspectMask(Forge::ImageAspectBits::None, PixelFormat::R8G8B8A8_UNORM) == Forge::ImageAspectBits::Color);
+        CHECK(Forge::ResolveAspectMask(Forge::ImageAspectBits::None, PixelFormat::D32_SFLOAT) == Forge::ImageAspectBits::Depth);
+        CHECK(Forge::ResolveAspectMask(Forge::ImageAspectBits::None, PixelFormat::D24_UNORM_S8_UINT) ==
+              (Forge::ImageAspectBits::Depth | Forge::ImageAspectBits::Stencil));
+        CHECK(Forge::ResolveAspectMask(Forge::ImageAspectBits::None, PixelFormat::S8_UINT) == Forge::ImageAspectBits::Stencil);
+    }
+    SECTION("ImageLayoutToString names every layout rather than falling back to unknown")
+    {
+        CHECK(strcmp(Forge::ImageLayoutToString(Forge::ImageLayout::Undefined), "Undefined") == 0);
+        CHECK(strcmp(Forge::ImageLayoutToString(Forge::ImageLayout::ColorAttachment), "ColorAttachment") == 0);
+        CHECK(strcmp(Forge::ImageLayoutToString(Forge::ImageLayout::DepthStencilReadOnly), "DepthStencilReadOnly") == 0);
+        CHECK(strcmp(Forge::ImageLayoutToString(Forge::ImageLayout::Present), "Present") == 0);
+        // A value this switch has no case for reads as unknown rather than as whichever case happens first.
+        CHECK(strcmp(Forge::ImageLayoutToString(static_cast<Forge::ImageLayout>(99)), "an unknown layout") == 0);
+    }
+}
+
 TEST_CASE("Forge queue family indices report what was put in them", "[forge]")
 {
     Forge::QueueFamilyIndices indices;
@@ -550,6 +605,19 @@ TEST_CASE("Forge context desc", "[forge]")
         REQUIRE_FALSE(result.HasValue());
         REQUIRE(result.GetError() == ErrorCode::InvalidArgument);
         REQUIRE_NO_VALIDATION_ERROR_IN(context);
+    }
+    SECTION("GetDebugMessageCount counts Info messages that GetDebugMessages never stores")
+    {
+        // Info is one of the three real severities, so it is accepted rather than refused the way 99 is -
+        // and docs/forge.md says only the count survives for it, which is what the second half checks: every
+        // message this context has stored, if any, is a Warning or an Error and never an Info.
+        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+        // Accepted rather than refused - ForgeTest::Unwrap already fails the case if it were not.
+        (void)ForgeTest::Unwrap(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Info));
+        for (const Forge::DebugMessage& message : context.GetDebugMessages())
+        {
+            REQUIRE(message.severity != Forge::DebugMessageSeverity::Info);
+        }
     }
 }
 
@@ -673,6 +741,16 @@ TEST_CASE("Forge buffer edges", "[forge]")
     ForgeFixture fixture;
     constexpr i32 k_size = 256;
 
+    SECTION("Create refuses initial data larger than the buffer")
+    {
+        const Opal::DynamicArray<u8> too_much = MakeBytes(k_size + 1, 9);
+        REQUIRE_FALSE(Forge::Buffer::Create(fixture.device,
+                                        {.size = k_size,
+                                         .usage = Forge::BufferUsageBits::TransferSource,
+                                         .host_access = Forge::HostAccess::Random},
+                                        too_much)
+                          .HasValue());
+    }
     SECTION("keep_memory_mapped = false still round-trips through Update and Read")
     {
         // Nothing stays mapped between calls, so this is the map-write-unmap and map-invalidate-read-unmap
