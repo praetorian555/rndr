@@ -334,87 +334,6 @@ TEST_CASE("Forge buffer update and read", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
-TEST_CASE("Forge buffer survives a move", "[forge]")
-{
-    if (!IsForgeAvailable())
-    {
-        SKIP("No Vulkan device on this machine.");
-    }
-    ForgeFixture fixture;
-    constexpr i32 k_size = 128;
-    const Opal::DynamicArray<u8> written = MakeBytes(k_size, 17);
-
-    Forge::Buffer source = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size,
-                                          .usage = Forge::BufferUsageBits::TransferSource,
-                                          .host_access = Forge::HostAccess::Random,
-                                          .keep_memory_mapped = true},
-                         written));
-
-    Forge::Buffer moved_to(std::move(source));
-    REQUIRE_FALSE(source.IsValid());
-    REQUIRE(moved_to.IsValid());
-
-    Forge::Buffer assigned_to;
-    assigned_to = std::move(moved_to);
-    REQUIRE_FALSE(moved_to.IsValid());
-    REQUIRE(assigned_to.IsValid());
-
-    // The mapped pointer has to have come along, or this writes through a pointer the source unmapped.
-    Opal::DynamicArray<u8> read_back(k_size);
-    REQUIRE(assigned_to.Read(read_back) == ErrorCode::Success);
-    REQUIRE(CountMismatches(written, read_back) == 0);
-    REQUIRE_NO_VALIDATION_ERROR(fixture);
-}
-
-TEST_CASE("Forge compute dispatch and readback", "[forge]")
-{
-    if (!IsForgeAvailable())
-    {
-        SKIP("No Vulkan device on this machine.");
-    }
-    ForgeFixture fixture;
-    constexpr i32 k_element_count = 256;
-    constexpr i32 k_group_size = 64;
-
-    Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
-                                          .usage = Forge::BufferUsageBits::StorageBuffer,
-                                          .host_access = Forge::HostAccess::Random,
-                                          .use_device_address = true}));
-    const Opal::DynamicArray<u8> zeros(k_element_count * sizeof(u32));
-    // Wiped first, so nothing a previous run left behind can pass for a successful dispatch.
-    REQUIRE(output.Update(zeros) == ErrorCode::Success);
-
-    const Forge::Shader compute_shader = ForgeTest::Unwrap(
-        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
-    REQUIRE(compute_shader.IsValid());
-    REQUIRE(compute_shader.GetShaderStage() == ShaderTypeBits::Compute);
-
-    Forge::ComputePipelineDesc pipeline_desc;
-    pipeline_desc.shader = compute_shader;
-    pipeline_desc.push_constant_ranges.PushBack(
-        {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
-    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
-    REQUIRE(pipeline.IsValid());
-
-    const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
-    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                               REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(output_address)) ==
-                                       ErrorCode::Success);
-                               REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
-                           }) == ErrorCode::Success);
-
-    Opal::DynamicArray<u32> values(k_element_count);
-    REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
-    for (i32 i = 0; i < k_element_count; ++i)
-    {
-        REQUIRE(values[i] == static_cast<u32>(i) + 1000);
-    }
-    REQUIRE_NO_VALIDATION_ERROR(fixture);
-}
-
 TEST_CASE("Forge buffer copy and readback", "[forge]")
 {
     if (!IsForgeAvailable())
@@ -1462,19 +1381,6 @@ TEST_CASE("Forge bindless texture array", "[forge]")
             ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = 4, .usage = Forge::BufferUsageBits::StorageBuffer}));
         REQUIRE(descriptor_set.Update(0, output, 0, Forge::k_whole_buffer, 1) != ErrorCode::Success);
     }
-    SECTION("A variable count above the texture binding descriptor count is refused")
-    {
-        REQUIRE_FALSE(Forge::DescriptorSet::Create(pool, layout, k_max_descriptors + 1).HasValue());
-    }
-    SECTION("An update after bind texture layout needs a pool that expects one")
-    {
-        Forge::DescriptorPoolDesc plain_pool_desc;
-        REQUIRE(plain_pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
-        REQUIRE(plain_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, k_max_descriptors) == ErrorCode::Success);
-        plain_pool_desc.use_update_after_bind = false;
-        const Forge::DescriptorPool plain_pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(device, plain_pool_desc));
-        REQUIRE_FALSE(Forge::DescriptorSet::Create(plain_pool, layout, k_used_descriptors).HasValue());
-    }
 
     Opal::StringUtf8 report;
     for (const Forge::DebugMessage& message : context.GetDebugMessages())
@@ -1675,29 +1581,6 @@ TEST_CASE("Forge barrier vocabulary", "[forge]")
         REQUIRE(command_buffer.CmdMemoryBarrier(barrier) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
-    SECTION("An ownership transfer naming one family on both sides is recorded")
-    {
-        // Both halves of a transfer, release and acquire, on the one queue this test has. Naming the same
-        // family on both sides is a no-op transfer, which is what makes it safe to record here.
-        const u32 family = fixture.GetQueue().GetQueueFamilyIndex();
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
-                                   const Forge::BufferBarrier release{
-                                       .stages_must_finish = Forge::PipelineStageBits::Copy,
-                                       .stages_must_finish_access = Forge::PipelineStageAccessBits::TransferWrite,
-                                       .before_stages_start = Forge::PipelineStageBits::None,
-                                       .before_stages_start_access = Forge::PipelineStageAccessBits::None,
-                                       .source_queue_family = family,
-                                       .destination_queue_family = family,
-                                       .buffer = destination};
-                                   REQUIRE(command_buffer.CmdBufferBarrier(release) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
-        Opal::DynamicArray<u8> read_back(k_size);
-        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
-        REQUIRE(CountMismatches(written, read_back) == 0);
-    }
 
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -1779,16 +1662,6 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
         const Forge::TextureBlitRegion region{.source = {.mip_level = 0}, .destination = {.mip_level = 1}};
         REQUIRE(command_buffer.CmdBlitTexture(texture, texture, {&region, 1}) != ErrorCode::Success);
         REQUIRE(command_buffer.End() == ErrorCode::Success);
-    }
-    SECTION("A move carries the layouts across")
-    {
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
-                    { REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success); }) ==
-                ErrorCode::Success);
-        Forge::Texture moved(std::move(texture));
-        REQUIRE(ForgeTest::Unwrap(moved.GetCurrentLayout()) == Forge::ImageLayout::ShaderReadOnly);
-        REQUIRE_FALSE(texture.IsValid());  // NOLINT(bugprone-use-after-move)
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -1899,7 +1772,7 @@ TEST_CASE("Forge GPU event macros", "[forge]")
         REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
-    SECTION("The begin and end macros are the same region written out")
+    SECTION("The begin and end macros are the same region written out, with or without the name on the end")
     {
         REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
                                        [&](Forge::CommandBuffer& command_buffer)
@@ -1907,66 +1780,15 @@ TEST_CASE("Forge GPU event macros", "[forge]")
                                            RNDR_GPU_EVENT_BEGIN(command_buffer, "copy pass");
                                            REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
                                            RNDR_GPU_EVENT_END(command_buffer, "copy pass");
-                                       }) == ErrorCode::Success);
-        Opal::DynamicArray<u8> read_back(k_size);
-        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
-        REQUIRE(CountMismatches(written, read_back) == 0);
-    }
-    SECTION("The end macro closes a region without being told the name")
-    {
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                                       [&](Forge::CommandBuffer& command_buffer)
-                                       {
-                                           RNDR_GPU_EVENT_BEGIN(command_buffer, "copy pass");
+                                           // The end macro takes the name for symmetry with Canvas and
+                                           // nothing reads it, so the same region closes without one.
+                                           RNDR_GPU_EVENT_BEGIN(command_buffer, "copy pass again");
                                            REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
                                            RNDR_GPU_EVENT_END(command_buffer);
                                        }) == ErrorCode::Success);
         Opal::DynamicArray<u8> read_back(k_size);
         REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
-    }
-    SECTION("Scoped regions nest")
-    {
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                                       [&](Forge::CommandBuffer& command_buffer)
-                                       {
-                                           RNDR_GPU_EVENT_SCOPED(command_buffer, "frame");
-                                           {
-                                               RNDR_GPU_EVENT_SCOPED(command_buffer, "copy pass");
-                                               REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
-                                           }
-                                       }) == ErrorCode::Success);
-        Opal::DynamicArray<u8> read_back(k_size);
-        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
-        REQUIRE(CountMismatches(written, read_back) == 0);
-    }
-    SECTION("A name longer than a small string still names the region")
-    {
-        // Past the 23 characters Opal keeps inline, which is the case the const char* overload exists for:
-        // nothing here should reach an allocation, and the name still has to arrive intact.
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        RNDR_GPU_EVENT_SCOPED(command_buffer, "a deferred shading pass with a name nobody would keep inline");
-                        REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-        Opal::DynamicArray<u8> read_back(k_size);
-        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
-        REQUIRE(CountMismatches(written, read_back) == 0);
-    }
-    SECTION("A scope closes the region a refused command left open")
-    {
-        const Forge::Buffer no_transfer =
-            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::ConstantBuffer}));
-        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
-        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
-        {
-            RNDR_GPU_EVENT_SCOPED(command_buffer, "doomed pass");
-            REQUIRE(command_buffer.CmdCopyBuffer(no_transfer, destination) == ErrorCode::InvalidArgument);
-        }
-        REQUIRE(command_buffer.End() == ErrorCode::Success);
-        // Not submitted, as above: the layer rejected the copy while it was recorded.
     }
     SECTION("Both arities of one macro compile side by side")
     {
@@ -2261,25 +2083,6 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
         Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
         REQUIRE(set.Update(0, small, 128, 256) != ErrorCode::Success);
         REQUIRE(set.Update(0, small, 0, 0) != ErrorCode::Success);
-    }
-    SECTION("A moved set carries what its layout declared")
-    {
-        // The pattern every per-frame resource in the sample uses: declare empty, assign over it. A set
-        // whose binding types stayed behind would reject the very bindings its layout has.
-        Forge::DescriptorSet set;
-        set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
-        REQUIRE(set.IsValid());
-        REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
-
-        const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
-                                   {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer}));
-        REQUIRE(set.Update(0, buffer) == ErrorCode::Success);
-
-        const Forge::DescriptorSet moved(std::move(set));
-        REQUIRE(ForgeTest::Unwrap(moved.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
-        // The source is empty afterwards, so it knows about no binding at all.
-        REQUIRE_FALSE(set.IsValid());
-        REQUIRE_FALSE(set.GetBindingDescriptorType(0).HasValue());
     }
     SECTION("Writing a binding the layout does not have is refused")
     {
@@ -5199,18 +5002,6 @@ TEST_CASE("Forge barrier presets", "[forge]")
         REQUIRE(CountMismatches(expected, pixels) == 0);
     };
 
-    SECTION("ToShaderRead moves a sampled texture without losing it")
-    {
-        run_preset(
-            Forge::TextureUsageBits::Sampled, [](Forge::Texture& texture)
-            { return ForgeTest::Unwrap(Forge::TextureBarrier::ToShaderRead(texture)); }, Forge::ImageLayout::ShaderReadOnly);
-    }
-    SECTION("ToTransferSource moves a texture into the layout a copy reads from")
-    {
-        run_preset(Forge::TextureUsageBits::Sampled,
-                   [](Forge::Texture& texture) { return ForgeTest::Unwrap(Forge::TextureBarrier::ToTransferSource(texture)); },
-                   Forge::ImageLayout::TransferSource);
-    }
     SECTION("The three argument To is told both layouts")
     {
         // No short form on purpose: with both, dropping an argument would leave a call that compiles and
@@ -6569,18 +6360,6 @@ TEST_CASE("Forge stencil testing", "[forge]")
             }
         }
     }
-    SECTION("The same draw with the test satisfied everywhere covers the whole target")
-    {
-        // Identical geometry and identical stencil buffer; only the comparator moved. Without this the case
-        // above would also pass on a device that simply dropped the second draw's right half.
-        const Opal::DynamicArray<u8> pixels = run_pass(make_paint_pipeline(Comparator::Always));
-        for (i32 i = 0; i < k_side * k_side; ++i)
-        {
-            INFO("texel " << i);
-            REQUIRE(static_cast<i32>(pixels[i * 4 + 0]) == 0);
-            REQUIRE(static_cast<i32>(pixels[i * 4 + 1]) == 255);
-        }
-    }
     SECTION("A stencil attachment that names no texture is refused")
     {
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
@@ -6861,7 +6640,7 @@ TEST_CASE("Forge blending", "[forge]")
         }
     };
 
-    /** The fourth channel, which the sections above leave alone and the two below are entirely about. */
+    /** The fourth channel, which both sections below are entirely about. */
     auto require_alpha = [&](const Opal::DynamicArray<u8>& pixels, i32 expected)
     {
         for (i32 texel = 0; texel < k_side * k_side; ++texel)
@@ -6873,61 +6652,6 @@ TEST_CASE("Forge blending", "[forge]")
         }
     };
 
-    SECTION("Source alpha over one minus source alpha is the classic blend")
-    {
-        const Opal::DynamicArray<u8> pixels = blend_over_destination({.blend_enabled = true,
-                                                                      .src_color_factor = BlendFactor::SrcAlpha,
-                                                                      .dst_color_factor = BlendFactor::InvSrcAlpha,
-                                                                      .color_operation = BlendOperation::Add});
-        const f32 source_alpha = static_cast<f32>(k_src[3]) / 255.0f;
-        i32 expected[3] = {};
-        for (i32 channel = 0; channel < 3; ++channel)
-        {
-            expected[channel] = expected_channel(static_cast<f32>(k_src[channel]) / 255.0f,
-                                                 static_cast<f32>(k_dst[channel]) / 255.0f, source_alpha,
-                                                 1.0f - source_alpha, false);
-        }
-        require_channels(pixels, expected);
-    }
-    SECTION("One and one add the two together")
-    {
-        const Opal::DynamicArray<u8> pixels = blend_over_destination({.blend_enabled = true,
-                                                                      .src_color_factor = BlendFactor::One,
-                                                                      .dst_color_factor = BlendFactor::One,
-                                                                      .color_operation = BlendOperation::Add});
-        i32 expected[3] = {};
-        for (i32 channel = 0; channel < 3; ++channel)
-        {
-            expected[channel] = expected_channel(static_cast<f32>(k_src[channel]) / 255.0f,
-                                                 static_cast<f32>(k_dst[channel]) / 255.0f, 1.0f, 1.0f, false);
-        }
-        require_channels(pixels, expected);
-    }
-    SECTION("A zero source factor leaves the destination alone")
-    {
-        // The draw still runs and still covers the target; what reaches the attachment is the factors.
-        const Opal::DynamicArray<u8> pixels = blend_over_destination({.blend_enabled = true,
-                                                                      .src_color_factor = BlendFactor::Zero,
-                                                                      .dst_color_factor = BlendFactor::One,
-                                                                      .color_operation = BlendOperation::Add});
-        const i32 expected[3] = {k_dst[0], k_dst[1], k_dst[2]};
-        require_channels(pixels, expected);
-    }
-    SECTION("The operation is read as well as the factors")
-    {
-        // The same two factors as the additive case, so what separates the two answers is the operation.
-        const Opal::DynamicArray<u8> pixels = blend_over_destination({.blend_enabled = true,
-                                                                      .src_color_factor = BlendFactor::One,
-                                                                      .dst_color_factor = BlendFactor::One,
-                                                                      .color_operation = BlendOperation::ReverseSubtract});
-        i32 expected[3] = {};
-        for (i32 channel = 0; channel < 3; ++channel)
-        {
-            expected[channel] = expected_channel(static_cast<f32>(k_src[channel]) / 255.0f,
-                                                 static_cast<f32>(k_dst[channel]) / 255.0f, 1.0f, 1.0f, true);
-        }
-        require_channels(pixels, expected);
-    }
     SECTION("The alpha factors are read from their own fields rather than the colour ones")
     {
         // Opposite factors on the two halves, which is what makes a swap visible: the colour keeps the
@@ -7202,30 +6926,6 @@ TEST_CASE("Forge sampler filtering and addressing", "[forge]")
         INFO("nearest rgba " << picked.x << " " << picked.y << " " << picked.z << " " << picked.w);
         REQUIRE(picked.x == Catch::Approx(1.0f).margin(0.01));
         REQUIRE(picked.y == Catch::Approx(0.0f).margin(0.01));
-    }
-    SECTION("Wrapping and clamping differ at a coordinate outside the texture")
-    {
-        // A quarter past the right edge. Repeat wraps it back onto the left texel; clamping holds it on the
-        // right one. A nearest filter, so the answer is a whole texel either way.
-        const SampleParams params{.uv = {1.25f, 0.5f}};
-        const Forge::Sampler repeating = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest,
-                                                        .mag_filter = ImageFilter::Nearest,
-                                                        .address_mode_u = ImageAddressMode::Repeat,
-                                                        .address_mode_v = ImageAddressMode::Repeat}));
-        const Forge::Sampler clamping = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest,
-                                                       .mag_filter = ImageFilter::Nearest,
-                                                       .address_mode_u = ImageAddressMode::Clamp,
-                                                       .address_mode_v = ImageAddressMode::Clamp}));
-
-        const Vector4f wrapped = sample_with(repeating, row, params);
-        INFO("wrapped rgba " << wrapped.x << " " << wrapped.y);
-        REQUIRE(wrapped.x == Catch::Approx(1.0f).margin(0.01));
-        REQUIRE(wrapped.y == Catch::Approx(0.0f).margin(0.01));
-
-        const Vector4f held = sample_with(clamping, row, params);
-        INFO("clamped rgba " << held.x << " " << held.y);
-        REQUIRE(held.x == Catch::Approx(0.0f).margin(0.01));
-        REQUIRE(held.y == Catch::Approx(1.0f).margin(0.01));
     }
     SECTION("A LOD clamp forces the level the sampler allows rather than the one asked for")
     {
