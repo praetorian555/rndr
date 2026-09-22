@@ -6079,6 +6079,250 @@ TEST_CASE("Forge barrier preset for presenting", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
+TEST_CASE("Forge a descriptor written after the set was bound", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_late_update{.update_after_bind_descriptors = true,
+                                                  .update_unused_while_pending_descriptors = true};
+    if (!CanCreateDevice(k_late_update))
+    {
+        SKIP("This device cannot have its descriptors written once the set is bound.");
+    }
+    ForgeFixture fixture(k_late_update);
+    constexpr i32 k_element_count = 64;
+
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_descriptor_source, {.entry_point = "main_descriptor", .cache = GetShaderCache()}));
+
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8) == ErrorCode::Success);
+    pool_desc.max_sets = 4;
+    pool_desc.use_update_after_bind = true;
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+
+    /** The buffer the dispatch wrote, element by element, against what the shader computes. */
+    auto require_written = [&](const Forge::Buffer& output, bool expect_written)
+    {
+        Opal::DynamicArray<u32> values(k_element_count);
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            INFO("element " << i);
+            REQUIRE(values[i] == (expect_written ? static_cast<u32>(i) + 7 : 0u));
+        }
+    };
+
+    SECTION("The descriptor the dispatch reads is the one written after the bind")
+    {
+        // The set is written once, bound, and written again with another buffer before anything is
+        // submitted. With UpdateAfterBind the descriptor the dispatch reads is the one standing when it
+        // runs, so the second buffer is the one that comes back written and the first is left as it was.
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute, {},
+                                       Forge::DescriptorBindingFlagBits::UpdateAfterBind) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        const Forge::Buffer bound_at_record = MakeWipedOutput(fixture.device, k_element_count);
+        const Forge::Buffer written_after = MakeWipedOutput(fixture.device, k_element_count);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, bound_at_record) == ErrorCode::Success);
+
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+
+        // After the bind was recorded and before the queue ever sees it.
+        REQUIRE(set.Update(0, written_after) == ErrorCode::Success);
+
+        const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
+        REQUIRE(fixture.GetQueue().Submit(command_buffer, fence) == ErrorCode::Success);
+        REQUIRE(fence.Wait() == ErrorCode::Success);
+
+        require_written(written_after, true);
+        require_written(bound_at_record, false);
+    }
+    SECTION("A binding no recorded command reads can be written while the submit is pending")
+    {
+        // Two bindings, and the shader reads the first. The second is written after the set is bound and
+        // before the submit, which is what UpdateUnusedWhilePending allows and what a plain binding forbids.
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute, {},
+                                       Forge::DescriptorBindingFlagBits::UpdateUnusedWhilePending) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        const Forge::Buffer read_by_the_shader = MakeWipedOutput(fixture.device, k_element_count);
+        const Forge::Buffer unused = MakeWipedOutput(fixture.device, k_element_count);
+        const Forge::Buffer written_while_pending = MakeWipedOutput(fixture.device, k_element_count);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, read_by_the_shader) == ErrorCode::Success);
+        REQUIRE(set.Update(1, unused) == ErrorCode::Success);
+
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+
+        REQUIRE(set.Update(1, written_while_pending) == ErrorCode::Success);
+
+        const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
+        REQUIRE(fixture.GetQueue().Submit(command_buffer, fence) == ErrorCode::Success);
+        REQUIRE(fence.Wait() == ErrorCode::Success);
+
+        // The dispatch wrote through the binding it reads, and the two buffers behind the binding it does
+        // not are both untouched.
+        require_written(read_by_the_shader, true);
+        require_written(unused, false);
+        require_written(written_while_pending, false);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a late update binding on a device without the feature is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // The fixture of every other case here: a device that asked for no descriptor features beyond the
+    // defaults, which is where both of these flags are a mistake rather than a capability.
+    ForgeFixture fixture;
+    REQUIRE_FALSE(fixture.device.GetFeatures().update_after_bind_descriptors);
+    REQUIRE_FALSE(fixture.device.GetFeatures().update_unused_while_pending_descriptors);
+
+    Forge::DescriptorSetLayoutDesc after_bind_desc;
+    REQUIRE(after_bind_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute, {},
+                                       Forge::DescriptorBindingFlagBits::UpdateAfterBind) == ErrorCode::Success);
+    REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, after_bind_desc).HasValue());
+
+    Forge::DescriptorSetLayoutDesc while_pending_desc;
+    REQUIRE(while_pending_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute, {},
+                                          Forge::DescriptorBindingFlagBits::UpdateUnusedWhilePending) == ErrorCode::Success);
+    REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, while_pending_desc).HasValue());
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a layout checked against a set index other than zero", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_element_count = 64;
+
+    // Two sets, one binding each, both named by the shader: `first` at set zero and `second` at set one.
+    const Forge::Shader shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_two_set_source, {.entry_point = "main_two_sets", .cache = GetShaderCache()}));
+
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 8) == ErrorCode::Success);
+    pool_desc.max_sets = 8;
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+
+    auto make_checked_layout = [&](u32 set_index, u32 binding)
+    {
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        REQUIRE(layout_desc.AddBinding(binding, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        layout_desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(shader));
+        layout_desc.set_index = set_index;
+        return Forge::DescriptorSetLayout::Create(fixture.device, layout_desc);
+    };
+
+    SECTION("The names come from the set the layout says it is")
+    {
+        const Forge::DescriptorSetLayout second_layout = ForgeTest::Unwrap(make_checked_layout(1, 0));
+        Forge::DescriptorSet second_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, second_layout));
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
+
+        // `second` is what set one calls its binding, and `first` is set zero's name for the binding at the
+        // same index - so a layout that had read set zero would take the other name and refuse this one.
+        REQUIRE(second_set.Update("second", output) == ErrorCode::Success);
+        REQUIRE(second_set.Update("first", output) != ErrorCode::Success);
+    }
+    SECTION("Both sets drive the dispatch that reads them")
+    {
+        const Forge::DescriptorSetLayout first_layout = ForgeTest::Unwrap(make_checked_layout(0, 0));
+        const Forge::DescriptorSetLayout second_layout = ForgeTest::Unwrap(make_checked_layout(1, 0));
+
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(first_layout));
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(second_layout));
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Opal::DynamicArray<u32> input_values(k_element_count);
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            input_values[i] = static_cast<u32>(i) + 500;
+        }
+        const Forge::Buffer input = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                   .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                   .host_access = Forge::HostAccess::Random},
+                                  {reinterpret_cast<const u8*>(input_values.GetData()), input_values.GetSize() * sizeof(u32)}));
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
+
+        Forge::DescriptorSet first_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, first_layout));
+        Forge::DescriptorSet second_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, second_layout));
+        REQUIRE(first_set.Update("first", input) == ErrorCode::Success);
+        REQUIRE(second_set.Update("second", output) == ErrorCode::Success);
+
+        const Opal::InPlaceArray<Opal::Ref<const Forge::DescriptorSet>, 2> sets{Opal::Ref<const Forge::DescriptorSet>(first_set),
+                                                                                Opal::Ref<const Forge::DescriptorSet>(second_set)};
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdBindDescriptorSets(pipeline, {sets.GetData(), 2}) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u32> values(k_element_count);
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            INFO("element " << i);
+            REQUIRE(values[i] == input_values[i] * 2);
+        }
+    }
+    SECTION("A layout that leaves a binding of its set undeclared is refused")
+    {
+        // Set one declares binding zero, and this layout declares binding three instead - so the binding the
+        // shader reads has nothing behind it, which is what naming the set index catches.
+        REQUIRE_FALSE(make_checked_layout(1, 3).HasValue());
+
+        // The other way round is deliberately allowed: a set index the shader declares nothing at leaves
+        // every binding of this layout unmatched, which is the same as a descriptor no shader reads. The
+        // layout is built, and the binding simply has no name for the by-name update to find.
+        const Forge::DescriptorSetLayout unused_set = ForgeTest::Unwrap(make_checked_layout(2, 0));
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, unused_set));
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
+        REQUIRE(set.Update("second", output) != ErrorCode::Success);
+        REQUIRE(set.Update(0, output) == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge binding several descriptor sets at once", "[forge]")
 {
     if (!IsForgeAvailable())
