@@ -525,6 +525,101 @@ TEST_CASE("Forge buffer copy and readback", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge buffer edges", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 256;
+
+    SECTION("keep_memory_mapped = false still round-trips through Update and Read")
+    {
+        // Nothing stays mapped between calls, so this is the map-write-unmap and map-invalidate-read-unmap
+        // path rather than the memcpy into memory already mapped that every other case here takes.
+        const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device,
+            {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource, .host_access = Forge::HostAccess::Random, .keep_memory_mapped = false}));
+        const Opal::DynamicArray<u8> written = MakeBytes(k_size, 41);
+        REQUIRE(buffer.Update(written) == ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(buffer.Read(read_back) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
+    SECTION("A read that does not fit is OutOfBounds")
+    {
+        const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource, .host_access = Forge::HostAccess::Random}));
+        Opal::DynamicArray<u8> too_much(k_size + 1);
+        REQUIRE(buffer.Read(too_much) == ErrorCode::OutOfBounds);
+        Opal::DynamicArray<u8> at_the_edge(1);
+        REQUIRE(buffer.Read(at_the_edge, k_size) == ErrorCode::OutOfBounds);
+    }
+    SECTION("UploadToBuffer and ReadBackBuffer honour their offset")
+    {
+        constexpr i32 k_offset = 64;
+        const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = k_size,
+                            .usage = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination,
+                            .host_access = Forge::HostAccess::Random}));
+        const Opal::DynamicArray<u8> zeros(k_size);
+        REQUIRE(buffer.Update(zeros) == ErrorCode::Success);
+
+        const Opal::DynamicArray<u8> written = MakeBytes(k_size - k_offset, 7);
+        REQUIRE(Forge::UploadToBuffer(fixture.device, fixture.GetQueue(), buffer, written, k_offset) == ErrorCode::Success);
+
+        Opal::DynamicArray<u8> head(k_offset);
+        REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), buffer, head, 0) == ErrorCode::Success);
+        for (i32 i = 0; i < k_offset; ++i)
+        {
+            REQUIRE(head[i] == 0);
+        }
+        Opal::DynamicArray<u8> tail(k_size - k_offset);
+        REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), buffer, tail, k_offset) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, tail) == 0);
+    }
+    SECTION("A CmdCopyBuffer region past the end of either buffer is refused")
+    {
+        const Forge::Buffer source =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}));
+        const Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device,
+            {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination}));
+        const Forge::BufferCopyRegion past_the_end{.source_offset = 0, .destination_offset = 0, .size = k_size + 1};
+        ErrorCode copy_status = ErrorCode::Success;
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       { copy_status = command_buffer.CmdCopyBuffer(source, destination, {&past_the_end, 1}); }) ==
+                ErrorCode::Success);
+        REQUIRE(copy_status == ErrorCode::OutOfBounds);
+    }
+    SECTION("The default CmdCopyBuffer overload copies only as much as the smaller buffer has")
+    {
+        constexpr i32 k_small_size = 64;
+        const Opal::DynamicArray<u8> written = MakeBytes(k_size, 53);
+        const Forge::Buffer source = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource}, written));
+        Forge::Buffer destination = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device,
+            {.size = k_small_size,
+             .usage = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination,
+             .host_access = Forge::HostAccess::Random}));
+        const Opal::DynamicArray<u8> zeros(k_small_size);
+        REQUIRE(destination.Update(zeros) == ErrorCode::Success);
+
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_small_size);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
+        const Opal::DynamicArray<u8> expected(written.GetData(), k_small_size);
+        REQUIRE(CountMismatches(expected, read_back) == 0);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge texture upload, mip generation and readback", "[forge]")
 {
     if (!IsForgeAvailable())
