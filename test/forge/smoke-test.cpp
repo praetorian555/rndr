@@ -4036,6 +4036,70 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+constexpr const char* k_named_storage_source = R"(
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> value_buffer;
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_named(uint3 thread_id : SV_DispatchThreadID)
+{
+    value_buffer[thread_id.x] = thread_id.x + 1000;
+}
+)";
+
+/**
+ * DescriptorSet::Update(name, buffer, ...), which had no caller - only the texture by-name overload was ever
+ * called. Writes the descriptor by name and then actually dispatches through it, rather than only checking
+ * that the call reports Success: a name resolved to the wrong binding index would still return Success and
+ * only show up in what the shader read.
+ */
+TEST_CASE("Forge descriptor set update by name for a buffer", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_element_count = 256;
+    constexpr i32 k_group_size = 64;
+
+    const Forge::Shader shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_named_storage_source, {.entry_point = "main_named", .cache = GetShaderCache()}));
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    layout_desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(shader));
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    REQUIRE(layout.GetDesc().bindings[0].name == Opal::StringUtf8("value_buffer"));
+
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+    pool_desc.max_sets = 1;
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+    Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+
+    Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
+    REQUIRE(ForgeTest::Unwrap(set.GetBindingIndex("value_buffer")) == 0);
+    REQUIRE(set.Update("value_buffer", output) == ErrorCode::Success);
+    // A name the layout does not carry is refused rather than silently doing nothing.
+    REQUIRE(set.Update("no_such_buffer", output) != ErrorCode::Success);
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
+    RequireComputeWrote(output, k_element_count);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 /** Trivial and self-contained, so the cache tests are about the cache and not about what it holds. */
 constexpr const char* k_cache_source = R"(
 [shader("compute")]
