@@ -3058,6 +3058,220 @@ Texel GetHalfColor(const Opal::DynamicArray<u8>& pixels, bool right_half)
         REQUIRE(half_color == (expected));                                                                        \
     } while (false)
 
+namespace
+{
+
+/**
+ * One draw writing two colour attachments, each a constant of its own. The two values share no channel, so
+ * an attachment that came back as the other one says the targets were swapped and one that came back as the
+ * clear says the draw never reached it.
+ */
+constexpr const char* k_two_target_source = R"(
+struct TwoTargets
+{
+    float4 first : SV_Target0;
+    float4 second : SV_Target1;
+};
+
+[shader("vertex")]
+float4 main_two_target_vertex(float2 position : POSITION) : SV_Position
+{
+    return float4(position, 0.0, 1.0);
+}
+
+[shader("fragment")]
+TwoTargets main_two_target_fragment()
+{
+    TwoTargets output;
+    output.first = float4(0.0, 1.0, 0.0, 1.0);
+    output.second = float4(0.0, 0.0, 1.0, 1.0);
+    return output;
+}
+)";
+
+/** What the two attachments are cleared to, and what each one holds once the draw has written it. */
+constexpr Texel k_cleared{255, 0, 0, 255};
+constexpr Texel k_first_target{0, 255, 0, 255};
+constexpr Texel k_second_target{0, 0, 255, 255};
+
+/** The square both two-target cases render into, and the format its attachments carry. */
+constexpr i32 k_two_target_side = 4;
+constexpr PixelFormat k_two_target_format = PixelFormat::R8G8B8A8_UNORM;
+
+/** A colour attachment of the size the two-target cases render at. */
+Forge::Texture MakeTwoTargetAttachment(const Forge::Device& device)
+{
+    return ForgeTest::Unwrap(Forge::Texture::Create(
+        device,
+        {.format = k_two_target_format,
+         .width = k_two_target_side,
+         .height = k_two_target_side,
+         .usage = Forge::TextureUsageBits::ColorAttachment | Forge::TextureUsageBits::TransferSource}));
+}
+
+/** The first texel of an attachment, which the fullscreen triangle wrote the same as every other one. */
+Texel ReadFirstTexel(ForgeFixture& fixture, Forge::Texture& texture)
+{
+    Opal::DynamicArray<u8> pixels(k_two_target_side * k_two_target_side * 4);
+    REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), texture, pixels, 0, Forge::ImageLayout::TransferSource) ==
+            ErrorCode::Success);
+    return Texel{static_cast<i32>(pixels[0]), static_cast<i32>(pixels[1]), static_cast<i32>(pixels[2]), static_cast<i32>(pixels[3])};
+}
+
+/** Clears both attachments and draws the triangle that writes both of them. */
+void DrawTwoTargets(ForgeFixture& fixture, const Forge::Pipeline& pipeline, const Forge::Buffer& vertices, Forge::Texture& first,
+                    Forge::Texture& second)
+{
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(first)) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(second)) == ErrorCode::Success);
+                    const Forge::RenderingDesc rendering_desc{
+                        .render_area_extent = {k_two_target_side, k_two_target_side},
+                        .color_attachments = {Forge::RenderingAttachmentDesc{.texture = first,
+                                                                             .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                             .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                             .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}},
+                                              Forge::RenderingAttachmentDesc{.texture = second,
+                                                                             .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                             .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                             .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
+                    REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_two_target_side, k_two_target_side}) ==
+                            ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_two_target_side, k_two_target_side}) ==
+                            ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                }) == ErrorCode::Success);
+}
+
+}  // namespace
+
+TEST_CASE("Forge several colour attachments", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_two_target_source, {.entry_point = "main_two_target_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_two_target_source, {.entry_point = "main_two_target_fragment", .cache = GetShaderCache()}));
+
+    const Forge::Buffer vertices = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                              Opal::AsBytes(k_fullscreen_vertices)));
+
+    /** The pipeline the sections differ in, with the blend state each one wants. */
+    auto make_pipeline_desc = [&]
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+        pipeline_desc.color_attachment_formats.PushBack(k_two_target_format);
+        pipeline_desc.color_attachment_formats.PushBack(k_two_target_format);
+        return pipeline_desc;
+    };
+
+    SECTION("A draw writes every attachment the pipeline names")
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = make_pipeline_desc();
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture first = MakeTwoTargetAttachment(fixture.device);
+        Forge::Texture second = MakeTwoTargetAttachment(fixture.device);
+        DrawTwoTargets(fixture, pipeline, vertices, first, second);
+
+        // Each attachment holds the value its own SV_Target wrote, and neither holds the clear.
+        REQUIRE(ReadFirstTexel(fixture, first) == k_first_target);
+        REQUIRE(ReadFirstTexel(fixture, second) == k_second_target);
+    }
+    SECTION("A pipeline with fewer blend attachments than colour formats is refused")
+    {
+        // Vulkan wants one blend state per colour attachment and reads the array by the format count, so a
+        // desc that names two formats and one blend state is read off the end of what the caller wrote.
+        Forge::GraphicsPipelineDesc pipeline_desc = make_pipeline_desc();
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, pipeline_desc).HasValue());
+    }
+    SECTION("Blend state that differs between attachments needs the device feature")
+    {
+        // This fixture asked for no features, so independent_blend is off and every attachment has to carry
+        // the same blend state. Two masks that differ is the mistake, and the device cannot honour it.
+        Forge::GraphicsPipelineDesc pipeline_desc = make_pipeline_desc();
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = Forge::ColorWriteMaskBits::All});
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = Forge::ColorWriteMaskBits::Red});
+        REQUIRE_FALSE(Forge::Pipeline::Create(fixture.device, pipeline_desc).HasValue());
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge blend state per colour attachment", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_independent_blend{.independent_blend = true};
+    if (!CanCreateDevice(k_independent_blend))
+    {
+        SKIP("This device cannot give each colour attachment its own blend state.");
+    }
+    ForgeFixture fixture(k_independent_blend);
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_two_target_source, {.entry_point = "main_two_target_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_two_target_source, {.entry_point = "main_two_target_fragment", .cache = GetShaderCache()}));
+
+    const Forge::Buffer vertices = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                              Opal::AsBytes(k_fullscreen_vertices)));
+
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+    // The first attachment takes everything the shader wrote; the second takes the red channel only, which
+    // the shader writes as zero over a clear that set it to one.
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = Forge::ColorWriteMaskBits::All});
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = Forge::ColorWriteMaskBits::Red});
+    pipeline_desc.color_attachment_formats.PushBack(k_two_target_format);
+    pipeline_desc.color_attachment_formats.PushBack(k_two_target_format);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    Forge::Texture first = MakeTwoTargetAttachment(fixture.device);
+    Forge::Texture second = MakeTwoTargetAttachment(fixture.device);
+    DrawTwoTargets(fixture, pipeline, vertices, first, second);
+
+    // The mask of one attachment says nothing about the other: the first is whole, and the second kept every
+    // channel but the one its own mask let through. A mask shared by both would have left the first black
+    // and the second the same as it is here.
+    const Texel written = ReadFirstTexel(fixture, first);
+    INFO("first rgba " << written.r << " " << written.g << " " << written.b << " " << written.a);
+    REQUIRE(written == k_first_target);
+
+    const Texel masked = ReadFirstTexel(fixture, second);
+    INFO("second rgba " << masked.r << " " << masked.g << " " << masked.b << " " << masked.a);
+    REQUIRE(masked == Texel{0, k_cleared.g, k_cleared.b, k_cleared.a});
+
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge indexed draws", "[forge]")
 {
     if (!IsForgeAvailable())
