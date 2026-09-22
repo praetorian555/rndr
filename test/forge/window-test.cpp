@@ -573,6 +573,74 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
 
+TEST_CASE("Forge frame context error paths", "[forge-window]")
+{
+    if (!IsForgeWindowAvailable())
+    {
+        SKIP("No window system with a Vulkan device that can present to it on this machine.");
+    }
+    ForgeWindowFixture fixture;
+    if (!SupportsSwapChainFormat(fixture))
+    {
+        SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
+    }
+
+    SECTION("Create refuses fewer than one frame in flight")
+    {
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
+        Opal::Expected<Forge::FrameContext, ErrorCode> result = Forge::FrameContext::Create(
+            fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = 0});
+        REQUIRE_FALSE(result.HasValue());
+        REQUIRE(result.GetError() == ErrorCode::InvalidArgument);
+        swap_chain.Destroy();
+    }
+    SECTION("GetCommandBuffer, GetColorTexture and EndFrame outside a frame are InvalidArgument")
+    {
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
+        Forge::FrameContext frame_context = ForgeTest::Unwrap(Forge::FrameContext::Create(
+            fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = 2}));
+
+        REQUIRE_FALSE(frame_context.GetCommandBuffer().HasValue());
+        REQUIRE(frame_context.GetCommandBuffer().GetError() == ErrorCode::InvalidArgument);
+        REQUIRE_FALSE(frame_context.GetColorTexture().HasValue());
+        REQUIRE(frame_context.GetColorTexture().GetError() == ErrorCode::InvalidArgument);
+        const Forge::FrameContext& const_frame_context = frame_context;
+        REQUIRE_FALSE(const_frame_context.GetColorTexture().HasValue());
+        REQUIRE(const_frame_context.GetColorTexture().GetError() == ErrorCode::InvalidArgument);
+
+        Opal::Expected<Forge::SwapChainStatus, ErrorCode> end_result = frame_context.EndFrame();
+        REQUIRE_FALSE(end_result.HasValue());
+        REQUIRE(end_result.GetError() == ErrorCode::InvalidArgument);
+
+        frame_context.Destroy();
+        swap_chain.Destroy();
+    }
+    SECTION("BeginFrame twice without an EndFrame between leaves the first frame open and is itself refused")
+    {
+        Forge::SwapChain swap_chain =
+            ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
+        Forge::FrameContext frame_context = ForgeTest::Unwrap(Forge::FrameContext::Create(
+            fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = 2}));
+
+        REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::Success);
+        Opal::Expected<Forge::SwapChainStatus, ErrorCode> second_begin = frame_context.BeginFrame();
+        REQUIRE_FALSE(second_begin.HasValue());
+        REQUIRE(second_begin.GetError() == ErrorCode::InvalidArgument);
+
+        // The frame BeginFrame opened first is untouched and can still be recorded into and ended normally.
+        RecordClearFrame(ForgeTest::Unwrap(frame_context.GetCommandBuffer()), ForgeTest::Unwrap(frame_context.GetColorTexture()), nullptr,
+                         swap_chain.GetExtent(), GetFrameColor(0), &swap_chain.GetDepthTexture());
+        REQUIRE(ForgeTest::Unwrap(frame_context.EndFrame()) == Forge::SwapChainStatus::Success);
+
+        REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
+        frame_context.Destroy();
+        swap_chain.Destroy();
+    }
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
 TEST_CASE("Forge swap chain follows the window across a resize", "[forge-window]")
 {
     if (!IsForgeWindowAvailable())
