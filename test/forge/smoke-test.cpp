@@ -2061,6 +2061,64 @@ TEST_CASE("Forge bindless texture array", "[forge]")
             REQUIRE(values[i] == expected);
         }
     }
+    SECTION("The array Update overload writes a texture the same way the convenience one does")
+    {
+        // Everything else in this file writes a texture through Update(binding, texture, sampler, ...);
+        // DescriptorSetUpdateBinding::TextureInfo through the array overload had no caller of its own,
+        // though it is what that convenience overload builds underneath.
+        if (IsSoftwareDevice())
+        {
+            SKIP("A software driver reports the non-uniform indexing feature and then reads element zero anyway.");
+        }
+        Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, k_used_descriptors));
+
+        Forge::Buffer output = MakeWipedOutput(device, k_element_count);
+        const Forge::Texture texture_one = make_texture(k_red_at_one);
+        const Forge::Texture texture_two = make_texture(k_red_at_two);
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(device, {.max_anisotropy = 1.0f}));
+
+        Opal::DynamicArray<Forge::DescriptorSetUpdateBinding> updates;
+        updates.PushBack(Forge::DescriptorSetUpdateBinding{.descriptor_type = Forge::DescriptorType::StorageBuffer,
+                                                            .binding = 0,
+                                                            .resource_info = Forge::DescriptorSetUpdateBinding::BufferInfo{.buffer = output}});
+        updates.PushBack(Forge::DescriptorSetUpdateBinding{
+            .descriptor_type = Forge::DescriptorType::CombinedImageSampler,
+            .binding = 1,
+            .array_element = 1,
+            .resource_info = Forge::DescriptorSetUpdateBinding::TextureInfo{
+                .sampler = sampler, .texture = texture_one, .texture_layout = Forge::ImageLayout::ShaderReadOnly}});
+        updates.PushBack(Forge::DescriptorSetUpdateBinding{
+            .descriptor_type = Forge::DescriptorType::CombinedImageSampler,
+            .binding = 1,
+            .array_element = 2,
+            .resource_info = Forge::DescriptorSetUpdateBinding::TextureInfo{
+                .sampler = sampler, .texture = texture_two, .texture_layout = Forge::ImageLayout::ShaderReadOnly}});
+        REQUIRE(descriptor_set.Update(updates) == ErrorCode::Success);
+
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            device, k_bindless_texture_source, {.entry_point = "main_bindless_textures", .cache = GetShaderCache()}));
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
+
+        REQUIRE(Forge::ImmediateSubmit(device, queue,
+                               [&](Forge::CommandBuffer& command_buffer)
+                               {
+                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
+                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+                               }) == ErrorCode::Success);
+
+        Opal::DynamicArray<u32> values(k_element_count);
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            const u32 expected = (i % 2) == 0 ? k_red_at_one : k_red_at_two;
+            INFO("invocation " << i);
+            REQUIRE(values[i] == expected);
+        }
+    }
     SECTION("An array element past the end of the binding is refused")
     {
         // Three of four allocated, so elements zero through two exist and element three does not, even though
@@ -4705,6 +4763,19 @@ TEST_CASE("Forge shader reflection", "[forge]")
     SECTION("A stage that reads no vertex buffer has no attributes to give")
     {
         REQUIRE_FALSE(Forge::VertexInputDesc::FromShader(fragment_shader).HasValue());
+    }
+    SECTION("FromShader honours the binding and the input rate it is given")
+    {
+        const Forge::VertexInputDesc derived =
+            ForgeTest::Unwrap(Forge::VertexInputDesc::FromShader(vertex_shader, 3, DataRepetition::PerInstance));
+        REQUIRE(derived.bindings.GetSize() == 1);
+        const Forge::VertexInputDesc::Binding& binding = derived.bindings[0];
+        REQUIRE(binding.binding == 3);
+        REQUIRE(binding.input_rate == DataRepetition::PerInstance);
+        // The layout of the attributes is the shader's business regardless of which binding or rate they
+        // land on, so the packing is the same as the default case's.
+        REQUIRE(binding.attributes.GetSize() == 3);
+        REQUIRE(binding.stride == 28);
     }
     SECTION("Push constant ranges come back merged across the stages that declare them")
     {

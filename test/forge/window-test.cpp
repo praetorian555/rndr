@@ -501,6 +501,35 @@ TEST_CASE("Forge swap chain present mode and depth format", "[forge-window]")
         REQUIRE(swap_chain.HasDepth());
         REQUIRE(swap_chain.GetDepthTexture().GetDesc().format == k_depth_format);
     }
+    SECTION("A colour space other than SrgbNonlinear, when the surface offers one, builds a working swap chain")
+    {
+        const Forge::SwapChainSupportDetails support = fixture.GetSupportDetails();
+        constexpr Forge::ColorSpace k_candidates[] = {Forge::ColorSpace::ExtendedSrgbLinear, Forge::ColorSpace::Hdr10St2084,
+                                                      Forge::ColorSpace::DisplayP3Nonlinear};
+        constexpr VkColorSpaceKHR k_native_candidates[] = {VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT, VK_COLOR_SPACE_HDR10_ST2084_EXT,
+                                                           VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT};
+        Opal::Optional<Forge::ColorSpace> chosen;
+        for (i32 i = 0; i < 3 && !chosen.HasValue(); ++i)
+        {
+            for (const VkSurfaceFormatKHR& format : support.formats)
+            {
+                if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == k_native_candidates[i])
+                {
+                    chosen = k_candidates[i];
+                    break;
+                }
+            }
+        }
+        if (!chosen.HasValue())
+        {
+            SKIP("This surface offers B8G8R8A8_SRGB in no colour space besides sRGB non-linear.");
+        }
+
+        const Forge::SwapChain swap_chain = ForgeTest::Unwrap(
+            Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format, .color_space = *chosen}));
+        REQUIRE(swap_chain.IsValid());
+        REQUIRE(swap_chain.GetDesc().color_space == *chosen);
+    }
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
 
@@ -539,6 +568,12 @@ TEST_CASE("Forge swap chain presents the frames that were rendered into it", "[f
         REQUIRE(acquired.texture_index < swap_chain.GetColorTextureCount());
         REQUIRE(swap_chain.HasAcquiredTexture());
         REQUIRE(swap_chain.GetCurrentTextureIndex() == acquired.texture_index);
+
+        // The re-acquire resets the tracked layout to Undefined, which is what a fresh clear wants and what
+        // docs/forge.md promises about a texture the presentation engine has handed back. Read before the
+        // barrier below moves it, and on the second round through the textures as well as the first.
+        REQUIRE(ForgeTest::Unwrap(ForgeTest::Unwrap(swap_chain.GetCurrentColorTexture()).GetCurrentLayout()) ==
+                Forge::ImageLayout::Undefined);
 
         const Vector4f color = GetFrameColor(frame);
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetGraphicsQueue()));
@@ -948,6 +983,74 @@ TEST_CASE("Forge device created before any surface presents to one that arrives 
         REQUIRE(device.WaitForAll() == ErrorCode::Success);
         frame_context.Destroy();
     }
+
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
+}
+
+TEST_CASE("Forge debug names on the two windowed object types", "[forge-window]")
+{
+    if (!IsForgeWindowAvailable())
+    {
+        SKIP("No window system with a Vulkan device that can present to it on this machine.");
+    }
+    ForgeWindowFixture fixture;
+    if (!fixture.device.AreDebugUtilsEnabled())
+    {
+        SKIP("This build has no debug utils, so there is nothing to name and nothing to report.");
+    }
+    if (!SupportsSwapChainFormat(fixture))
+    {
+        SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
+    }
+
+    // SwapChain and FrameContext, the two SetDebugName overloads the headless loop leaves out since neither
+    // type exists without a window. Nothing hands the name back out to ask for, so what this checks is that
+    // naming both raises nothing - the same the headless loop checks for every type it covers.
+    Forge::SwapChain swap_chain =
+        ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format}));
+    Forge::SetDebugName(fixture.device, swap_chain, "probe-swap-chain");
+
+    Forge::FrameContext frame_context = ForgeTest::Unwrap(
+        Forge::FrameContext::Create(fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue()));
+    Forge::SetDebugName(fixture.device, frame_context, "probe-frame-context");
+
+    // Explicit, and in this order: the teardown macro destroys the device ahead of the scope exit that would
+    // otherwise release these, and a swap chain or a frame context outliving its device is what the VMA
+    // assertion at process exit is for.
+    frame_context.Destroy();
+    swap_chain.Destroy();
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
+TEST_CASE("Forge CanPresentTo answers false for a device without presentation", "[forge-window]")
+{
+    if (!IsForgeWindowAvailable())
+    {
+        SKIP("No window system with a Vulkan device that can present to it on this machine.");
+    }
+
+    // No enable_presentation and no surface - the ordinary headless device every smoke test builds, over
+    // here to ask it about a real window's surface. It has no present family to check, which is the no this
+    // answers rather than the failure an empty device or an empty surface would be.
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+    Forge::Device device =
+        ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context,
+                                                {.use_async_compute_queue = false, .use_dedicated_transfer_queue = false}));
+
+    Opal::Ref<GenericWindow> window = app->CreateGenericWindow({.width = k_window_width,
+                                                                .height = k_window_height,
+                                                                .name = "Forge no-presentation test",
+                                                                .resizable = false,
+                                                                .has_title_bar = false,
+                                                                .has_border = false,
+                                                                .show_in_taskbar = false,
+                                                                .start_visible = false})
+                                          .GetValue();
+    Forge::Surface surface = ForgeTest::Unwrap(Forge::Surface::Create(context, *window));
+
+    REQUIRE_FALSE(ForgeTest::Unwrap(device.CanPresentTo(surface)));
 
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
