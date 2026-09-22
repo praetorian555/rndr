@@ -9510,6 +9510,235 @@ void BeginTableRendering(Forge::CommandBuffer& command_buffer, Forge::Texture& c
  * each of the four is run at a stored value where it differs from its partner as well as at one where it
  * does not.
  */
+TEST_CASE("Forge a depth attachment that is read and not written", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr f32 k_stored_depth = 0.5f;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+
+    const Forge::Buffer stored_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(k_stored_depth));
+    const Forge::Buffer near_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.25f));
+    const Forge::Buffer far_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.75f));
+    const Vector4f green = ByteColor(0, 255, 0, 255);
+    const Vector4f red = ByteColor(255, 0, 0, 255);
+    const Vector4f blue = ByteColor(0, 0, 255, 255);
+
+    SECTION("A pass that only reads the depth keeps the layout and the values")
+    {
+        constexpr PixelFormat k_depth_format = PixelFormat::D32_SFLOAT;
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                        {.format = k_depth_format,
+                                                                         .width = k_table_side,
+                                                                         .height = k_table_side,
+                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                                                                  Forge::TextureUsageBits::TransferSource}));
+
+        Forge::GraphicsPipelineDesc writing_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        writing_desc.depth_stencil.depth_test_enabled = true;
+        writing_desc.depth_stencil.depth_write_enabled = true;
+        writing_desc.depth_stencil.depth_comparator = Comparator::Always;
+        writing_desc.depth_attachment_format = k_depth_format;
+        const Forge::Pipeline writing_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, writing_desc));
+
+        // The second pass tests against what the first left and writes nothing, which is what makes the
+        // read-only layout legal for it.
+        Forge::GraphicsPipelineDesc reading_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        reading_desc.depth_stencil.depth_test_enabled = true;
+        reading_desc.depth_stencil.depth_write_enabled = false;
+        reading_desc.depth_stencil.depth_comparator = Comparator::Less;
+        reading_desc.depth_attachment_format = k_depth_format;
+        const Forge::Pipeline reading_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, reading_desc));
+
+        // The submit is kept in a variable rather than asserted on directly: REQUIRE stringizes what it is
+        // given, and the recorder below is past what a compiler will take as one string literal.
+        const ErrorCode submit_status = Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) ==
+                                ErrorCode::Success);
+                        const Forge::RenderingDesc writing_pass{
+                            .render_area_extent = {k_table_side, k_table_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}},
+                            .depth_attachment = Forge::RenderingAttachmentDesc{
+                                .texture = depth,
+                                .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                .store_operation = Forge::AttachmentStoreOperation::Store,
+                                .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(writing_pass) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(writing_pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(stored_quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(writing_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(green)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+
+                        // Written by hand rather than through CmdTransition: the preset for this layout names
+                        // the fragment stage and a shader read, which is what a texture about to be sampled
+                        // wants. What follows here is the depth test, so the stages and the access are the
+                        // ones the fixed-function depth read happens in.
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier{
+                                    .stages_must_finish =
+                                        Forge::PipelineStageBits::EarlyFragmentTests | Forge::PipelineStageBits::LateFragmentTests,
+                                    .stages_must_finish_access = Forge::PipelineStageAccessBits::DepthStencilAttachmentWrite,
+                                    .before_stages_start =
+                                        Forge::PipelineStageBits::EarlyFragmentTests | Forge::PipelineStageBits::LateFragmentTests,
+                                    .before_stages_start_access = Forge::PipelineStageAccessBits::DepthStencilAttachmentRead,
+                                    .old_layout = Forge::ImageLayout::DepthStencilAttachment,
+                                    .new_layout = Forge::ImageLayout::DepthStencilReadOnly,
+                                    .texture = depth}) == ErrorCode::Success);
+
+                        // Load and a store of DontCare: the pass reads the depth and is not allowed to write
+                        // it, so there is nothing for a store to keep.
+                        const Forge::RenderingDesc reading_pass{
+                            .render_area_extent = {k_table_side, k_table_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Load,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store}},
+                            .depth_attachment =
+                                Forge::RenderingAttachmentDesc{.texture = depth,
+                                                               .load_operation = Forge::AttachmentLoadOperation::Load,
+                                                               .store_operation = Forge::AttachmentStoreOperation::DontCare}};
+                        REQUIRE(command_buffer.CmdBeginRendering(reading_pass) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(reading_pipeline) == ErrorCode::Success);
+                        // Nearer than what is stored, so it passes, and then further, so it does not.
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(near_quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(reading_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(red)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(far_quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(reading_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(blue)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    });
+        REQUIRE(submit_status == ErrorCode::Success);
+
+        REQUIRE(ForgeTest::Unwrap(depth.GetCurrentLayout()) == Forge::ImageLayout::DepthStencilReadOnly);
+
+        Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        // Red, from the quad the test let through. Blue would mean the depth was not being read at all.
+        REQUIRE(static_cast<i32>(pixels[0]) == 255);
+        REQUIRE(static_cast<i32>(pixels[2]) == 0);
+
+        Opal::DynamicArray<u8> depth_bytes(k_table_side * k_table_side * sizeof(f32));
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), depth, depth_bytes, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        f32 written_depth = 0.0f;
+        memcpy(&written_depth, depth_bytes.GetData(), sizeof(f32));
+        // What the first pass left. The pass that followed drew a fragment that passed the test and wrote
+        // none of it, which is the whole point of the layout.
+        REQUIRE(written_depth == Catch::Approx(k_stored_depth).margin(0.0001));
+    }
+    SECTION("A stencil attachment with no depth beside it stands on its own texture")
+    {
+        // The only way a stencil attachment gets a texture of its own: Vulkan requires one image where both
+        // sides are present, so a pass that writes stencil and no depth is what a separate texture is for.
+        constexpr u32 k_reference = 0x2A;
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture stencil = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                          {.format = k_table_depth_stencil_format,
+                                                                           .width = k_table_side,
+                                                                           .height = k_table_side,
+                                                                           .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                                                                    Forge::TextureUsageBits::TransferSource}));
+
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        pipeline_desc.depth_stencil.stencil_test_enabled = true;
+        pipeline_desc.depth_stencil.front_stencil_comparator = Comparator::Always;
+        pipeline_desc.depth_stencil.back_stencil_comparator = Comparator::Always;
+        pipeline_desc.depth_stencil.front_pass = StencilOperation::Replace;
+        pipeline_desc.depth_stencil.back_pass = StencilOperation::Replace;
+        pipeline_desc.depth_stencil.front_reference = k_reference;
+        pipeline_desc.depth_stencil.back_reference = k_reference;
+        pipeline_desc.depth_stencil.front_write_mask = 0xFF;
+        pipeline_desc.depth_stencil.back_write_mask = 0xFF;
+        pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        const ErrorCode submit_status = Forge::ImmediateSubmit(
+            fixture.device, fixture.GetQueue(),
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(stencil)) == ErrorCode::Success);
+                const Forge::RenderingDesc rendering_desc{
+                    .render_area_extent = {k_table_side, k_table_side},
+                    .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                         .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                         .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                         .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}},
+                    .stencil_attachment =
+                        Forge::RenderingAttachmentDesc{.texture = stencil,
+                                                       .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                       .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                       .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
+                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(stored_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(green)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+            });
+        REQUIRE(submit_status == ErrorCode::Success);
+
+        // The reference landed in the texture the stencil attachment named, and nothing else was attached to
+        // carry it.
+        REQUIRE(static_cast<i32>(ReadStencilValue(fixture, stencil)) == static_cast<i32>(k_reference));
+    }
+    SECTION("A stencil attachment on a texture other than the depth one is refused")
+    {
+        // Where both sides are present Vulkan wants one image for the two, so this pair of descs describes a
+        // pass no device will begin.
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                        {.format = k_table_depth_stencil_format,
+                                                                         .width = k_table_side,
+                                                                         .height = k_table_side,
+                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
+        Forge::Texture stencil = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                          {.format = k_table_depth_stencil_format,
+                                                                           .width = k_table_side,
+                                                                           .height = k_table_side,
+                                                                           .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
+
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(stencil)) == ErrorCode::Success);
+        const Forge::RenderingDesc rendering_desc{
+            .render_area_extent = {k_table_side, k_table_side},
+            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color}},
+            .depth_attachment = Forge::RenderingAttachmentDesc{.texture = depth,
+                                                               .load_operation = Forge::AttachmentLoadOperation::Load},
+            .stencil_attachment = Forge::RenderingAttachmentDesc{.texture = stencil,
+                                                                 .load_operation = Forge::AttachmentLoadOperation::Load}};
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) != ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge the stencil operations", "[forge]")
 {
     if (!IsForgeAvailable())
