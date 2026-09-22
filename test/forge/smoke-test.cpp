@@ -352,6 +352,33 @@ TEST_CASE("Forge maps a VkResult to the error code it reports as", "[forge]")
     CHECK(Forge::VkResultToErrorCode(VK_INCOMPLETE) == ErrorCode::Success);
 }
 
+TEST_CASE("Forge queue family indices report what was put in them", "[forge]")
+{
+    Forge::QueueFamilyIndices indices;
+    REQUIRE(indices.GetValidQueueFamilies().IsEmpty());
+    REQUIRE(indices.GetQueueFamilyIndex(Forge::QueueFamily::Graphics) == Forge::QueueFamilyIndices::k_invalid_index);
+    // A value naming no family - EnumCount is not a family - has no index either.
+    REQUIRE(indices.GetQueueFamilyIndex(Forge::QueueFamily::EnumCount) == Forge::QueueFamilyIndices::k_invalid_index);
+
+    indices.graphics_family = 0;
+    indices.present_family = 0;  // Shares the graphics family's index.
+    indices.compute_family = 1;
+    indices.transfer_family = 2;
+
+    REQUIRE(indices.GetQueueFamilyIndex(Forge::QueueFamily::Graphics) == 0);
+    REQUIRE(indices.GetQueueFamilyIndex(Forge::QueueFamily::Present) == 0);
+    REQUIRE(indices.GetQueueFamilyIndex(Forge::QueueFamily::AsyncCompute) == 1);
+    REQUIRE(indices.GetQueueFamilyIndex(Forge::QueueFamily::Transfer) == 2);
+    REQUIRE(indices.GetQueueFamilyIndex(Forge::QueueFamily::Decode) == Forge::QueueFamilyIndices::k_invalid_index);
+
+    const Opal::DynamicArray<u32> valid = indices.GetValidQueueFamilies();
+    // Four families named, two of them (graphics and present) sharing an index, so three distinct entries.
+    REQUIRE(valid.GetSize() == 3);
+    REQUIRE(valid.Contains(0));
+    REQUIRE(valid.Contains(1));
+    REQUIRE(valid.Contains(2));
+}
+
 TEST_CASE("Forge has the device the environment says it has to have", "[forge]")
 {
     if (!ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_REQUIRE_VULKAN"))
@@ -1135,6 +1162,50 @@ TEST_CASE("Forge physical device selection", "[forge]")
         // surface must not reject a device for presentation it was never asked to do.
         Forge::DeviceDesc desc = MakeHeadlessDeviceDesc();
         REQUIRE(Forge::FindPhysicalDevice(devices, desc).HasValue());
+    }
+
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
+}
+
+TEST_CASE("Forge queue family lookup by flags, and creation from an empty physical device", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+    Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+    REQUIRE_FALSE(physical_devices.IsEmpty());
+    const Forge::PhysicalDevice& physical_device = physical_devices[0];
+
+    SECTION("A family matching queue_flags actually reports that bit")
+    {
+        const Opal::Optional<u32> graphics_family = physical_device.GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT);
+        REQUIRE(graphics_family.HasValue());
+        REQUIRE((physical_device.GetQueueFamilyProperties()[graphics_family.GetValue()].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0);
+    }
+    SECTION("not_queue_flags excludes a family that has the excluded bit")
+    {
+        const Opal::Optional<u32> async_compute_family =
+            physical_device.GetQueueFamilyIndex(VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT);
+        if (!async_compute_family.HasValue())
+        {
+            SKIP("This device has no compute family separate from its graphics one.");
+        }
+        REQUIRE((physical_device.GetQueueFamilyProperties()[async_compute_family.GetValue()].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0);
+    }
+    SECTION("Asking for and excluding the same bit is unmet by any family")
+    {
+        REQUIRE_FALSE(physical_device.GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT, VK_QUEUE_GRAPHICS_BIT).HasValue());
+    }
+    SECTION("Device::Create refuses an empty physical device")
+    {
+        Forge::PhysicalDevice empty_physical_device;
+        REQUIRE_FALSE(empty_physical_device.IsValid());
+        Opal::Expected<Forge::Device, ErrorCode> result =
+            Forge::Device::Create(std::move(empty_physical_device), context, MakeHeadlessDeviceDesc());
+        REQUIRE_FALSE(result.HasValue());
+        REQUIRE(result.GetError() == ErrorCode::InvalidArgument);
     }
 
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
