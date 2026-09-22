@@ -8737,6 +8737,131 @@ TEST_CASE("Forge a buffer handed from one queue family to another", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge a texture handed from one queue family to another", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_queues{.async_compute = true};
+    if (!CanCreateDevice({}, k_queues))
+    {
+        SKIP("This device has no async compute family.");
+    }
+    ForgeFixture fixture({}, k_queues);
+    Forge::DeviceQueue& compute_queue = fixture.GetQueue(Forge::QueueFamily::AsyncCompute);
+    Forge::DeviceQueue& graphics_queue = fixture.GetQueue();
+    const u32 compute_family = compute_queue.GetQueueFamilyIndex();
+    const u32 graphics_family = graphics_queue.GetQueueFamilyIndex();
+    REQUIRE(compute_family != graphics_family);
+
+    constexpr i32 k_side = 4;
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_storage_image_source, {.entry_point = "main_write_storage", .cache = GetShaderCache()}));
+
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageImage, 1) == ErrorCode::Success);
+    pool_desc.max_sets = 1;
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageImage, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    // Written on one family and read on the other, with nothing host visible in between: a texture the host
+    // could reach would let the read on the second family be left out, and handing it over is the point.
+    Forge::Texture shared = ForgeTest::Unwrap(Forge::Texture::Create(
+        fixture.device,
+        {.format = PixelFormat::R8G8B8A8_UNORM,
+         .width = k_side,
+         .height = k_side,
+         .usage = Forge::TextureUsageBits::Storage | Forge::TextureUsageBits::TransferSource}));
+    const Forge::Sampler unused = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {}));
+    Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+    REQUIRE(set.Update(0, shared, unused, Forge::ImageLayout::General) == ErrorCode::Success);
+
+    const Forge::Buffer host_visible = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device,
+                                                                               {.size = k_side * k_side * 4,
+                                                                                .usage = Forge::BufferUsageBits::TransferDestination,
+                                                                                .host_access = Forge::HostAccess::Random}));
+    const Opal::DynamicArray<u8> zeros(k_side * k_side * 4);
+    REQUIRE(host_visible.Update(zeros) == ErrorCode::Success);
+
+    // The release half, on the family that wrote the image. Both halves name the same pair of layouts: a
+    // transfer that carries a transition performs it once, and the two barriers have to agree on it.
+    Forge::CommandBuffer release_commands = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, compute_queue));
+    REQUIRE(release_commands.Begin() == ErrorCode::Success);
+    REQUIRE(release_commands.CmdTextureBarrier(Forge::TextureBarrier::ToGeneral(shared)) == ErrorCode::Success);
+    REQUIRE(release_commands.CmdBindPipeline(pipeline) == ErrorCode::Success);
+    REQUIRE(release_commands.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+    REQUIRE(release_commands.CmdDispatch(1) == ErrorCode::Success);
+    REQUIRE(release_commands.CmdTextureBarrier({.stages_must_finish = Forge::PipelineStageBits::ComputeShader,
+                                                .stages_must_finish_access = Forge::PipelineStageAccessBits::ShaderWrite,
+                                                .before_stages_start = Forge::PipelineStageBits::None,
+                                                .before_stages_start_access = Forge::PipelineStageAccessBits::None,
+                                                .old_layout = Forge::ImageLayout::General,
+                                                .new_layout = Forge::ImageLayout::TransferSource,
+                                                .source_queue_family = compute_family,
+                                                .destination_queue_family = graphics_family,
+                                                .texture = shared}) == ErrorCode::Success);
+    REQUIRE(release_commands.End() == ErrorCode::Success);
+
+    // The acquire half, on the family that reads it, naming the same families in the same order.
+    Forge::CommandBuffer acquire_commands = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, graphics_queue));
+    REQUIRE(acquire_commands.Begin() == ErrorCode::Success);
+    REQUIRE(acquire_commands.CmdTextureBarrier({.stages_must_finish = Forge::PipelineStageBits::None,
+                                                .stages_must_finish_access = Forge::PipelineStageAccessBits::None,
+                                                .before_stages_start = Forge::PipelineStageBits::Copy,
+                                                .before_stages_start_access = Forge::PipelineStageAccessBits::TransferRead,
+                                                .old_layout = Forge::ImageLayout::General,
+                                                .new_layout = Forge::ImageLayout::TransferSource,
+                                                .source_queue_family = compute_family,
+                                                .destination_queue_family = graphics_family,
+                                                .texture = shared}) == ErrorCode::Success);
+    const Forge::BufferTextureCopyRegion region{};
+    REQUIRE(acquire_commands.CmdCopyTextureToBuffer(shared, host_visible, {&region, 1}) == ErrorCode::Success);
+    REQUIRE(acquire_commands.End() == ErrorCode::Success);
+
+    // A semaphore between the two submits, which the transfer needs beyond the barriers: the acquire may not
+    // run before the release, and two queues have no order of their own.
+    const Forge::Semaphore handover = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
+    const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
+    const Opal::Ref<const Forge::CommandBuffer> release_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(release_commands)};
+    const Opal::Ref<const Forge::CommandBuffer> acquire_batch[1] = {Opal::Ref<const Forge::CommandBuffer>(acquire_commands)};
+    const Forge::SemaphoreSubmit signal{.semaphore = handover, .stages = Forge::PipelineStageBits::ComputeShader};
+    const Forge::SemaphoreSubmit wait{.semaphore = handover, .stages = Forge::PipelineStageBits::Transfer};
+    REQUIRE(compute_queue.Submit({.command_buffers = {release_batch, 1}, .signal_semaphores = {&signal, 1}}) == ErrorCode::Success);
+    REQUIRE(graphics_queue.Submit({.command_buffers = {acquire_batch, 1}, .wait_semaphores = {&wait, 1}, .fence = fence}) ==
+            ErrorCode::Success);
+    REQUIRE(fence.Wait() == ErrorCode::Success);
+
+    Opal::DynamicArray<u8> pixels(k_side * k_side * 4);
+    REQUIRE(host_visible.Read({pixels.GetData(), pixels.GetSize()}) == ErrorCode::Success);
+    for (i32 y = 0; y < k_side; ++y)
+    {
+        for (i32 x = 0; x < k_side; ++x)
+        {
+            // What the shader writes at that texel, which is its own coordinates over four. The contents
+            // crossing the handover is the whole question: an image whose ownership was dropped comes back
+            // as whatever the allocation held.
+            const i32 base = (y * k_side + x) * 4;
+            const i32 expected_red = static_cast<i32>(static_cast<f32>(x) / 4.0f * 255.0f + 0.5f);
+            const i32 expected_green = static_cast<i32>(static_cast<f32>(y) / 4.0f * 255.0f + 0.5f);
+            INFO("texel " << x << "," << y);
+            REQUIRE(static_cast<i32>(pixels[base + 0]) >= expected_red - 1);
+            REQUIRE(static_cast<i32>(pixels[base + 0]) <= expected_red + 1);
+            REQUIRE(static_cast<i32>(pixels[base + 1]) >= expected_green - 1);
+            REQUIRE(static_cast<i32>(pixels[base + 1]) <= expected_green + 1);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 namespace
 {
 
