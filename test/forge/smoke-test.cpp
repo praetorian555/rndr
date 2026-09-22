@@ -414,6 +414,69 @@ TEST_CASE("Forge context and device", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
+TEST_CASE("Forge context desc", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    SECTION("A required instance extension that is not supported is refused")
+    {
+        Forge::GraphicsContextDesc desc = ForgeTest::TestContextDesc();
+        desc.required_instance_extensions.PushBack(Opal::StringUtf8("VK_EXT_this_extension_does_not_exist"));
+        Opal::Expected<Forge::GraphicsContext, ErrorCode> result = Forge::GraphicsContext::Create(desc);
+        REQUIRE_FALSE(result.HasValue());
+        REQUIRE(result.GetError() == ErrorCode::FeatureNotSupported);
+    }
+    SECTION("max_stored_debug_messages caps the storage, not the count")
+    {
+        Forge::GraphicsContextDesc desc = ForgeTest::TestContextDesc();
+        desc.max_stored_debug_messages = 1;
+        Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(desc));
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+        Forge::Device device =
+            ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc()));
+        Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
+
+        // Copying between two formats of different texel size is what the debug-names case above uses to
+        // provoke one validation error at record time; recorded three times over, it provokes three.
+        constexpr Forge::TextureUsageBits k_transfer_usage =
+            Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
+        Forge::Texture source = ForgeTest::Unwrap(
+            Forge::Texture::Create(device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_transfer_usage}));
+        Forge::Texture destination = ForgeTest::Unwrap(Forge::Texture::Create(
+            device, {.format = PixelFormat::R16G16B16A16_SFLOAT, .width = 4, .height = 4, .usage = k_transfer_usage}));
+        const Forge::TextureCopyRegion region;
+        constexpr i32 k_error_count = 3;
+        for (i32 i = 0; i < k_error_count; ++i)
+        {
+            Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, queue));
+            REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+            REQUIRE(command_buffer.CmdTransition(source, Forge::ImageLayout::TransferSource) == ErrorCode::Success);
+            REQUIRE(command_buffer.CmdTransition(destination, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
+            REQUIRE(command_buffer.CmdCopyTexture(source, destination, {&region, 1}) == ErrorCode::Success);
+            REQUIRE(command_buffer.End() == ErrorCode::Success);
+        }
+
+        REQUIRE(context.GetDebugMessages().GetSize() == 1);
+        REQUIRE(ForgeTest::Unwrap(context.GetDebugMessageCount(Forge::DebugMessageSeverity::Error, Forge::DebugMessageTypeBits::Validation)) >=
+               k_error_count);
+
+        // The errors above were the point of this section, so they must not reach the assertion below.
+        context.ClearDebugMessages();
+        REQUIRE_NO_VALIDATION_ERROR_IN(context);
+    }
+    SECTION("GetDebugMessageCount refuses a severity that is none of the three")
+    {
+        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+        const auto bad_severity = static_cast<Forge::DebugMessageSeverity>(99);
+        Opal::Expected<u32, ErrorCode> result = context.GetDebugMessageCount(bad_severity);
+        REQUIRE_FALSE(result.HasValue());
+        REQUIRE(result.GetError() == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR_IN(context);
+    }
+}
+
 TEST_CASE("Forge context outlives a second one", "[forge]")
 {
     if (!IsForgeAvailable())
