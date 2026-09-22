@@ -8209,6 +8209,67 @@ void main_sample_cube()
 }
 )";
 
+/**
+ * The shapes a sampler can take that the cases above do not: a line of texels, an array of such lines, an
+ * array of flat textures, and an array of cubes. Each reads the one push constant every shape shader here
+ * takes, so they all go through the same harness.
+ */
+constexpr const char* k_line_sample_source = R"(
+[[vk::push_constant]] float4 params;
+
+[[vk::binding(0, 0)]] Sampler1D line_texture;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> line_output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_line()
+{
+    line_output[0] = line_texture.SampleLevel(params.x, params.w);
+}
+)";
+
+constexpr const char* k_line_array_sample_source = R"(
+[[vk::push_constant]] float4 params;
+
+[[vk::binding(0, 0)]] Sampler1DArray line_array;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> line_array_output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_line_array()
+{
+    line_array_output[0] = line_array.SampleLevel(float2(params.x, params.y), params.w);
+}
+)";
+
+constexpr const char* k_flat_array_sample_source = R"(
+[[vk::push_constant]] float4 params;
+
+[[vk::binding(0, 0)]] Sampler2DArray flat_array;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> flat_array_output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_flat_array()
+{
+    flat_array_output[0] = flat_array.SampleLevel(float3(params.x, params.y, params.z), params.w);
+}
+)";
+
+constexpr const char* k_cube_array_sample_source = R"(
+[[vk::push_constant]] float4 params;
+
+[[vk::binding(0, 0)]] SamplerCubeArray cube_array;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> cube_array_output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_cube_array()
+{
+    cube_array_output[0] = cube_array.SampleLevel(float4(params.xyz, params.w), 0.0);
+}
+)";
+
 constexpr const char* k_storage_image_source = R"(
 [[vk::image_format("rgba8")]]
 [[vk::binding(0, 0)]] RWTexture2D<float4> storage_image;
@@ -8678,6 +8739,111 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
         INFO("+z red " << positive_z.x);
         REQUIRE(positive_z.x == Catch::Approx(5.0f * 36.0f / 255.0f).margin(0.01));
     }
+    SECTION("A one dimensional texture is sampled along its width")
+    {
+        // Two texels, red then green, in an image with no height at all: the shape is the point, and what
+        // comes back says which of the two the coordinate landed on.
+        Forge::Texture line = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                       {.dimension = Forge::TextureDimension::Texture1D,
+                                                                        .format = k_format,
+                                                                        .width = 2,
+                                                                        .height = 1,
+                                                                        .usage = Forge::TextureUsageBits::Sampled |
+                                                                                 Forge::TextureUsageBits::TransferDestination,
+                                                                        .view_type = Forge::TextureViewType::Texture1D}));
+        const Opal::DynamicArray<u8> texels = MakeTwoTexelRow();
+        UploadMip(fixture.device, fixture.GetQueue(), line, {texels.GetData(), texels.GetSize()}, 0);
+
+        const Vector4f left = sample_shape(k_line_sample_source, "main_sample_line", line, {0.25f, 0.0f, 0.0f, 0.0f});
+        INFO("left rgba " << left.x << " " << left.y);
+        REQUIRE(left.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(left.y == Catch::Approx(0.0f).margin(0.01));
+
+        const Vector4f right = sample_shape(k_line_sample_source, "main_sample_line", line, {0.75f, 0.0f, 0.0f, 0.0f});
+        INFO("right rgba " << right.x << " " << right.y);
+        REQUIRE(right.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(right.y == Catch::Approx(1.0f).margin(0.01));
+    }
+    SECTION("A one dimensional array is sampled by layer")
+    {
+        // One texel per layer, so the coordinate along the width says nothing and the layer says everything.
+        Forge::Texture lines = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                        {.dimension = Forge::TextureDimension::Texture1D,
+                                                                         .format = k_format,
+                                                                         .width = 1,
+                                                                         .height = 1,
+                                                                         .array_layer_count = 2,
+                                                                         .usage = Forge::TextureUsageBits::Sampled |
+                                                                                  Forge::TextureUsageBits::TransferDestination,
+                                                                         .view_type = Forge::TextureViewType::Texture1DArray}));
+        const Opal::DynamicArray<u8> layers = MakeTwoTexelRow();
+        UploadMip(fixture.device, fixture.GetQueue(), lines, {layers.GetData(), layers.GetSize()}, 0);
+
+        const Vector4f first = sample_shape(k_line_array_sample_source, "main_sample_line_array", lines, {0.5f, 0.0f, 0.0f, 0.0f});
+        INFO("layer zero rgba " << first.x << " " << first.y);
+        REQUIRE(first.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(first.y == Catch::Approx(0.0f).margin(0.01));
+
+        const Vector4f second = sample_shape(k_line_array_sample_source, "main_sample_line_array", lines, {0.5f, 1.0f, 0.0f, 0.0f});
+        INFO("layer one rgba " << second.x << " " << second.y);
+        REQUIRE(second.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(second.y == Catch::Approx(1.0f).margin(0.01));
+    }
+    SECTION("A two dimensional array is sampled rather than only copied")
+    {
+        Forge::Texture layers_texture = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                                 {.format = k_format,
+                                                                                  .width = 1,
+                                                                                  .height = 1,
+                                                                                  .array_layer_count = 2,
+                                                                                  .usage = Forge::TextureUsageBits::Sampled |
+                                                                                           Forge::TextureUsageBits::TransferDestination,
+                                                                                  .view_type = Forge::TextureViewType::Texture2DArray}));
+        const Opal::DynamicArray<u8> layers = MakeTwoTexelRow();
+        UploadMip(fixture.device, fixture.GetQueue(), layers_texture, {layers.GetData(), layers.GetSize()}, 0);
+
+        const Vector4f first =
+            sample_shape(k_flat_array_sample_source, "main_sample_flat_array", layers_texture, {0.5f, 0.5f, 0.0f, 0.0f});
+        INFO("layer zero rgba " << first.x << " " << first.y);
+        REQUIRE(first.x == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(first.y == Catch::Approx(0.0f).margin(0.01));
+
+        const Vector4f second =
+            sample_shape(k_flat_array_sample_source, "main_sample_flat_array", layers_texture, {0.5f, 0.5f, 1.0f, 0.0f});
+        INFO("layer one rgba " << second.x << " " << second.y);
+        REQUIRE(second.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(second.y == Catch::Approx(1.0f).margin(0.01));
+    }
+    SECTION("A view over one mip level samples that level as its own level zero")
+    {
+        // Two levels with nothing in common, and a view that covers the second one only. The shader asks for
+        // level zero, which through this view is the image's level one - so a view that ignored the range
+        // would hand back red.
+        Forge::Texture mipped = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                    .width = 2,
+                                                    .height = 2,
+                                                    .mip_level_count = 2,
+                                                    .usage = Forge::TextureUsageBits::Sampled |
+                                                             Forge::TextureUsageBits::TransferDestination,
+                                                    .subresource_range = {.first_mip_level = 1, .mip_level_count = 1}}));
+        Opal::DynamicArray<u8> top(2 * 2 * 4);
+        for (i32 texel = 0; texel < 4; ++texel)
+        {
+            top[texel * 4 + 0] = 255;
+            top[texel * 4 + 3] = 255;
+        }
+        Opal::DynamicArray<u8> bottom(4);
+        bottom[1] = 255;
+        bottom[3] = 255;
+        UploadMip(fixture.device, fixture.GetQueue(), mipped, {top.GetData(), top.GetSize()}, 0);
+        UploadMip(fixture.device, fixture.GetQueue(), mipped, {bottom.GetData(), bottom.GetSize()}, 1);
+
+        const Vector4f sampled = sample_shape(k_combined_sample_source, "main_sample_combined", mipped, {0.5f, 0.5f, 0.0f, 0.0f});
+        INFO("rgba " << sampled.x << " " << sampled.y);
+        REQUIRE(sampled.x == Catch::Approx(0.0f).margin(0.01));
+        REQUIRE(sampled.y == Catch::Approx(1.0f).margin(0.01));
+    }
     SECTION("A cube view over a layer count that is not a multiple of six is refused")
     {
         REQUIRE_FALSE(Forge::Texture::Create(fixture.device, {.format = k_format,
@@ -8687,6 +8853,109 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
                                                           .usage = Forge::TextureUsageBits::Sampled,
                                                           .view_type = Forge::TextureViewType::Cube}).HasValue());
     }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+TEST_CASE("Forge a cube array view", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_cube_array{.image_cube_array = true};
+    if (!CanCreateDevice(k_cube_array))
+    {
+        SKIP("This device cannot put more than one cube under a view.");
+    }
+    ForgeFixture fixture(k_cube_array);
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr i32 k_cube_count = 2;
+    constexpr i32 k_layer_count = k_cube_count * 6;
+
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_cube_array_sample_source, {.entry_point = "main_sample_cube_array", .cache = GetShaderCache()}));
+
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4) == ErrorCode::Success);
+    pool_desc.max_sets = 4;
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(Vector4f)});
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    // Two cubes of one texel a face, each face a red level of its own, counted from one so that a face
+    // nobody wrote reads differently from every face that was.
+    Forge::Texture cubes = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                    {.format = k_format,
+                                                                     .width = 1,
+                                                                     .height = 1,
+                                                                     .array_layer_count = k_layer_count,
+                                                                     .usage = Forge::TextureUsageBits::Sampled |
+                                                                              Forge::TextureUsageBits::TransferDestination,
+                                                                     .view_type = Forge::TextureViewType::CubeArray}));
+    Opal::DynamicArray<u8> faces(k_layer_count * 4);
+    for (i32 layer = 0; layer < k_layer_count; ++layer)
+    {
+        faces[layer * 4 + 0] = static_cast<u8>((layer + 1) * 20);
+        faces[layer * 4 + 3] = 255;
+    }
+    UploadMip(fixture.device, fixture.GetQueue(), cubes, {faces.GetData(), faces.GetSize()}, 0);
+
+    const Forge::Sampler nearest =
+        ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
+
+    /** Sample one direction of one cube of the array, and hand back what came out. */
+    auto sample_cube = [&](const Vector4f& direction_and_cube)
+    {
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
+                                                                                              .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                                                              .host_access = Forge::HostAccess::Random}));
+        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
+        REQUIRE(output.Update(zeros) == ErrorCode::Success);
+
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, cubes, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+        REQUIRE(set.Update(1, output) == ErrorCode::Success);
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
+                                                                Opal::AsBytes(direction_and_cube)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        Vector4f result;
+        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
+        return result;
+    };
+
+    // Layer order within a cube is +X, -X, +Y, -Y, +Z, -Z, and the cubes follow one another: the first face
+    // of the second cube is layer six.
+    const Vector4f first_cube = sample_cube({1.0f, 0.0f, 0.0f, 0.0f});
+    INFO("first cube +x red " << first_cube.x);
+    REQUIRE(first_cube.x == Catch::Approx(20.0f / 255.0f).margin(0.01));
+
+    const Vector4f second_cube = sample_cube({1.0f, 0.0f, 0.0f, 1.0f});
+    INFO("second cube +x red " << second_cube.x);
+    REQUIRE(second_cube.x == Catch::Approx(140.0f / 255.0f).margin(0.01));
+
+    // And a direction inside the second cube that is not the first face, so the cube index and the face are
+    // both being read rather than one standing in for the other.
+    const Vector4f second_cube_back = sample_cube({0.0f, 0.0f, 1.0f, 1.0f});
+    INFO("second cube +z red " << second_cube_back.x);
+    REQUIRE(second_cube_back.x == Catch::Approx(220.0f / 255.0f).margin(0.01));
+
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
