@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <cstring>
 
 #include <catch2/catch2.hpp>
 
@@ -9154,6 +9155,71 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         const Opal::StringUtf8 path = TestScratchPath("from-spirv-file.spv");
         REQUIRE(Opal::WriteBytesToFile(path, spirv_view) == Opal::ErrorCode::Success);
         REQUIRE_FALSE(Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "no_such_entry"}).HasValue());
+    }
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
+/**
+ * Shader::FromSource, which had no caller: every shader elsewhere in this file comes from
+ * FromSourceInMemory, with the Slang text already in a `constexpr const char*` beside the case. FromSource
+ * is the same compiler behind a file read, so what is unique to it is that read - a missing or empty file,
+ * and a file that reads fine but is not valid Slang.
+ */
+TEST_CASE("Forge shader compiled from a source file on disk", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    SECTION("A module read from a source file is the same shader FromSourceInMemory builds")
+    {
+        const Opal::StringUtf8 path = TestScratchPath("from-source.slang");
+        REQUIRE(Opal::WriteBytesToFile(path, {reinterpret_cast<const u8*>(k_compute_source), std::strlen(k_compute_source)}) ==
+               Opal::ErrorCode::Success);
+        const Forge::Shader from_file =
+            ForgeTest::Unwrap(Forge::Shader::FromSource(fixture.device, path, {.entry_point = "main_compute"}));
+        REQUIRE(from_file.IsValid());
+        REQUIRE(from_file.GetShaderStage() == ShaderTypeBits::Compute);
+        REQUIRE(from_file.GetEntryPoint() == Opal::StringUtf8("main_compute"));
+        const Forge::Shader from_memory = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
+        REQUIRE(from_file.GetPushConstants().GetSize() == from_memory.GetPushConstants().GetSize());
+        REQUIRE(from_file.GetBindings().GetSize() == from_memory.GetBindings().GetSize());
+    }
+    SECTION("A file that is not there, and one that is there but empty, are both FileNotFound")
+    {
+        Opal::Expected<Forge::Shader, ErrorCode> missing =
+            Forge::Shader::FromSource(fixture.device, TestScratchPath("no-such-source.slang"), {.entry_point = "main_compute"});
+        REQUIRE_FALSE(missing.HasValue());
+        REQUIRE(missing.GetError() == ErrorCode::FileNotFound);
+
+        const Opal::StringUtf8 empty_path = TestScratchPath("empty.slang");
+        REQUIRE(Opal::WriteBytesToFile(empty_path, {}) == Opal::ErrorCode::Success);
+        Opal::Expected<Forge::Shader, ErrorCode> empty =
+            Forge::Shader::FromSource(fixture.device, empty_path, {.entry_point = "main_compute"});
+        REQUIRE_FALSE(empty.HasValue());
+        REQUIRE(empty.GetError() == ErrorCode::FileNotFound);
+    }
+    SECTION("A file that reads fine but is not valid Slang is a ShaderCompilationError")
+    {
+        const Opal::StringUtf8 path = TestScratchPath("not-slang.slang");
+        constexpr const char* k_not_slang = "this is not { valid Slang at all";
+        REQUIRE(Opal::WriteBytesToFile(path, {reinterpret_cast<const u8*>(k_not_slang), std::strlen(k_not_slang)}) ==
+               Opal::ErrorCode::Success);
+        Opal::Expected<Forge::Shader, ErrorCode> result = Forge::Shader::FromSource(fixture.device, path, {.entry_point = "main"});
+        REQUIRE_FALSE(result.HasValue());
+        REQUIRE(result.GetError() == ErrorCode::ShaderCompilationError);
+    }
+    SECTION("Empty source handed to FromSourceInMemory directly is InvalidArgument")
+    {
+        // What a caller reading a file itself and handing the text over would get - FromSource never takes
+        // this path, since it turns a missing or empty file into FileNotFound before FromSourceInMemory sees it.
+        Opal::Expected<Forge::Shader, ErrorCode> result =
+            Forge::Shader::FromSourceInMemory(fixture.device, Opal::StringUtf8(""), {.entry_point = "main"});
+        REQUIRE_FALSE(result.HasValue());
+        REQUIRE(result.GetError() == ErrorCode::InvalidArgument);
     }
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
