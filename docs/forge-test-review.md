@@ -220,7 +220,8 @@ error paths, `VkResultToErrorCode`, the buffer edges, the physical device helper
 the swap chain modes.
 
 **In progress**, one commit per item: 18 (`VkResultToErrorCode`), 20 (the physical device queue family
-helpers), and 5 (`Shader::FromSource`) are done. 6, 13, 16, 17, 19, 22, 23 remain.
+helpers), 5 (`Shader::FromSource`), and 6 (`CommandBuffer::Reset` and `Begin(false)`) are done. 13, 16, 17,
+19, 22, 23 remain.
 
 ### Bucket C: new shaders, Vulkan semantics, likely Forge changes
 
