@@ -749,6 +749,92 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+TEST_CASE("Forge command buffer reset and repeated Begin", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Forge::Shader shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
+    const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, shader);
+    constexpr i32 k_element_count = 256;
+    constexpr i32 k_group_size = 64;
+
+    auto record_and_run = [&](Forge::CommandBuffer& command_buffer, const Forge::Buffer& output)
+    {
+        const VkDeviceAddress address = output.GetNativeDeviceAddress();
+        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address)) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
+    };
+    /** Submit one command buffer and wait for it, through a fence made and waited on here. */
+    auto submit_and_wait = [&](Forge::CommandBuffer& command_buffer)
+    {
+        const Opal::Ref<const Forge::CommandBuffer> batch[1] = {Opal::Ref<const Forge::CommandBuffer>(command_buffer)};
+        const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
+        REQUIRE(fixture.GetQueue().Submit({.command_buffers = {batch, 1}, .fence = fence}) == ErrorCode::Success);
+        REQUIRE(fence.Wait() == ErrorCode::Success);
+    };
+
+    SECTION("Reset lets a command buffer be recorded and submitted a second time")
+    {
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+
+        Forge::Buffer first_output = MakeWipedOutput(fixture.device, k_element_count);
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        record_and_run(command_buffer, first_output);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+        submit_and_wait(command_buffer);
+        RequireComputeWrote(first_output, k_element_count);
+
+        // Reset, not a fresh Create: the same native command buffer is recorded into again.
+        REQUIRE(command_buffer.Reset() == ErrorCode::Success);
+        Forge::Buffer second_output = MakeWipedOutput(fixture.device, k_element_count);
+        REQUIRE(command_buffer.Begin(/*submit_one_time=*/false) == ErrorCode::Success);
+        record_and_run(command_buffer, second_output);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+        submit_and_wait(command_buffer);
+        RequireComputeWrote(second_output, k_element_count);
+    }
+    SECTION("A command buffer not marked submit_one_time can be submitted twice with no Reset between")
+    {
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
+        REQUIRE(command_buffer.Begin(/*submit_one_time=*/false) == ErrorCode::Success);
+        record_and_run(command_buffer, output);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+
+        submit_and_wait(command_buffer);
+        RequireComputeWrote(output, k_element_count);
+
+        submit_and_wait(command_buffer);
+        RequireComputeWrote(output, k_element_count);
+    }
+    SECTION("Reset does not roll back the layout bookkeeping a discarded barrier set")
+    {
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                            .width = 4,
+                            .height = 4,
+                            .usage = Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination}));
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
+
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTransition(texture, Forge::ImageLayout::TransferDestination) == ErrorCode::Success);
+        // The barrier is recorded, so the bookkeeping moves right away - this is record-time, not execution-time.
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferDestination);
+
+        // Discarded, never submitted: the texture never actually left Undefined on the device.
+        REQUIRE(command_buffer.Reset() == ErrorCode::Success);
+        // docs/forge.md: Reset does not roll the bookkeeping back. It still says TransferDestination.
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::TransferDestination);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge batched submit", "[forge]")
 {
     if (!IsForgeAvailable())
