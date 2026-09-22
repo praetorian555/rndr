@@ -967,6 +967,19 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
         }
         stencil_attachment = info.GetValue();
     }
+    // Both sides are taken apart, and both have to be the same image when both are there: Vulkan allows a
+    // stencil attachment of its own only in a pass that has no depth attachment at all. A desc naming two
+    // textures is a pass that would be rejected, and the pair of them is easier to see here than in the
+    // layer's message about two image views.
+    if (has_depth && has_stencil &&
+        desc.depth_attachment.GetValue().texture.Get().GetNativeImageView() !=
+            desc.stencil_attachment.GetValue().texture.Get().GetNativeImageView())
+    {
+        RNDR_LOG_ERROR(
+            "Forge: a pass with both a depth and a stencil attachment needs them on one texture. A stencil texture of its own "
+            "is only allowed in a pass with no depth attachment.");
+        return ErrorCode::InvalidArgument;
+    }
 
     const VkRenderingInfo rendering_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,

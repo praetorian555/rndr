@@ -83,8 +83,10 @@ struct RenderingDesc
      * Stencil attachment, absent for a pass that does no stencil work. Vulkan takes the two sides separately
      * even when one texture carries both, so a combined format such as D24_UNORM_S8_UINT names the *same
      * texture* here as the depth attachment does - and takes its own load and store operations, since
-     * clearing the depth and keeping the stencil is a thing a pass may want. A separate stencil texture names
-     * its own.
+     * clearing the depth and keeping the stencil is a thing a pass may want.
+     *
+     * A texture of its own is allowed only in a pass with no depth attachment: where both are present Vulkan
+     * requires one image, and a desc naming two is refused here rather than at the validation layer.
      *
      * Present with no texture is a mistake and is refused, the way the depth attachment does.
      */
