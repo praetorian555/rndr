@@ -564,12 +564,12 @@ struct SamplerDesc
      */
     f32 lod_bias = 0;
 
-    /** Minimum mip level to use. */
+    /** Minimum mip level to use. Canvas only - Forge::Sampler reads min_lod and max_lod instead. */
     i32 base_mip_level = 0;
 
     /**
      * Maximum mip level to use. If use_mips in ImageDesc is set to true and this value is 0 it will be overridden by number of mip map
-     * levels - 1.
+     * levels - 1. Canvas only - Forge::Sampler reads min_lod and max_lod instead.
      */
     i32 max_mip_level = 0;
 

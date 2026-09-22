@@ -309,7 +309,7 @@ TEST_CASE("Forge surface reports what a swap chain can be built from", "[forge-w
         REQUIRE(fixture.surface.GetNativeSurface() != VK_NULL_HANDLE);
         REQUIRE(&fixture.surface.GetWindow() == &fixture.window.Get());
 
-        // The one call 3.21 left to this file: a device selected for this surface has to be able to present
+        // A device selected for this surface has to be able to present
         // to it, and the family index is what says so.
         const Opal::Optional<u32> present_family = fixture.device.GetPhysicalDevice().GetPresentQueueFamilyIndex(fixture.surface);
         REQUIRE(present_family.HasValue());
@@ -399,7 +399,7 @@ TEST_CASE("Forge swap chain matches the window it was built over", "[forge-windo
     }
     SECTION("A swap chain asked for no depth has none")
     {
-        // 4.5 from the other side: the sample reads HasDepth to decide whether to name a depth attachment,
+        // The other side of that same rule: the sample reads HasDepth to decide whether to name a depth attachment,
         // and nothing checked that a swap chain without one answers false rather than handing out a texture.
         const Forge::SwapChain swap_chain = ForgeTest::Unwrap(
             Forge::SwapChain::Create(fixture.device, fixture.surface, {.use_depth = false, .pixel_format = k_swap_chain_format}));
@@ -586,7 +586,8 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
     // One makes every frame wait for the one before it, two lets the host run ahead: the two the desc
     // documents, and the two whose slot arithmetic differs.
     const i32 frames_in_flight = GENERATE(1, 2);
-    // A frame with no depth attachment is 4.5 seen through the frame loop rather than through the swap chain.
+    // A frame with no depth attachment is that same rule seen through the frame loop rather than through the
+    // swap chain.
     const bool use_depth = GENERATE(true, false);
     INFO("frames_in_flight " << frames_in_flight << ", use_depth " << use_depth);
 
