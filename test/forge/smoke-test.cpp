@@ -844,6 +844,70 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * Every headless SetDebugName overload but Texture and TimestampQueryPool, which were the only two called
+ * anywhere in the suite. SwapChain and FrameContext need a window and are covered in window-test.cpp instead.
+ *
+ * SetName hands the handle and a VkObjectType off to vkSetDebugUtilsObjectNameEXT by hand per overload, so a
+ * copy-pasted overload naming the wrong VkObjectType for its handle compiles fine and is silent without the
+ * validation layer: it is the layer that knows a VK_OBJECT_TYPE_BUFFER handle is not a VkImage. So the check
+ * here is not that the name reached the object - nothing hands that back out to ask - but that naming every
+ * one of them raised nothing.
+ */
+TEST_CASE("Forge debug names on every headless object", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    if (!fixture.device.AreDebugUtilsEnabled())
+    {
+        SKIP("This build has no debug utils, so there is nothing to name and nothing to report.");
+    }
+
+    const Forge::Buffer buffer = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = 32, .usage = Forge::BufferUsageBits::TransferDestination}));
+    Forge::SetDebugName(fixture.device, buffer, "probe-buffer");
+
+    const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f}));
+    Forge::SetDebugName(fixture.device, sampler, "probe-sampler");
+
+    const Forge::Shader shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
+    Forge::SetDebugName(fixture.device, shader, "probe-shader");
+
+    const Forge::Pipeline pipeline = MakeAddressPipeline(fixture.device, shader);
+    Forge::SetDebugName(fixture.device, pipeline, "probe-pipeline");
+
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+    pool_desc.max_sets = 1;
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+    Forge::SetDebugName(fixture.device, pool, "probe-descriptor-pool");
+
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+    const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+    Forge::SetDebugName(fixture.device, layout, "probe-descriptor-set-layout");
+
+    const Forge::DescriptorSet descriptor_set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+    Forge::SetDebugName(fixture.device, descriptor_set, "probe-descriptor-set");
+
+    const Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    Forge::SetDebugName(fixture.device, command_buffer, "probe-command-buffer");
+
+    const Forge::Fence fence = ForgeTest::Unwrap(Forge::Fence::Create(fixture.device, false));
+    Forge::SetDebugName(fixture.device, fence, "probe-fence");
+
+    const Forge::Semaphore semaphore = ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device));
+    Forge::SetDebugName(fixture.device, semaphore, "probe-semaphore");
+
+    Forge::SetDebugName(fixture.device, fixture.GetQueue(), "probe-queue");
+
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge command buffer reset and repeated Begin", "[forge]")
 {
     if (!IsForgeAvailable())
