@@ -373,6 +373,49 @@ Opal::DynamicArray<u8> ReadColorPixels(ForgeFixture& fixture, Forge::Texture& te
     return pixels;
 }
 
+/** A colour target these cases render into and read straight back out of. */
+Forge::Texture MakeColorTarget(const Forge::Device& device, i32 side, PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
+{
+    return ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = format,
+                                   .width = static_cast<u32>(side),
+                                   .height = static_cast<u32>(side),
+                                   .usage = Forge::TextureUsageBits::ColorAttachment |
+                                            Forge::TextureUsageBits::TransferSource}));
+}
+
+/**
+ * Clear the target, run one recorded draw over it and hand back the pixels, left in TransferSource. The
+ * viewport and the scissor are set to the whole target first, so a case that wants something else says so by
+ * setting it again inside the draw.
+ *
+ * @param clear_color What the target is cleared to. Opaque red by default, which is what IsCovered reads a
+ *        texel no fragment reached as.
+ */
+template <typename Record>
+Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color, i32 side, Record&& record,
+                                    const Vector4f& clear_color = Vector4f{1.0f, 0.0f, 0.0f, 1.0f})
+{
+    REQUIRE(Forge::ImmediateSubmit(
+                fixture.device, fixture.GetQueue(),
+                [&](Forge::CommandBuffer& command_buffer)
+                {
+                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                    const Forge::RenderingDesc rendering_desc{
+                        .render_area_extent = {side, side},
+                        .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                             .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                             .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                             .clear_value = clear_color}}};
+                    REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {static_cast<f32>(side), static_cast<f32>(side)}) ==
+                            ErrorCode::Success);
+                    REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {side, side}) == ErrorCode::Success);
+                    record(command_buffer);
+                    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                }) == ErrorCode::Success);
+    return ReadColorPixels(fixture, color, side);
+}
+
 /** A source and a destination texture whose formats differ in texel size, for RecordMismatchedFormatCopy. */
 struct MismatchedFormatTextures
 {
@@ -2829,24 +2872,8 @@ TEST_CASE("Forge rendering without a depth attachment", "[forge]")
     {
         // No pipeline and no draw: the load operation is what writes the attachment, so what comes back says
         // the pass ran with a colour attachment and nothing else.
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                        const Forge::RenderingDesc rendering_desc{
-                            .render_area_extent = {k_side, k_side},
-                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                                 .clear_value = Vector4f{1.0f, 0.0f, 1.0f, 1.0f}}}};
-                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-
-        // Left in TransferSource rather than the ShaderReadOnly this defaults to: that layout needs the
-        // Sampled usage, and this texture is an attachment nothing ever samples.
-        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
+        const Opal::DynamicArray<u8> pixels =
+            RenderRaster(fixture, color, k_side, [](Forge::CommandBuffer&) {}, Vector4f{1.0f, 0.0f, 1.0f, 1.0f});
         // Zero and one are the only channel values a UNORM format converts exactly, so this compares
         // what was cleared rather than how the driver rounds.
         for (i32 i = 0; i < pixels.GetSize(); i += 4)
@@ -3036,11 +3063,7 @@ TEST_CASE("Forge color write mask", "[forge]")
 
     auto draw_through_mask = [&](Forge::ColorWriteMaskBits mask)
     {
-        Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
-                                              .width = k_side,
-                                              .height = k_side,
-                                              .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                       Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
 
         Forge::GraphicsPipelineDesc pipeline_desc;
         pipeline_desc.vertex_shader = vertex_shader;
@@ -3052,27 +3075,14 @@ TEST_CASE("Forge color write mask", "[forge]")
         pipeline_desc.color_attachment_formats.PushBack(k_format);
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                        const Forge::RenderingDesc rendering_desc{
-                            .render_area_extent = {k_side, k_side},
-                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                                 .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
-                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-
-        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) ==
+                                                                       ErrorCode::Success);
+                                                               REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                                                           });
         return Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]};
     };
 
@@ -4322,11 +4332,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
     {
         using Result = Opal::Expected<Opal::DynamicArray<u8>, ErrorCode>;
 
-        Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
-                                              .width = k_side,
-                                              .height = k_side,
-                                              .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                       Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         Forge::GraphicsPipelineDesc pipeline_desc;
         pipeline_desc.vertex_shader = vertex_shader;
         pipeline_desc.fragment_shader = fragment_shader;
@@ -4347,27 +4353,15 @@ TEST_CASE("Forge specialization constants", "[forge]")
         }
         const Forge::Pipeline& pipeline = pipeline_result.GetValue();
 
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                        const Forge::RenderingDesc rendering_desc{
-                            .render_area_extent = {k_side, k_side},
-                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
-                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-
-        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(
+            fixture, color, k_side,
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+            },
+            Vector4f{0.0f, 0.0f, 0.0f, 1.0f});
         return Result(Opal::DynamicArray<u8>{pixels[0], pixels[1], pixels[2], pixels[3]});
     };
 
@@ -7475,45 +7469,6 @@ float4 main_instanced_fragment(InstancedOutput input) : SV_Target
 }
 )";
 
-/** A colour target these cases render into and read straight back out of. */
-Forge::Texture MakeColorTarget(const Forge::Device& device, i32 side, PixelFormat format = PixelFormat::R8G8B8A8_UNORM)
-{
-    return ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = format,
-                                   .width = static_cast<u32>(side),
-                                   .height = static_cast<u32>(side),
-                                   .usage = Forge::TextureUsageBits::ColorAttachment |
-                                            Forge::TextureUsageBits::TransferSource}));
-}
-
-/**
- * Clear the target to opaque red, run one recorded draw over it and hand back the pixels. The viewport and
- * the scissor are set to the whole target first, so a case that wants something else says so by setting it
- * again inside the draw.
- */
-template <typename Record>
-Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color, i32 side, Record&& record)
-{
-    REQUIRE(Forge::ImmediateSubmit(
-                fixture.device, fixture.GetQueue(),
-                [&](Forge::CommandBuffer& command_buffer)
-                {
-                    REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                    const Forge::RenderingDesc rendering_desc{
-                        .render_area_extent = {side, side},
-                        .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                             .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                             .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                             .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
-                    REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                    REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {static_cast<f32>(side), static_cast<f32>(side)}) ==
-                            ErrorCode::Success);
-                    REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {side, side}) == ErrorCode::Success);
-                    record(command_buffer);
-                    REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-                }) == ErrorCode::Success);
-    return ReadColorPixels(fixture, color, side);
-}
-
 /** What one call to RenderWithDepth leaves behind: the colour attachment and the depth attachment, both read back. */
 struct DepthPassResult
 {
@@ -8583,29 +8538,16 @@ TEST_CASE("Forge push constants read by two stages", "[forge]")
     auto draw_pushing = [&](auto&& push_the_block)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
-        const ErrorCode submit_status = Forge::ImmediateSubmit(
-            fixture.device, fixture.GetQueue(),
+        return RenderRaster(
+            fixture, color, k_side,
             [&](Forge::CommandBuffer& command_buffer)
             {
-                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                const Forge::RenderingDesc rendering_desc{
-                    .render_area_extent = {k_side, k_side},
-                    .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                         .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                         .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                         .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
-                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
                 REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
                 push_the_block(command_buffer);
                 REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
                 REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-            });
-        REQUIRE(submit_status == ErrorCode::Success);
-
-        return ReadColorPixels(fixture, color, k_side);
+            },
+            Vector4f{0.0f, 0.0f, 0.0f, 1.0f});
     };
 
     /** The four channels of one texel of that readback. */
@@ -9807,34 +9749,23 @@ TEST_CASE("Forge blending", "[forge]")
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
         const Vector4f destination = ByteColor(k_dst[0], k_dst[1], k_dst[2], k_dst[3]);
         const Vector4f source = ByteColor(k_src[0], k_src[1], k_src[2], k_src[3]);
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                        const Forge::RenderingDesc rendering_desc{
-                            .render_area_extent = {k_side, k_side},
-                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f}}}};
-                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
-                        // The destination is drawn rather than cleared to, so it is exactly the
-                        // bytes the shader wrote and not a float the clear had to convert.
-                        REQUIRE(command_buffer.CmdBindPipeline(opaque_pipeline) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdPushConstants(opaque_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(destination)) ==
-                                ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindPipeline(blend_pipeline) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdPushConstants(blend_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(source)) ==
-                                ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-        return ReadColorPixels(fixture, color, k_side);
+        return RenderRaster(
+            fixture, color, k_side,
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                // The destination is drawn rather than cleared to, so it is exactly the bytes the shader wrote and
+                // not a float the clear had to convert.
+                REQUIRE(command_buffer.CmdBindPipeline(opaque_pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(opaque_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(destination)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindPipeline(blend_pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(blend_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(source)) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+            },
+            Vector4f{0.0f, 0.0f, 0.0f, 1.0f});
     };
 
     /** The same equation on the CPU, in the floats the device works in, rounded back to a byte at the end. */
@@ -10912,39 +10843,22 @@ TEST_CASE("Forge a draw that reads a descriptor set", "[forge]")
         REQUIRE(set.Update(0, transform_buffer) == ErrorCode::Success);
         REQUIRE(set.Update(1, row, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
 
-        Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                                                                       {.format = k_format,
-                                                                        .width = k_side,
-                                                                        .height = k_side,
-                                                                        .usage = Forge::TextureUsageBits::ColorAttachment |
-                                                                                 Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
 
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                        // Cleared to blue, which the shader never writes: a texel that comes back blue is one
-                        // the draw did not reach.
-                        const Forge::RenderingDesc rendering_desc{
-                            .render_area_extent = {k_side, k_side},
-                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f}}}};
-                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                        // The same call the dispatch cases make. The bind point comes off the pipeline, so
-                        // this is the one line that says a set can be bound for graphics at all.
-                        REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-
-        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
+        // Cleared to blue, which the shader never writes: a texel that comes back blue is one the draw did not
+        // reach.
+        const Opal::DynamicArray<u8> pixels = RenderRaster(
+            fixture, color, k_side,
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                // The same call the dispatch cases make. The bind point comes off the pipeline, so this is the one
+                // line that says a set can be bound for graphics at all.
+                REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+            },
+            Vector4f{0.0f, 0.0f, 1.0f, 1.0f});
         Opal::DynamicArray<Texel> columns(k_side);
         for (i32 column = 0; column < k_side; ++column)
         {
@@ -12246,31 +12160,16 @@ TEST_CASE("Forge the blend factors and operations", "[forge]")
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                        const Forge::RenderingDesc rendering_desc{
-                            .render_area_extent = {k_table_side, k_table_side},
-                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
-                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
-                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
-                                                                                 .clear_value = dst}}};
-                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_table_side, k_table_side}) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindVertexBuffer(full_quad, 0) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(src)) ==
-                                ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-
-        Opal::DynamicArray<u8> pixels(k_table_side * k_table_side * 4);
-        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), color, pixels, 0, Forge::ImageLayout::TransferSource) ==
-                ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(
+            fixture, color, k_table_side,
+            [&](Forge::CommandBuffer& command_buffer)
+            {
+                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdBindVertexBuffer(full_quad, 0) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(src)) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+            },
+            dst);
         return ByteColor(pixels[0], pixels[1], pixels[2], pixels[3]);
     };
 
