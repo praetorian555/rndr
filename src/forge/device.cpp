@@ -171,6 +171,8 @@ struct FeatureChain
         vk12.samplerMirrorClampToEdge = features.sampler_mirror_clamp_to_edge;
         vk12.samplerFilterMinmax = features.sampler_filter_minmax;
         vk12.drawIndirectCount = features.draw_indirect_count;
+        vk12.shaderInt8 = features.shader_int8;
+        vk12.shaderFloat16 = features.shader_float16;
         vk12.shaderBufferInt64Atomics = features.shader_buffer_int64_atomics;
         vk12.shaderSharedInt64Atomics = features.shader_shared_int64_atomics;
         vk12.shaderOutputLayer = features.shader_output_layer;
@@ -316,6 +318,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.sampler_mirror_clamp_to_edge, supported.vk12.samplerMirrorClampToEdge, "sampler_mirror_clamp_to_edge");
     require(requested.sampler_filter_minmax, supported.vk12.samplerFilterMinmax, "sampler_filter_minmax");
     require(requested.draw_indirect_count, supported.vk12.drawIndirectCount, "draw_indirect_count");
+    require(requested.shader_int8, supported.vk12.shaderInt8, "shader_int8");
+    require(requested.shader_float16, supported.vk12.shaderFloat16, "shader_float16");
     require(requested.shader_buffer_int64_atomics, supported.vk12.shaderBufferInt64Atomics, "shader_buffer_int64_atomics");
     require(requested.shader_shared_int64_atomics, supported.vk12.shaderSharedInt64Atomics, "shader_shared_int64_atomics");
     require(requested.shader_output_layer, supported.vk12.shaderOutputLayer, "shader_output_layer");

@@ -110,6 +110,14 @@ struct DeviceFeatures
     bool shader_int64 = false;
     bool shader_float64 = false;
     /**
+     * 8-bit integers in shader arithmetic and constants - a uint8_t specialization constant among them, which
+     * reflection reports with a byte_size of one. Reading or writing them in a buffer is a storage feature
+     * of its own that Forge does not ask for.
+     */
+    bool shader_int8 = false;
+    /** half arithmetic in a shader. As with shader_int8, a half in a buffer needs a storage feature beside it. */
+    bool shader_float16 = false;
+    /**
      * 64-bit atomics on storage buffers - an InterlockedMax over a u64, which is how a software rasterizer
      * resolves depth and the id beside it in one operation. Needs shader_int64 for the type itself.
      */
