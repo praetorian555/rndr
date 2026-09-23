@@ -302,6 +302,25 @@ and one of them changes Forge. One item per session.
 Items 4, 6 (the `BufferBarrier` check and its test), 14 and 19: what reflection refuses, the buffer barrier
 range, multisampled depth, and implicit LOD.
 
+### What was done, and what was left
+
+Items 1, 2, 3, 4 and 6 were judged worth the time and are **done** on 2026-09-23, `bbe7d1d` to `508728d`:
+
+- 6 found a Forge bug beyond the one listed. `CmdBarriers` recorded `vkCmdPipelineBarrier2` before the
+  layout bookkeeping checked a texture range, so a range past the texture reached the driver and was refused
+  afterwards, with the textures ahead of it in a batch already moved. `bbe7d1d` checks every buffer and
+  texture range before anything is recorded, through a new private `Texture::CheckRange`. The test fails with
+  five validation errors against the old code.
+- 1 and 2 are two cases, one section per guard. 3 rewrote 128 refusals to name their code; every one held,
+  including `UnsupportedFormat` for the mesh files and `CorruptData` for truncated SPIR-V. The optional
+  answers (`FindPhysicalDevice`, the queue family lookup) have no code and were left.
+- 4 covers both texel buffer kinds, a ray generation stage and a `half` constant.
+
+The rest - 7 to 20, bar the item 20 already done in bucket A - is **deferred**, not open. Each checks a cast,
+a copied field or a one-line guard that a first real use would show wrong, and none is likely to find a
+live bug. Pick one up when the area it covers is being worked on: 13 with multi-window support, 14 with MSAA
+rendering, 19 with a sampler feature that needs implicit LOD.
+
 ### API gaps found on the way
 
 Not test gaps, since nothing in the API reaches them, but worth a line each so the next feature has a list:
