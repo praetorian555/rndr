@@ -11522,6 +11522,88 @@ TEST_CASE("Forge comparison samplers", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * SamplerDesc::reduction and DeviceFeatures::sampler_filter_minmax, over a two texel float texture holding
+ * 0.25 and 0.75 sampled halfway between them: the average there is one half, the least one quarter and the
+ * greatest three quarters, so each mode reads back as a value no other one gives.
+ */
+TEST_CASE("Forge min and max samplers", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_features{.sampler_filter_minmax = true};
+    constexpr PixelFormat k_format = PixelFormat::R32_SFLOAT;
+    constexpr f32 k_values[] = {0.25f, 0.75f};
+
+    SECTION("A reduction returns the least or the greatest texel the filter reads")
+    {
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device has no min or max sampler reduction.");
+        }
+        ForgeFixture fixture(k_features);
+        Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format,
+                             .width = 2,
+                             .height = 1,
+                             .usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination}));
+        UploadMip(fixture.device, fixture.GetQueue(), texture, Opal::AsBytes(k_values), 0);
+
+        const SampleHarness harness = MakeSampleHarness(fixture.device, 4);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
+        pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        auto sample_between = [&](SamplerReduction reduction)
+        {
+            const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Linear,
+                                                                                                      .mag_filter = ImageFilter::Linear,
+                                                                                                      .mip_map_filter = ImageFilter::Nearest,
+                                                                                                      .address_mode_u = ImageAddressMode::Clamp,
+                                                                                                      .address_mode_v = ImageAddressMode::Clamp,
+                                                                                                      .address_mode_w = ImageAddressMode::Clamp,
+                                                                                                      .reduction = reduction}));
+            const f32 value = SampleOnce(fixture, harness, pipeline, texture, sampler, SampleParams{.uv = {0.5f, 0.5f}}).x;
+            INFO("reduction " << static_cast<i32>(reduction) << " sampled " << value);
+            return value;
+        };
+        REQUIRE(sample_between(SamplerReduction::Max) == 0.75f);
+        REQUIRE(sample_between(SamplerReduction::Min) == 0.25f);
+        // The ordinary filter at the same point, which only a format that filters linearly can give - and which
+        // shows the two above are not what any linear sample there reads.
+        if (fixture.device.GetPhysicalDevice().SupportsLinearFilter(k_format))
+        {
+            REQUIRE(sample_between(SamplerReduction::WeightedAverage) == Catch::Approx(0.5f).margin(0.01));
+        }
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A reduction the device or the rest of the desc cannot take is refused")
+    {
+        {
+            ForgeFixture fixture;
+            REQUIRE(Forge::Sampler::Create(fixture.device, {.reduction = SamplerReduction::Max}).GetErrorOr(ErrorCode::Success) ==
+                    ErrorCode::InvalidArgument);
+            REQUIRE_NO_VALIDATION_ERROR(fixture);
+        }
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device has no min or max sampler reduction.");
+        }
+        ForgeFixture fixture(k_features);
+        REQUIRE(Forge::Sampler::Create(fixture.device, {.compare_enabled = true, .reduction = SamplerReduction::Min})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE(Forge::Sampler::Create(fixture.device, {.reduction = SamplerReduction::EnumCount}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
+
 TEST_CASE("Forge separate sampler and sampled image", "[forge]")
 {
     if (!IsForgeAvailable())
