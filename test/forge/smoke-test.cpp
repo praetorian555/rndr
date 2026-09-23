@@ -14587,6 +14587,94 @@ TEST_CASE("Forge a shader of a stage the device did not enable is refused", "[fo
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+namespace
+{
+
+/** A uniform texel buffer, which is a descriptor kind DescriptorType has no entry for. */
+constexpr const char* k_texel_buffer_source = R"(
+[[vk::binding(0, 0)]] Buffer<float4> texels;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_texel_buffer()
+{
+    output[0] = texels.Load(0);
+}
+)";
+
+/** A storage texel buffer, the other kind of texel buffer and just as absent. */
+constexpr const char* k_storage_texel_buffer_source = R"(
+[[vk::image_format("rgba32f")]]
+[[vk::binding(0, 0)]] RWBuffer<float4> texels;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_storage_texel_buffer()
+{
+    texels[0] = float4(1.0, 2.0, 3.0, 4.0);
+}
+)";
+
+/** A ray generation entry point, a stage ShaderTypeBits has no bit for. */
+constexpr const char* k_ray_generation_source = R"(
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> output;
+
+[shader("raygeneration")]
+void main_ray_generation()
+{
+    output[DispatchRaysIndex().x] = 1;
+}
+)";
+
+/** A sixteen bit float specialization constant, a width SpecializationType has no entry for. */
+constexpr const char* k_half_constant_source = R"(
+[SpecializationConstant]
+const half SCALE = 0.5;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_half_constant(uniform float *output)
+{
+    output[0] = float(SCALE);
+}
+)";
+
+}  // namespace
+
+/**
+ * What reflection finds and Forge does not model: a descriptor kind, a shader stage and a specialization
+ * constant type. All three are refused while the SPIR-V is read, before vkCreateShaderModule, so none needs
+ * the device feature the shader would otherwise want - and each answers UnsupportedFormat, which is how
+ * Shader::FromSpirvInMemory says the module is fine and Forge is what falls short.
+ */
+TEST_CASE("Forge a shader reflection finds something Forge does not model in is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    struct Case
+    {
+        const char* source;
+        const char* entry_point;
+    };
+    const Case cases[] = {{k_texel_buffer_source, "main_texel_buffer"},
+                          {k_storage_texel_buffer_source, "main_storage_texel_buffer"},
+                          {k_ray_generation_source, "main_ray_generation"},
+                          {k_half_constant_source, "main_half_constant"}};
+    for (const Case& test_case : cases)
+    {
+        INFO("entry point " << test_case.entry_point);
+        const Opal::Expected<Forge::Shader, ErrorCode> shader = Forge::Shader::FromSourceInMemory(
+            fixture.device, test_case.source, {.entry_point = test_case.entry_point, .cache = GetShaderCache()});
+        REQUIRE(shader.GetErrorOr(ErrorCode::Success) == ErrorCode::UnsupportedFormat);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 /*
  * The device features that map onto a Vulkan feature bit in device.cpp and that nothing else in this file
  * asks for or relies on. A field wired to the wrong bit is silent until a shader needs it, so each case below
