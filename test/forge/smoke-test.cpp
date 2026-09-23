@@ -243,6 +243,22 @@ Forge::Pipeline MakeAddressPipeline(const Forge::Device& device, const Forge::Sh
 }
 
 /**
+ * Bind a compute pipeline and one set at slot zero, dispatch, and wait for it - what every case that reads
+ * its output through a descriptor set rather than a device address records.
+ */
+void DispatchWithSet(const Forge::Device& device, Forge::DeviceQueue& queue, const Forge::Pipeline& pipeline, const Forge::DescriptorSet& set,
+                     u32 group_count = 1)
+{
+    REQUIRE(Forge::ImmediateSubmit(device, queue,
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdDispatch(group_count) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
+}
+
+/**
  * A storage buffer of that many u32, readable by the host and addressable by a shader, wiped so nothing a
  * previous run left in it can pass for a dispatch that ran.
  */
@@ -1948,13 +1964,7 @@ TEST_CASE("Forge bindless descriptor bindings", "[forge]")
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 
-        REQUIRE(Forge::ImmediateSubmit(device, queue,
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
+        DispatchWithSet(device, queue, pipeline, descriptor_set, k_element_count / k_group_size);
 
         Opal::DynamicArray<u32> values(k_element_count);
         REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
@@ -2105,13 +2115,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 
-        REQUIRE(Forge::ImmediateSubmit(device, queue,
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
+        DispatchWithSet(device, queue, pipeline, descriptor_set, k_element_count / k_group_size);
 
         Opal::DynamicArray<u32> values(k_element_count);
         REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
@@ -2165,13 +2169,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 
-        REQUIRE(Forge::ImmediateSubmit(device, queue,
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
+        DispatchWithSet(device, queue, pipeline, descriptor_set, k_element_count / k_group_size);
 
         Opal::DynamicArray<u32> values(k_element_count);
         REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
@@ -2288,13 +2286,7 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
 
-    REQUIRE(Forge::ImmediateSubmit(device, queue,
-                           [&](Forge::CommandBuffer& command_buffer)
-                           {
-                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                               REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, descriptor_set) == ErrorCode::Success);
-                               REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
-                           }) == ErrorCode::Success);
+    DispatchWithSet(device, queue, pipeline, descriptor_set, k_element_count / k_group_size);
 
     Opal::DynamicArray<u32> values(k_element_count);
     REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
@@ -2838,13 +2830,7 @@ TEST_CASE("Forge single resource descriptor updates", "[forge]")
         pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
+        DispatchWithSet(fixture.device, fixture.GetQueue(), pipeline, set, k_element_count / k_group_size);
 
         Opal::DynamicArray<u32> values(k_element_count);
         REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
@@ -4440,13 +4426,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
         pipeline_desc.specialization.PushBack(Forge::SpecializationConstant{.name = "ADDEND", .value = 100u});
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(k_element_count / 64) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
+        DispatchWithSet(fixture.device, fixture.GetQueue(), pipeline, set, k_element_count / 64);
         Opal::DynamicArray<u32> values(k_element_count);
         REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         // 100 rather than the 5 the shader declares, so the value came from the pipeline.
@@ -5391,13 +5371,7 @@ TEST_CASE("Forge descriptor set update by name for a buffer", "[forge]")
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
-    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                                   [&](Forge::CommandBuffer& command_buffer)
-                                   {
-                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                       REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                       REQUIRE(command_buffer.CmdDispatch(k_element_count / k_group_size) == ErrorCode::Success);
-                                   }) == ErrorCode::Success);
+    DispatchWithSet(fixture.device, fixture.GetQueue(), pipeline, set, k_element_count / k_group_size);
     RequireComputeWrote(output, k_element_count);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -5896,13 +5870,7 @@ TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
                               REQUIRE(ForgeTest::Unwrap(set.GetBindingDescriptorType(0)) == Forge::DescriptorType::StorageBuffer);
                               const Forge::Buffer output = MakeWipedOutput(fixture.device, k_lifetime_elements);
                               REQUIRE(set.Update(0, output) == ErrorCode::Success);
-                              REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                                                     [&](Forge::CommandBuffer& command_buffer)
-                                                     {
-                                                         REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                                         REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                                         REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                                                     }) == ErrorCode::Success);
+                              DispatchWithSet(fixture.device, fixture.GetQueue(), pipeline, set);
                               Opal::DynamicArray<u32> values(k_lifetime_elements);
                               REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) ==
                                       ErrorCode::Success);
@@ -10851,13 +10819,7 @@ TEST_CASE("Forge descriptor pool recycling", "[forge]")
     {
         const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
         REQUIRE(set.Update(0, output) == ErrorCode::Success);
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
+        DispatchWithSet(fixture.device, fixture.GetQueue(), pipeline, set);
         Opal::DynamicArray<u32> values(k_element_count);
         REQUIRE(output.Read({reinterpret_cast<u8*>(values.GetData()), values.GetSize() * sizeof(u32)}) == ErrorCode::Success);
         for (i32 i = 0; i < k_element_count; ++i)
@@ -14193,13 +14155,7 @@ Opal::DynamicArray<u32> DispatchIntoStorageBuffer(ForgeFixture& fixture, const F
     Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, variable_count));
     const Forge::Buffer output = MakeWipedOutput(fixture.device, word_count);
     REQUIRE(set.Update(0, output) == ErrorCode::Success);
-    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                                   [&](Forge::CommandBuffer& command_buffer)
-                                   {
-                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                       REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                       REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                                   }) == ErrorCode::Success);
+    DispatchWithSet(fixture.device, fixture.GetQueue(), pipeline, set);
     Opal::DynamicArray<u32> words(word_count);
     REQUIRE(output.Read({reinterpret_cast<u8*>(words.GetData()), words.GetSize() * sizeof(u32)}) == ErrorCode::Success);
     return words;
