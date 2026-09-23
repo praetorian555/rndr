@@ -743,13 +743,14 @@ TEST_CASE("Forge buffer edges", "[forge]")
 
     SECTION("Create refuses initial data larger than the buffer")
     {
+        // A range that does not fit, which docs/forge.md says is OutOfBounds rather than InvalidArgument.
         const Opal::DynamicArray<u8> too_much = MakeBytes(k_size + 1, 9);
-        REQUIRE_FALSE(Forge::Buffer::Create(fixture.device,
-                                        {.size = k_size,
-                                         .usage = Forge::BufferUsageBits::TransferSource,
-                                         .host_access = Forge::HostAccess::Random},
-                                        too_much)
-                          .HasValue());
+        REQUIRE(Forge::Buffer::Create(fixture.device,
+                                      {.size = k_size,
+                                       .usage = Forge::BufferUsageBits::TransferSource,
+                                       .host_access = Forge::HostAccess::Random},
+                                      too_much)
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::OutOfBounds);
     }
     SECTION("keep_memory_mapped = false still round-trips through Update and Read")
     {

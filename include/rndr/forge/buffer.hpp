@@ -41,8 +41,9 @@ public:
      * @param initial_data Bytes to write into it. Needs host access; UploadToBuffer is the path for a buffer
      *        the host cannot write.
      * @return The buffer, ErrorCode::InvalidArgument when the desc asks for something this device or this
-     *         buffer cannot do - a device address without the feature, initial data that does not fit or
-     *         that goes to memory the host cannot write - or whatever the failing allocation maps to.
+     *         buffer cannot do - a device address without the feature, or initial data for memory the host
+     *         cannot write - ErrorCode::OutOfBounds for initial data that does not fit, or whatever the
+     *         failing allocation maps to.
      */
     [[nodiscard]] static Opal::Expected<Buffer, ErrorCode> Create(const Device& device, const BufferDesc& desc = {},
                                                                   Opal::ArrayView<const u8> initial_data = {});
