@@ -277,6 +277,13 @@ bullet, the full `[forge]` and `[forge-window]` set run after each.
 - The static_assert table of item 5, in "Forge pure functions of the public headers".
 - The three `StringUtf8` label overloads, item 20.
 
+**Done**, `76a8df9` to `b7767ed`. Where it fell short of the bullets: `RenderRaster` took seven passes, not
+eleven - the two-target, resolve, halves, two-pass and depth passes are not one colour attachment and a
+draw. `MakeFullscreenPipelineDesc` took six descs; the two-target, instanced, reflected and tessellation
+ones differ in what it fixes. `SampleOnce` took five bodies; the separate sampler case has its own layout.
+The dispatch helper is `DispatchWithSet`, taking a prepared set, and took ten; the cases that bind two sets
+or update between record and submit keep theirs. `PixelFormat` has 155 enumerators, not 107.
+
 ### Bucket B: pattern-following tests
 
 **Sonnet 5, medium effort.** Each copies the shape of an existing case and asserts a readback or a code.
