@@ -416,6 +416,25 @@ Opal::DynamicArray<u8> RenderRaster(ForgeFixture& fixture, Forge::Texture& color
     return ReadColorPixels(fixture, color, side);
 }
 
+/**
+ * The pipeline desc of a draw over a two float position at location zero and one colour attachment, culling
+ * nothing - the shape of every fullscreen triangle and quad here that reads nothing else. A case changes what
+ * it is about on the desc this hands back.
+ */
+Forge::GraphicsPipelineDesc MakeFullscreenPipelineDesc(const Forge::Shader& vertex_shader, const Forge::Shader& fragment_shader,
+                                                       PixelFormat format)
+{
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vertex_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
+    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(format);
+    return pipeline_desc;
+}
+
 /** A source and a destination texture whose formats differ in texel size, for RecordMismatchedFormatCopy. */
 struct MismatchedFormatTextures
 {
@@ -3065,14 +3084,8 @@ TEST_CASE("Forge color write mask", "[forge]")
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
 
-        Forge::GraphicsPipelineDesc pipeline_desc;
-        pipeline_desc.vertex_shader = vertex_shader;
-        pipeline_desc.fragment_shader = fragment_shader;
-        pipeline_desc.rasterizer.cull_mode = Face::None;
-        pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
-        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = mask});
-        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format);
+        pipeline_desc.color_blend_attachments[0].color_write_mask = mask;
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
@@ -3571,17 +3584,11 @@ TEST_CASE("Forge blend state per colour attachment", "[forge]")
         Forge::Buffer::Create(fixture.device, {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
                               Opal::AsBytes(k_fullscreen_vertices)));
 
-    Forge::GraphicsPipelineDesc pipeline_desc;
-    pipeline_desc.vertex_shader = vertex_shader;
-    pipeline_desc.fragment_shader = fragment_shader;
-    pipeline_desc.rasterizer.cull_mode = Face::None;
-    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
     // The first attachment takes everything the shader wrote; the second takes the red channel only, which
     // the shader writes as zero over a clear that set it to one.
-    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = Forge::ColorWriteMaskBits::All});
+    Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_two_target_format);
+    pipeline_desc.color_blend_attachments[0].color_write_mask = Forge::ColorWriteMaskBits::All;
     pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{.color_write_mask = Forge::ColorWriteMaskBits::Red});
-    pipeline_desc.color_attachment_formats.PushBack(k_two_target_format);
     pipeline_desc.color_attachment_formats.PushBack(k_two_target_format);
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
@@ -3938,18 +3945,7 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
     const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
 
-    auto make_desc = [&]()
-    {
-        Forge::GraphicsPipelineDesc desc;
-        desc.vertex_shader = vertex_shader;
-        desc.fragment_shader = fragment_shader;
-        desc.rasterizer.cull_mode = Face::None;
-        desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-        REQUIRE(desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
-        desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
-        desc.color_attachment_formats.PushBack(k_format);
-        return desc;
-    };
+    auto make_desc = [&]() { return MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format); };
 
     SECTION("A sample count this device supports builds a pipeline")
     {
@@ -4046,14 +4042,7 @@ TEST_CASE("Forge multisampled draw resolved to one sample", "[forge]")
         Forge::Buffer::Create(fixture.device, {.size = sizeof(k_left_quarter_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
                               Opal::AsBytes(k_left_quarter_vertices)));
 
-    Forge::GraphicsPipelineDesc pipeline_desc;
-    pipeline_desc.vertex_shader = vertex_shader;
-    pipeline_desc.fragment_shader = fragment_shader;
-    pipeline_desc.rasterizer.cull_mode = Face::None;
-    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
-    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
-    pipeline_desc.color_attachment_formats.PushBack(k_format);
+    Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format);
     pipeline_desc.sample_count = Forge::SampleCount::Count4;
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
@@ -4333,14 +4322,7 @@ TEST_CASE("Forge specialization constants", "[forge]")
         using Result = Opal::Expected<Opal::DynamicArray<u8>, ErrorCode>;
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
-        Forge::GraphicsPipelineDesc pipeline_desc;
-        pipeline_desc.vertex_shader = vertex_shader;
-        pipeline_desc.fragment_shader = fragment_shader;
-        pipeline_desc.rasterizer.cull_mode = Face::None;
-        pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
-        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
-        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format);
         for (i32 i = 0; i < values.GetSize(); ++i)
         {
             pipeline_desc.specialization.PushBack(
@@ -7555,16 +7537,10 @@ Opal::Expected<Forge::Pipeline, ErrorCode> MakeRasterPipeline(const Forge::Devic
                                                               PrimitiveTopology topology = PrimitiveTopology::Triangle,
                                                               Forge::DynamicStateBits dynamic_state = Forge::DynamicStateBits::None)
 {
-    Forge::GraphicsPipelineDesc pipeline_desc;
-    pipeline_desc.vertex_shader = vertex_shader;
-    pipeline_desc.fragment_shader = fragment_shader;
+    Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, format);
     pipeline_desc.rasterizer = rasterizer;
     pipeline_desc.topology = topology;
     pipeline_desc.dynamic_state = dynamic_state;
-    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
-    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
-    pipeline_desc.color_attachment_formats.PushBack(format);
     return Forge::Pipeline::Create(device, pipeline_desc);
 }
 
@@ -10797,15 +10773,8 @@ TEST_CASE("Forge a draw that reads a descriptor set", "[forge]")
     REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
     const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
 
-    Forge::GraphicsPipelineDesc pipeline_desc;
-    pipeline_desc.vertex_shader = vertex_shader;
-    pipeline_desc.fragment_shader = fragment_shader;
-    pipeline_desc.rasterizer.cull_mode = Face::None;
-    pipeline_desc.vertex_input.AddBinding(0, 2 * sizeof(f32), DataRepetition::PerVertex);
-    REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+    Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format);
     pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
-    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
-    pipeline_desc.color_attachment_formats.PushBack(k_format);
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
     const Forge::Buffer vertices = ForgeTest::Unwrap(
