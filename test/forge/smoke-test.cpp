@@ -14540,15 +14540,41 @@ TEST_CASE("Forge variable descriptor count", "[forge]")
     }
 }
 
+TEST_CASE("Forge a BC texture on a device without the feature is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // Vulkan would take the texture on a device that reports the format, and the layer would say nothing,
+    // so the refusal is Forge's own and nothing else stands behind it.
+    ForgeFixture fixture;
+    REQUIRE_FALSE(fixture.device.GetFeatures().texture_compression_bc);
+    constexpr Forge::TextureUsageBits k_usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination;
+    // The first and the last of the BC range, so a check that stops short at either end shows.
+    REQUIRE_FALSE(Forge::Texture::Create(fixture.device, {.format = PixelFormat::BC1_RGB_UNORM_BLOCK, .width = 4, .height = 4, .usage = k_usage})
+                      .HasValue());
+    REQUIRE_FALSE(Forge::Texture::Create(fixture.device, {.format = PixelFormat::BC7_SRGB_BLOCK, .width = 4, .height = 4, .usage = k_usage})
+                      .HasValue());
+    // An uncompressed format on the same device is not refused. Not the formats either side of the range:
+    // ETC2 is a feature of its own that DeviceFeatures does not model, and D32_SFLOAT_S8_UINT is not a format
+    // every device offers, so neither could be asked for here without a probe of its own.
+    const Forge::Texture unaffected = ForgeTest::Unwrap(
+        Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = k_usage}));
+    REQUIRE(unaffected.IsValid());
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 /**
  * A BC1 texture uploaded and sampled. One four by four block, encoded by hand: red and blue as the two end
  * colours, and a two bit index per texel choosing between them. Only the two end colours are used, never
  * the two BC1 interpolates between them, so every texel decodes to an exact value.
  *
  * The validation layer does not tie BC formats to textureCompressionBC - a device that reports the formats
- * lets them be used either way - so unlike the cases above, this one cannot show the field reaches its bit.
- * What it does cover is the path a compressed texture takes through Forge, which no case had taken: an
- * upload sized in blocks rather than texels, and a sample that decodes it.
+ * lets them be used either way - so unlike the cases above, this one cannot show the field reaches its bit;
+ * the case above shows Forge refuses the format without it. What this one covers is the path a compressed
+ * texture takes through Forge, which no case had taken: an upload sized in blocks rather than texels, and a
+ * sample that decodes it.
  */
 TEST_CASE("Forge a BC compressed texture uploaded and sampled", "[forge]")
 {
