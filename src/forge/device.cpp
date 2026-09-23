@@ -159,6 +159,8 @@ struct FeatureChain
         vk12.hostQueryReset = features.host_query_reset;
         vk12.samplerMirrorClampToEdge = features.sampler_mirror_clamp_to_edge;
         vk12.drawIndirectCount = features.draw_indirect_count;
+        vk12.shaderBufferInt64Atomics = features.shader_buffer_int64_atomics;
+        vk12.shaderSharedInt64Atomics = features.shader_shared_int64_atomics;
 
         // Forge is written on all of these, so they are not the caller's to turn off.
         vk12.timelineSemaphore = VK_TRUE;
@@ -292,6 +294,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.host_query_reset, supported.vk12.hostQueryReset, "host_query_reset");
     require(requested.sampler_mirror_clamp_to_edge, supported.vk12.samplerMirrorClampToEdge, "sampler_mirror_clamp_to_edge");
     require(requested.draw_indirect_count, supported.vk12.drawIndirectCount, "draw_indirect_count");
+    require(requested.shader_buffer_int64_atomics, supported.vk12.shaderBufferInt64Atomics, "shader_buffer_int64_atomics");
+    require(requested.shader_shared_int64_atomics, supported.vk12.shaderSharedInt64Atomics, "shader_shared_int64_atomics");
 
     // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
     require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");

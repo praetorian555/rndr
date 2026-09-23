@@ -91,6 +91,13 @@ struct DeviceFeatures
     bool shader_int16 = false;
     bool shader_int64 = false;
     bool shader_float64 = false;
+    /**
+     * 64-bit atomics on storage buffers - an InterlockedMax over a u64, which is how a software rasterizer
+     * resolves depth and the id beside it in one operation. Needs shader_int64 for the type itself.
+     */
+    bool shader_buffer_int64_atomics = false;
+    /** 64-bit atomics on groupshared memory, which a workgroup reducing into one u64 before writing it out wants. */
+    bool shader_shared_int64_atomics = false;
 
     // Descriptors.
     /** Indexing into arrays of descriptors. The rest of the descriptor fields build on this one. */
