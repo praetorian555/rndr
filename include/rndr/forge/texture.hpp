@@ -86,6 +86,14 @@ public:
     [[nodiscard]] const TextureDesc& GetDesc() const { return m_desc; }
 
     /**
+     * The properties of the memory type the image was allocated from. A transient attachment lands in
+     * VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT memory when the device has a type the image can use, which is
+     * the only way to tell whether it did. Zero for an empty texture and for one wrapping an image Forge
+     * did not allocate.
+     */
+    [[nodiscard]] VkMemoryPropertyFlags GetMemoryProperties() const;
+
+    /**
      * The layout every subresource of the texture is in, which is what a barrier transitions out of. Vulkan
      * keeps no such thing, so this is Forge's own bookkeeping: it starts at ImageLayout::Undefined, the way a
      * freshly created image does, and CommandBuffer moves it on as it records barriers.

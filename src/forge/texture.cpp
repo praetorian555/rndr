@@ -335,8 +335,22 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
         .usage = static_cast<VkImageUsageFlags>(m_desc.usage),
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    const VmaAllocationCreateInfo allocation_create_info = {.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-                                                            .usage = VMA_MEMORY_USAGE_AUTO};
+    VmaAllocationCreateInfo allocation_create_info = {.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+                                                      .usage = VMA_MEMORY_USAGE_AUTO};
+    // A transient attachment belongs in lazily allocated memory, which a tiled device may never back at all.
+    // VMA_MEMORY_USAGE_AUTO neither asks for nor avoids it, so left to itself it lands there only when the
+    // lazy type happens to come first. It is asked for by name where the device has a type the image can
+    // use, and a device without one - every desktop one - gets the ordinary allocation.
+    if (!!(m_desc.usage & TextureUsageBits::TransientAttachment))
+    {
+        VmaAllocationCreateInfo lazy_create_info = allocation_create_info;
+        lazy_create_info.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
+        u32 lazy_type_index = 0;
+        if (vmaFindMemoryTypeIndexForImageInfo(gpu_allocator, &image_create_info, &lazy_create_info, &lazy_type_index) == VK_SUCCESS)
+        {
+            allocation_create_info = lazy_create_info;
+        }
+    }
     RNDR_FORGE_VK_CHECK(vmaCreateImage(gpu_allocator, &image_create_info, &allocation_create_info, &m_image, &m_image_allocation, nullptr),
                         "vmaCreateImage");
     // A view is only allowed on an image that some stage can read or write. A texture that is nothing but the
@@ -420,6 +434,17 @@ void Rndr::Forge::Texture::Destroy()
         m_image = VK_NULL_HANDLE;
     }
     m_layouts.Clear();
+}
+
+VkMemoryPropertyFlags Rndr::Forge::Texture::GetMemoryProperties() const
+{
+    if (m_image_allocation == VK_NULL_HANDLE)
+    {
+        return 0;
+    }
+    VkMemoryPropertyFlags properties = 0;
+    vmaGetAllocationMemoryProperties(m_device->GetGPUAllocator(), m_image_allocation, &properties);
+    return properties;
 }
 
 /**
