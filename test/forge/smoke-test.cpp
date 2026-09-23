@@ -15141,6 +15141,317 @@ TEST_CASE("Forge a geometry shader draw", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+namespace
+{
+
+/**
+ * Two triangles over the whole target, each carrying the layer it lands in. The vertex stage picks the
+ * layer, which is what DeviceFeatures::shader_output_layer allows, and the colour says which layer the
+ * triangle was meant for - passed on as a varying of its own, since reading SV_RenderTargetArrayIndex back in
+ * the fragment stage is a capability of its own too.
+ */
+constexpr const char* k_layered_source = R"(
+struct LayeredOutput
+{
+    float4 position : SV_Position;
+    uint layer : SV_RenderTargetArrayIndex;
+    nointerpolation uint color_layer : COLOR_LAYER;
+};
+
+[shader("vertex")]
+LayeredOutput main_layered_vertex(float2 position : POSITION, uint layer : LAYER)
+{
+    LayeredOutput output;
+    output.position = float4(position, 0.0, 1.0);
+    output.layer = layer;
+    output.color_layer = layer;
+    return output;
+}
+
+[shader("fragment")]
+float4 main_layered_fragment(nointerpolation uint color_layer : COLOR_LAYER) : SV_Target
+{
+    return color_layer == 0 ? float4(0.0, 1.0, 0.0, 1.0) : float4(0.0, 0.0, 1.0, 1.0);
+}
+)";
+
+/** One fullscreen triangle drawn once and rendered for every view, coloured by the view it ran for. */
+constexpr const char* k_multiview_source = R"(
+[shader("vertex")]
+float4 main_multiview_vertex(float2 position : POSITION) : SV_Position
+{
+    return float4(position, 0.0, 1.0);
+}
+
+[shader("fragment")]
+float4 main_multiview_fragment(uint view : SV_ViewID) : SV_Target
+{
+    return view == 0 ? float4(0.0, 1.0, 0.0, 1.0) : view == 2 ? float4(0.0, 0.0, 1.0, 1.0) : float4(1.0, 1.0, 1.0, 1.0);
+}
+)";
+
+/** A vertex of k_layered_source: a position and the layer its triangle goes to. */
+struct LayeredVertex
+{
+    f32 x = 0.0f;
+    f32 y = 0.0f;
+    u32 layer = 0;
+};
+
+}  // namespace
+
+/**
+ * RenderingDesc::layer_count and view_mask, GraphicsPipelineDesc::view_mask, and the two device features
+ * behind them. Each pass renders into an array texture filled with red and reads every layer back: a layer
+ * the pass never reached stays red, and one that got another layer's work shows that layer's colour.
+ */
+TEST_CASE("Forge layered rendering", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr u8 k_red[] = {255, 0, 0, 255};
+    constexpr u8 k_green[] = {0, 255, 0, 255};
+    constexpr u8 k_blue[] = {0, 0, 255, 255};
+
+    auto make_target = [&](const Forge::Device& device, u32 layer_count)
+    {
+        return ForgeTest::Unwrap(Forge::Texture::Create(
+            device, {.format = k_format,
+                     .width = k_side,
+                     .height = k_side,
+                     .array_layer_count = layer_count,
+                     .usage = Forge::TextureUsageBits::ColorAttachment | Forge::TextureUsageBits::TransferSource |
+                              Forge::TextureUsageBits::TransferDestination,
+                     .view_type = Forge::TextureViewType::Texture2DArray}));
+    };
+    /**
+     * Fill every layer with red, run one pass of the given shape over them, and read all of them back. Filled
+     * by an upload and loaded rather than cleared by the pass: a load operation reaches only the layers the
+     * pass renders, and the ones it does not are the point.
+     */
+    auto render = [&](ForgeFixture& fixture, Forge::Texture& target, u32 layer_count, u32 view_mask, const Forge::Pipeline& pipeline,
+                      const Forge::Buffer& vertices, u32 vertex_count)
+    {
+        const u32 target_layer_count = target.GetDesc().array_layer_count;
+        Opal::DynamicArray<u8> red(k_side * k_side * target_layer_count * 4);
+        for (u64 texel = 0; texel < red.GetSize() / 4; ++texel)
+        {
+            memcpy(red.GetData() + texel * 4, k_red, 4);
+        }
+        UploadMip(fixture.device, fixture.GetQueue(), target, {red.GetData(), red.GetSize()}, 0, Forge::PipelineStageBits::None);
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(target)) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = target,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Load,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store}},
+                            .layer_count = layer_count,
+                            .view_mask = view_mask};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(vertex_count) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> pixels(k_side * k_side * 4 * target_layer_count);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), target, pixels, 0, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        return pixels;
+    };
+    /** Every texel of one layer of the readback is the given colour. */
+    auto require_layer = [&](const Opal::DynamicArray<u8>& pixels, u32 layer, const u8 (&color)[4])
+    {
+        const i32 layer_base = static_cast<i32>(layer) * k_side * k_side * 4;
+        for (i32 texel = 0; texel < k_side * k_side; ++texel)
+        {
+            const i32 base = layer_base + texel * 4;
+            INFO("layer " << layer << " texel " << texel << " rgba " << +pixels[base] << " " << +pixels[base + 1] << " "
+                          << +pixels[base + 2] << " " << +pixels[base + 3]);
+            REQUIRE((pixels[base] == color[0] && pixels[base + 1] == color[1] && pixels[base + 2] == color[2] &&
+                     pixels[base + 3] == color[3]));
+        }
+    };
+    auto make_multiview_pipeline = [&](const Forge::Device& device, u32 view_mask)
+    {
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            device, k_multiview_source,
+            {.entry_point = "main_multiview_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            device, k_multiview_source,
+            {.entry_point = "main_multiview_fragment", .cache = GetShaderCache()}));
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format);
+        pipeline_desc.view_mask = view_mask;
+        return Forge::Pipeline::Create(device, pipeline_desc);
+    };
+
+    SECTION("A layered pass lands each triangle in the layer its vertex stage picked")
+    {
+        constexpr Forge::DeviceFeatures k_features{.shader_output_layer = true};
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device cannot write the layer from the vertex stage.");
+        }
+        ForgeFixture fixture(k_features);
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_layered_source,
+            {.entry_point = "main_layered_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_layered_source,
+            {.entry_point = "main_layered_fragment", .cache = GetShaderCache()}));
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.vertex_input.AddBinding(0, sizeof(LayeredVertex), DataRepetition::PerVertex);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 0, PixelFormat::R32G32_SFLOAT, 0) == ErrorCode::Success);
+        REQUIRE(pipeline_desc.vertex_input.AddAttribute(0, 1, PixelFormat::R32_UINT, 2 * sizeof(f32)) == ErrorCode::Success);
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        // The second layer's triangle goes first, so a pass that ignored the layer would end up green.
+        const LayeredVertex triangles[] = {{-1.0f, -1.0f, 1}, {3.0f, -1.0f, 1}, {-1.0f, 3.0f, 1},
+                                           {-1.0f, -1.0f, 0}, {3.0f, -1.0f, 0}, {-1.0f, 3.0f, 0}};
+        const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = sizeof(triangles), .usage = Forge::BufferUsageBits::VertexBuffer},
+            {reinterpret_cast<const u8*>(triangles), sizeof(triangles)}));
+
+        // Three layers and a pass over two of them: the third is past the pass and keeps its clear.
+        Forge::Texture target = make_target(fixture.device, 3);
+        const Opal::DynamicArray<u8> pixels = render(fixture, target, 2, 0, pipeline, vertices, 6);
+        require_layer(pixels, 0, k_green);
+        require_layer(pixels, 1, k_blue);
+        require_layer(pixels, 2, k_red);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A multiview pass renders one draw into the layer of every bit of its mask")
+    {
+        constexpr Forge::DeviceFeatures k_features{.multiview = true};
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device has no multiview.");
+        }
+        ForgeFixture fixture(k_features);
+        // Views zero and two, so the layer between them is one no view lands in.
+        constexpr u32 k_view_mask = 0b101;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(make_multiview_pipeline(fixture.device, k_view_mask));
+        const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+            {reinterpret_cast<const u8*>(k_fullscreen_vertices), sizeof(k_fullscreen_vertices)}));
+
+        Forge::Texture target = make_target(fixture.device, 3);
+        const Opal::DynamicArray<u8> pixels = render(fixture, target, 1, k_view_mask, pipeline, vertices, 3);
+        require_layer(pixels, 0, k_green);
+        require_layer(pixels, 1, k_red);
+        require_layer(pixels, 2, k_blue);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A pass whose layers or views the attachments or the device cannot take is refused")
+    {
+        ForgeFixture fixture;
+        Forge::Texture target = make_target(fixture.device, 2);
+        const Forge::TextureView first_layer = ForgeTest::Unwrap(Forge::TextureView::Create(
+            fixture.device, target,
+            {.view_type = Forge::TextureViewType::Texture2DArray, .subresource_range = {.first_array_layer = 0, .array_layer_count = 1}}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(target)) == ErrorCode::Success);
+        /** Begin a pass over the whole target, or over the view of its first layer. */
+        auto begin = [&](bool through_view, u32 layer_count, u32 view_mask)
+        {
+            Forge::RenderingDesc rendering_desc{.render_area_extent = {k_side, k_side}, .layer_count = layer_count, .view_mask = view_mask};
+            rendering_desc.color_attachments.PushBack(through_view ? Forge::RenderingAttachmentDesc{.view = first_layer}
+                                                                   : Forge::RenderingAttachmentDesc{.texture = target});
+            return command_buffer.CmdBeginRendering(rendering_desc);
+        };
+        REQUIRE(begin(false, 0, 0) == ErrorCode::InvalidArgument);
+        REQUIRE(begin(false, 3, 0) == ErrorCode::InvalidArgument);
+        REQUIRE(begin(false, fixture.device.GetPhysicalDevice().GetProperties().limits.maxFramebufferLayers + 1, 0) ==
+                ErrorCode::InvalidArgument);
+        // The view's range is what the pass reaches into, not the texture's.
+        REQUIRE(begin(true, 2, 0) == ErrorCode::InvalidArgument);
+        // A device made without multiview takes neither a pass nor a pipeline with a mask.
+        REQUIRE_FALSE(fixture.device.GetFeatures().multiview);
+        REQUIRE(begin(false, 1, 0b1) == ErrorCode::InvalidArgument);
+        // Over shaders that never read the view, since a module that does is refused by the layer on this device.
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format);
+        pipeline_desc.view_mask = 0b1;
+        REQUIRE(Forge::Pipeline::Create(fixture.device, pipeline_desc).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A multiview pass the attachments or its own layer count contradict is refused")
+    {
+        constexpr Forge::DeviceFeatures k_features{.geometry_shader = true, .multiview = true};
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device has no multiview, or no geometry stage.");
+        }
+        ForgeFixture fixture(k_features);
+        Forge::Texture target = make_target(fixture.device, 2);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(target)) == ErrorCode::Success);
+        auto begin = [&](u32 layer_count, u32 view_mask)
+        {
+            return command_buffer.CmdBeginRendering({.render_area_extent = {k_side, k_side},
+                                                     .color_attachments = {Forge::RenderingAttachmentDesc{.texture = target}},
+                                                     .layer_count = layer_count,
+                                                     .view_mask = view_mask});
+        };
+        // A mask reaching the third layer of a two layer target, and a mask beside a layer count.
+        REQUIRE(begin(1, 0b100) == ErrorCode::InvalidArgument);
+        REQUIRE(begin(2, 0b11) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+
+        // Multiview over a geometry stage is a feature Forge does not ask for.
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_geometry_source,
+            {.entry_point = "main_geometry_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader geometry_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_geometry_source,
+            {.entry_point = "main_geometry", .cache = GetShaderCache()}));
+        const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_geometry_source,
+            {.entry_point = "main_geometry_fragment", .cache = GetShaderCache()}));
+        Forge::GraphicsPipelineDesc pipeline_desc;
+        pipeline_desc.vertex_shader = vertex_shader;
+        pipeline_desc.geometry_shader = geometry_shader;
+        pipeline_desc.fragment_shader = fragment_shader;
+        pipeline_desc.topology = PrimitiveTopology::Point;
+        pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+        pipeline_desc.color_attachment_formats.PushBack(k_format);
+        pipeline_desc.view_mask = 0b1;
+        REQUIRE(Forge::Pipeline::Create(fixture.device, pipeline_desc).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Without shader_output_layer on, the layer refuses a vertex stage that writes the layer")
+    {
+        // Nothing is built past the shader - a pipeline over a module the layer rejected is undefined.
+        ForgeFixture fixture;
+        REQUIRE(fixture.status == ErrorCode::Success);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_layered_source,
+            {.entry_point = "main_layered_vertex", .cache = GetShaderCache()}));
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+}
+
 TEST_CASE("Forge a tessellation draw", "[forge]")
 {
     if (!IsForgeAvailable())
