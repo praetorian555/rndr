@@ -2795,6 +2795,29 @@ TEST_CASE("Forge debug labels", "[forge]")
         REQUIRE(destination.Read(read_back) == ErrorCode::Success);
         REQUIRE(CountMismatches(written, read_back) == 0);
     }
+    SECTION("The StringUtf8 overloads open, mark and close a region the same way")
+    {
+        // Every other section names its labels with a literal, which picks the const char* overloads. A name
+        // built at run time arrives as a StringUtf8, and those are three overloads of their own.
+        const Opal::StringUtf8 region_name("copy region");
+        const Opal::StringUtf8 marker_name("about to copy");
+        const Opal::StringUtf8 scope_name("scoped copy region");
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBeginDebugLabel(region_name, {0.2f, 0.6f, 1.0f, 1.0f}) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdInsertDebugLabel(marker_name) == ErrorCode::Success);
+                                           {
+                                               const Forge::ScopedDebugLabel scope(command_buffer, scope_name);
+                                               REQUIRE(command_buffer.CmdCopyBuffer(source, destination) == ErrorCode::Success);
+                                           }
+                                           REQUIRE(command_buffer.CmdEndDebugLabel() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(destination.Read(read_back) == ErrorCode::Success);
+        REQUIRE(CountMismatches(written, read_back) == 0);
+    }
     SECTION("A region left open by a refused command is still closed")
     {
         // The point of the guard: the copy below is rejected while it is recorded, and the region has to end
