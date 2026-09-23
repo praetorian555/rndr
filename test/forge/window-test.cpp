@@ -816,7 +816,7 @@ TEST_CASE("Forge swap chain recovers from a window with no client area", "[forge
         SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
     }
 
-    // 1.1, which nothing checked. A minimized window is a window with no client area as far as the surface
+    // A window with no client area, which nothing checked. A minimized window is a window with no client area as far as the surface
     // is concerned, and sizing one to nothing is the same thing without stealing focus to do it.
     SECTION("A swap chain over an empty client area is left empty and recovers on the next acquire")
     {

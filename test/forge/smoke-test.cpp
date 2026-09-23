@@ -5800,7 +5800,7 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                           });
 
     // A sampler holds nothing but its device and its handle, so writing it into a descriptor is the cheapest
-    // thing that uses both. Sampling through one is "Forge sampler filtering and addressing".
+    // thing that uses both. Sampling through one is "Forge sampler filtering, LOD clamp and immutable samplers".
     Forge::DescriptorPoolDesc sampler_pool_desc;
     REQUIRE(sampler_pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, 4) == ErrorCode::Success);
     sampler_pool_desc.max_sets = 4;
@@ -5873,7 +5873,7 @@ TEST_CASE("Forge empty state and moves of the descriptor objects", "[forge]")
     REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 16) == ErrorCode::Success);
     pool_desc.max_sets = 16;
     // On, so that DescriptorSet::Destroy returns the set to its pool rather than only dropping the handle,
-    // which is the half of 1.7 nothing runs otherwise.
+    // which is the half of Destroy nothing else in the suite runs.
     pool_desc.free_individual_sets = true;
 
     Forge::DescriptorSetLayoutDesc layout_desc;
@@ -6982,7 +6982,7 @@ TEST_CASE("Forge barrier presets", "[forge]")
                                            REQUIRE(command_buffer.CmdTextureBarrier(
                                                        Forge::TextureBarrier::ToDepthStencilAttachment(depth)) == ErrorCode::Success);
                                        }) == ErrorCode::Success);
-        // Rendering with one is 3.16; what this says is that the preset picks the depth aspect off the
+        // Rendering with one is "Forge depth testing"'s business; what this says is that the preset picks the depth aspect off the
         // format rather than the colour aspect a colour texture would have given it.
         REQUIRE(ForgeTest::Unwrap(depth.GetCurrentLayout()) == Forge::ImageLayout::DepthStencilAttachment);
     }
@@ -9330,8 +9330,7 @@ f32 ReadDepthValue(ForgeFixture& fixture, Forge::Texture& depth_stencil)
 /**
  * A pipeline that covers the whole target, writes no colour, and applies `pass_operation` to the stencil
  * buffer wherever it draws. Comparator::Always, so nothing about the test decides whether the operation runs.
- */
-/**
+ *
  * @param dynamic_state Which of the stencil state is left to the command buffer. StencilReference by
  *        default, which is every caller but the one that stamps a fixed reference and never calls
  *        CmdSetStencilReference at all.
@@ -10131,7 +10130,7 @@ SampleHarness MakeSampleHarness(const Forge::Device& device, u32 set_count)
 
 }  // namespace
 
-TEST_CASE("Forge sampler filtering and addressing", "[forge]")
+TEST_CASE("Forge sampler filtering, LOD clamp and immutable samplers", "[forge]")
 {
     if (!IsForgeAvailable())
     {
