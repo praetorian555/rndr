@@ -323,9 +323,11 @@ bool Rndr::ImGuiContext::OnMouseButtonUp(const GenericWindow& window, InputPrimi
     return true;
 }
 
-bool Rndr::ImGuiContext::OnMouseDoubleClick(const GenericWindow&, InputPrimitive, const Vector2i&)
+bool Rndr::ImGuiContext::OnMouseDoubleClick(const GenericWindow& window, InputPrimitive primitive, const Vector2i& cursor_position)
 {
-    return true;
+    // The platform delivers a double click in place of the second press. ImGui counts clicks
+    // itself, so it only needs the press.
+    return OnMouseButtonDown(window, primitive, cursor_position);
 }
 
 bool Rndr::ImGuiContext::OnMouseWheel(const GenericWindow& window, f32 delta, const Vector2i&)
