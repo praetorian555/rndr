@@ -224,6 +224,8 @@ Opal::Optional<Rndr::Forge::DescriptorType> ToDescriptorType(SpvReflectDescripto
             return Opal::Optional<DescriptorType>(DescriptorType::ConstantBuffer);
         case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER:
             return Opal::Optional<DescriptorType>(DescriptorType::StorageBuffer);
+        case SPV_REFLECT_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+            return Opal::Optional<DescriptorType>(DescriptorType::InputAttachment);
         default:
             return {};
     }

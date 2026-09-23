@@ -89,6 +89,8 @@ struct FeatureChain
     VkPhysicalDeviceVulkan13Features vk13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     VkPhysicalDeviceMeshShaderFeaturesEXT mesh{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT};
     VkPhysicalDeviceIndexTypeUint8Features index_type_uint8{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES};
+    VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR local_read{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR};
 
     /**
      * Chaining a structure that belongs to an extension the device does not have is not allowed, so each of
@@ -97,8 +99,9 @@ struct FeatureChain
      *
      * @param include_mesh Whether to chain the mesh shader structure.
      * @param include_index_type_uint8 Whether to chain the 8-bit index structure.
+     * @param include_local_read Whether to chain the dynamic rendering local read structure.
      */
-    explicit FeatureChain(bool include_mesh, bool include_index_type_uint8)
+    explicit FeatureChain(bool include_mesh, bool include_index_type_uint8, bool include_local_read)
     {
         features2.pNext = &vk11;
         vk11.pNext = &vk12;
@@ -115,6 +118,12 @@ struct FeatureChain
         {
             *tail = &index_type_uint8;
             tail = &index_type_uint8.pNext;
+            *tail = nullptr;
+        }
+        if (include_local_read)
+        {
+            *tail = &local_read;
+            tail = &local_read.pNext;
             *tail = nullptr;
         }
     }
@@ -173,6 +182,7 @@ struct FeatureChain
         mesh.meshShader = features.mesh_shader;
         mesh.taskShader = features.task_shader;
         index_type_uint8.indexTypeUint8 = features.index_type_uint8;
+        local_read.dynamicRenderingLocalRead = features.dynamic_rendering_local_read;
     }
 };
 
@@ -228,6 +238,10 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
         const char* name = FindIndexTypeUint8Extension(physical_device);
         extensions.PushBack(name != nullptr ? name : VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME);
     }
+    if (desc.features.dynamic_rendering_local_read)
+    {
+        extensions.PushBack(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
+    }
     return extensions;
 }
 
@@ -239,7 +253,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
 {
     const bool has_mesh_extension = physical_device.IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     const char* index_type_uint8_extension = FindIndexTypeUint8Extension(physical_device);
-    FeatureChain supported(has_mesh_extension, index_type_uint8_extension != nullptr);
+    const bool has_local_read_extension = physical_device.IsExtensionSupported(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
+    FeatureChain supported(has_mesh_extension, index_type_uint8_extension != nullptr, has_local_read_extension);
     vkGetPhysicalDeviceFeatures2(physical_device.GetNativePhysicalDevice(), &supported.features2);
 
     const char* missing = nullptr;
@@ -312,6 +327,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.task_shader, has_mesh_extension ? supported.mesh.taskShader : VK_FALSE, "task_shader");
     require(requested.index_type_uint8, index_type_uint8_extension != nullptr ? supported.index_type_uint8.indexTypeUint8 : VK_FALSE,
             "index_type_uint8");
+    require(requested.dynamic_rendering_local_read, has_local_read_extension ? supported.local_read.dynamicRenderingLocalRead : VK_FALSE,
+            "dynamic_rendering_local_read");
     return missing;
 }
 
@@ -511,7 +528,7 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
     }
 
     FeatureChain enabled_features(device.m_desc.features.mesh_shader || device.m_desc.features.task_shader,
-                                  device.m_desc.features.index_type_uint8);
+                                  device.m_desc.features.index_type_uint8, device.m_desc.features.dynamic_rendering_local_read);
     enabled_features.Fill(device.m_desc.features);
 
     VkDeviceCreateInfo create_info{};

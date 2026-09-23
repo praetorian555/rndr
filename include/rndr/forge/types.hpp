@@ -122,6 +122,14 @@ enum class DescriptorType : u8
     ConstantBuffer,
     StorageBuffer,
     StorageImage,
+    /**
+     * An attachment of the pass a fragment shader is running in, read at the texel being shaded - a
+     * SubpassInput in Slang. Needs DeviceFeatures::dynamic_rendering_local_read, the fragment stage alone, a
+     * texture made with TextureUsageBits::InputAttachment, and the General layout both here and as the
+     * attachment. What earlier draws of the pass wrote is visible once a ByRegion barrier inside the pass
+     * orders the attachment write before the input attachment read.
+     */
+    InputAttachment,
 
     EnumCount
 };

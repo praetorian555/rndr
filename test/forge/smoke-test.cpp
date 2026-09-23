@@ -6224,7 +6224,11 @@ TEST_CASE("Forge descriptor bindings of every kind checked against the shader", 
     const Forge::Shader shader = ForgeTest::Unwrap(
         Forge::Shader::FromSourceInMemory(fixture.device, k_every_kind_source, {.entry_point = "main_every_kind", .cache = GetShaderCache()}));
 
-    constexpr i32 k_kind_count = static_cast<i32>(Forge::DescriptorType::EnumCount);
+    // Every kind a compute shader can declare. InputAttachment is read by the fragment stage alone, so it is
+    // left to the input attachment case, which checks its reflection the same way; it is the last kind, which
+    // is what lets the count stop short of it.
+    static_assert(static_cast<i32>(Forge::DescriptorType::InputAttachment) + 1 == static_cast<i32>(Forge::DescriptorType::EnumCount));
+    constexpr i32 k_kind_count = static_cast<i32>(Forge::DescriptorType::InputAttachment);
     // Indexed by binding. Every kind appears exactly once, which is what lets the wrong-kind section below
     // try each binding against all five kinds it is not.
     constexpr Forge::DescriptorType k_every_kind_declared[k_kind_count] = {

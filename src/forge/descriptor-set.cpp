@@ -27,6 +27,8 @@ Opal::Optional<VkDescriptorType> FromDescriptorType(Rndr::Forge::DescriptorType 
             return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         case Rndr::Forge::DescriptorType::StorageImage:
             return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        case Rndr::Forge::DescriptorType::InputAttachment:
+            return Opal::Optional<VkDescriptorType>(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
         default:
             return {};
     }
@@ -264,6 +266,8 @@ const char* DescriptorTypeName(Rndr::Forge::DescriptorType type)
             return "StorageBuffer";
         case Rndr::Forge::DescriptorType::StorageImage:
             return "StorageImage";
+        case Rndr::Forge::DescriptorType::InputAttachment:
+            return "InputAttachment";
         default:
             return "unknown";
     }
@@ -427,6 +431,22 @@ Opal::Expected<Rndr::Forge::DescriptorSetLayout, Rndr::ErrorCode> Rndr::Forge::D
         binding.descriptorCount = source.descriptor_count;
         binding.stageFlags = FromShaderTypeBits(source.shader_types);
         binding.pImmutableSamplers = nullptr;
+        // An input attachment is only ever read inside a pass, which dynamic rendering allows only with local
+        // read, and only by the fragment stage - Vulkan takes no other stage on the binding.
+        if (source.descriptor_type == DescriptorType::InputAttachment)
+        {
+            if (!features.dynamic_rendering_local_read)
+            {
+                RNDR_LOG_ERROR("Forge: an input attachment binding needs the device created with DeviceFeatures::dynamic_rendering_local_read");
+                return Result(ErrorCode::InvalidArgument);
+            }
+            if (source.shader_types != ShaderTypeBits::Fragment)
+            {
+                RNDR_LOG_ERROR("Forge: input attachment binding {} names a stage other than the fragment one, which is the only one that reads it",
+                               source.binding);
+                return Result(ErrorCode::InvalidArgument);
+            }
+        }
         if (!source.immutable_samplers.IsEmpty())
         {
             binding.pImmutableSamplers = immutable_samplers.GetData() + next_immutable_sampler;
@@ -717,6 +737,23 @@ Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const Descrip
         {
             const DescriptorSetUpdateBinding::TextureInfo& texture_info =
                 updates[i].resource_info.Get<DescriptorSetUpdateBinding::TextureInfo>();
+            // Read in the pass that renders it, so in the one layout that is both an attachment layout and one
+            // an input attachment may be read in - and only from a texture that said it would be read so.
+            if (updates[i].descriptor_type == DescriptorType::InputAttachment)
+            {
+                const Texture& texture = texture_info.view.IsValid() ? texture_info.view->GetTexture() : texture_info.texture.Get();
+                if (!(texture.GetDesc().usage & TextureUsageBits::InputAttachment))
+                {
+                    RNDR_LOG_ERROR("Forge: an input attachment descriptor needs a texture created with TextureUsageBits::InputAttachment");
+                    return ErrorCode::InvalidArgument;
+                }
+                if (texture_info.texture_layout != ImageLayout::General)
+                {
+                    RNDR_LOG_ERROR("Forge: an input attachment is read in the General layout, which the pass renders it in, not {}",
+                                   ImageLayoutToString(texture_info.texture_layout));
+                    return ErrorCode::InvalidArgument;
+                }
+            }
             image_infos[i] = {.sampler = texture_info.sampler->GetNativeSampler(),
                               .imageView = texture_info.view.IsValid() ? texture_info.view->GetNativeImageView()
                                                                        : texture_info.texture->GetNativeImageView(),

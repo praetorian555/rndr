@@ -72,6 +72,11 @@ struct DeviceFeatures
      * pass (RenderingDesc::layer_count) without a geometry stage to do it.
      */
     bool shader_output_layer = false;
+    /**
+     * DescriptorType::InputAttachment inside a dynamic rendering pass, which is how a tiled device reads a
+     * G-buffer without it leaving tile memory. VK_KHR_dynamic_rendering_local_read, enabled with it.
+     */
+    bool dynamic_rendering_local_read = false;
     /** Blend state per color attachment rather than one shared by all of them. */
     bool independent_blend = false;
     /** More than one command in a CmdDrawIndirect or CmdDrawIndexedIndirect. */
