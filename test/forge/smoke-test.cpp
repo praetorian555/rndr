@@ -9009,6 +9009,35 @@ void BeginTableRendering(Forge::CommandBuffer& command_buffer, Forge::Texture& c
     REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
 }
 
+/**
+ * Whether `quad` presents its front face under WindingOrder::CCW, decided by whether culling the back of it
+ * leaves anything behind. The winding of a quad in clip space depends on the viewport transform as much as on
+ * the order of its vertices, so it is measured rather than reasoned about - the same reason the culling case
+ * never asserts which way its triangle is wound.
+ */
+bool IsQuadFrontFacing(ForgeFixture& fixture, const Forge::Shader& vertex_shader, const Forge::Shader& fragment_shader,
+                       const Forge::Buffer& quad)
+{
+    Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+    pipeline_desc.rasterizer.cull_mode = Face::Back;
+    pipeline_desc.rasterizer.front_face = WindingOrder::CCW;
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    const Vector4f paint_color = ByteColor(0, 255, 0, 255);
+    Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+    const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_table_side,
+                                                       [&](Forge::CommandBuffer& command_buffer)
+                                                       {
+                                                           REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                           REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                                                           REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment,
+                                                                                                   Opal::AsBytes(paint_color)) ==
+                                                                   ErrorCode::Success);
+                                                           REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                                                       });
+    return CountCovered(pixels, k_table_side) == k_table_side * k_table_side;
+}
+
 }  // namespace
 
 TEST_CASE("Forge stencil testing", "[forge]")
@@ -12301,34 +12330,7 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
     const Vector4f unused_color = ByteColor(0, 0, 0, 255);
     const Vector4f paint_color = ByteColor(0, 255, 0, 255);
 
-    /**
-     * Which face this quad presents, decided by whether culling the back of it leaves anything behind. The
-     * winding of a quad in clip space depends on the viewport transform as much as on the order of its
-     * vertices, so it is measured rather than reasoned about - the same reason the culling case never asserts
-     * which way its triangle is wound.
-     */
-    const bool quad_is_front_facing = [&]
-    {
-        Forge::GraphicsPipelineDesc pipeline_desc =
-            MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
-        pipeline_desc.rasterizer.cull_mode = Face::Back;
-        pipeline_desc.rasterizer.front_face = WindingOrder::CCW;
-        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
-
-        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
-        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_table_side,
-                                                           [&](Forge::CommandBuffer& command_buffer)
-                                                           {
-                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                                               REQUIRE(command_buffer.CmdBindVertexBuffer(full_quad, 0) ==
-                                                                       ErrorCode::Success);
-                                                               REQUIRE(command_buffer.CmdPushConstants(
-                                                                   pipeline, ShaderTypeBits::Fragment,
-                                                                   Opal::AsBytes(paint_color)) == ErrorCode::Success);
-                                                               REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
-                                                           });
-        return CountCovered(pixels, k_table_side) == k_table_side * k_table_side;
-    }();
+    const bool quad_is_front_facing = IsQuadFrontFacing(fixture, vertex_shader, fragment_shader, full_quad);
     INFO("the quad presents its " << (quad_is_front_facing ? "front" : "back") << " face");
 
     /**
@@ -12483,6 +12485,196 @@ TEST_CASE("Forge stencil state that differs between the faces", "[forge]")
         // And it reaches the face the quad does not present as well, which is the half of FrontAndBack that
         // naming one face at a time cannot show.
         REQUIRE(stamp({.reference = 77}, {.reference = 77}) == 77);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
+ * The stencil fail and depth fail operations, which every other stencil case leaves at Keep while it drives
+ * the operation table through the pass slot alone. VkStencilOpState has three operation slots per face, and
+ * a fail operation written into the pass slot, or the two fail slots exchanged, is a pipeline the layer is
+ * happy with and a stencil buffer that is quietly wrong.
+ *
+ * All six slots are given operations that leave six different values behind, and each draw is arranged to
+ * reach exactly one outcome - the stencil test fails, the stencil test passes and the depth test fails, or
+ * both pass - through the comparators alone. Whatever comes back names the slot the driver actually ran.
+ * The quad is drawn under both windings, so each face gets a draw it presents, and the two tables are
+ * then exchanged between the faces so the one slot holding Keep - the default a dropped field would fall
+ * back to - holds something else the second time round.
+ */
+TEST_CASE("Forge the stencil fail and depth fail operations", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+    const Forge::Buffer full_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.5f));
+    const Vector4f unused_color = ByteColor(0, 0, 0, 255);
+
+    const bool quad_is_front_facing = IsQuadFrontFacing(fixture, vertex_shader, fragment_shader, full_quad);
+    INFO("the quad presents its " << (quad_is_front_facing ? "front" : "back") << " face under CCW");
+
+    /** The three operation slots of one face. */
+    struct FaceOperations
+    {
+        StencilOperation stencil_fail = StencilOperation::Keep;
+        StencilOperation depth_fail = StencilOperation::Keep;
+        StencilOperation pass = StencilOperation::Keep;
+    };
+
+    /** Which of the three slots a draw reaches, decided by the stencil and depth comparators. */
+    enum class Outcome : u8
+    {
+        StencilFails,
+        DepthFails,
+        BothPass
+    };
+
+    constexpr u8 k_seed = 5;
+    constexpr u8 k_reference = 200;
+    // From the seed and reference above: 250, 6 and 200 from the first table, 0, 4 and 5 from the second.
+    // Six values, so no slot can stand in for another without the readback changing.
+    constexpr FaceOperations k_first_table{.stencil_fail = StencilOperation::Invert,
+                                           .depth_fail = StencilOperation::IncrementWrap,
+                                           .pass = StencilOperation::Replace};
+    constexpr FaceOperations k_second_table{.stencil_fail = StencilOperation::Zero,
+                                            .depth_fail = StencilOperation::DecrementWrap,
+                                            .pass = StencilOperation::Keep};
+    constexpr Outcome k_outcomes[] = {Outcome::StencilFails, Outcome::DepthFails, Outcome::BothPass};
+
+    auto slot = [](const FaceOperations& operations, Outcome outcome)
+    {
+        switch (outcome)
+        {
+            case Outcome::StencilFails:
+                return operations.stencil_fail;
+            case Outcome::DepthFails:
+                return operations.depth_fail;
+            default:
+                return operations.pass;
+        }
+    };
+    auto outcome_name = [](Outcome outcome)
+    {
+        switch (outcome)
+        {
+            case Outcome::StencilFails:
+                return "stencil fails";
+            case Outcome::DepthFails:
+                return "depth fails";
+            default:
+                return "both pass";
+        }
+    };
+
+    const Forge::Pipeline seed_pipeline =
+        MakeStencilWritePipeline(fixture.device, vertex_shader, fragment_shader, StencilOperation::Replace);
+
+    /** Seed the buffer, draw once under `outcome` with the given tables and winding, and read what is left. */
+    auto run = [&](const FaceOperations& front, const FaceOperations& back, Outcome outcome, WindingOrder winding)
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
+        pipeline_desc.rasterizer.front_face = winding;
+        pipeline_desc.color_blend_attachments[0].color_write_mask = Forge::ColorWriteMaskBits::None;
+        pipeline_desc.depth_attachment_format = k_table_depth_stencil_format;
+        pipeline_desc.stencil_attachment_format = k_table_depth_stencil_format;
+
+        Forge::DepthStencilDesc& depth_stencil_desc = pipeline_desc.depth_stencil;
+        // The depth test is on for every outcome, so the only thing that differs between the three
+        // pipelines is the comparator deciding which slot runs. Never writing depth keeps the cleared 1.0
+        // from mattering to anything but the Never comparator.
+        depth_stencil_desc.depth_test_enabled = true;
+        depth_stencil_desc.depth_write_enabled = false;
+        depth_stencil_desc.depth_comparator = outcome == Outcome::DepthFails ? Comparator::Never : Comparator::Always;
+        depth_stencil_desc.stencil_test_enabled = true;
+        const Comparator stencil_comparator = outcome == Outcome::StencilFails ? Comparator::Never : Comparator::Always;
+        depth_stencil_desc.front_stencil_comparator = stencil_comparator;
+        depth_stencil_desc.back_stencil_comparator = stencil_comparator;
+        depth_stencil_desc.front_stencil_fail = front.stencil_fail;
+        depth_stencil_desc.front_depth_fail = front.depth_fail;
+        depth_stencil_desc.front_pass = front.pass;
+        depth_stencil_desc.back_stencil_fail = back.stencil_fail;
+        depth_stencil_desc.back_depth_fail = back.depth_fail;
+        depth_stencil_desc.back_pass = back.pass;
+        depth_stencil_desc.front_reference = k_reference;
+        depth_stencil_desc.back_reference = k_reference;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           BeginTableRendering(command_buffer, color, depth_stencil, full_quad, 0);
+
+                                           REQUIRE(command_buffer.CmdBindPipeline(seed_pipeline) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdSetStencilReference(k_seed) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdPushConstants(seed_pipeline, ShaderTypeBits::Fragment,
+                                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+
+                                           REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment,
+                                                                                   Opal::AsBytes(unused_color)) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        return ReadStencilValue(fixture, depth_stencil);
+    };
+
+    SECTION("No two slots leave the same value, so a slot wired to another has somewhere to show")
+    {
+        // What the section below rests on, asserted rather than assumed.
+        const FaceOperations tables[] = {k_first_table, k_second_table};
+        u8 values[6] = {};
+        i32 count = 0;
+        for (const FaceOperations& table : tables)
+        {
+            for (const Outcome outcome : k_outcomes)
+            {
+                values[count++] = ApplyStencilOperation(slot(table, outcome), k_seed, k_reference);
+            }
+        }
+        for (i32 i = 0; i < count; ++i)
+        {
+            for (i32 j = i + 1; j < count; ++j)
+            {
+                INFO("slots " << i << " and " << j);
+                REQUIRE(values[i] != values[j]);
+            }
+        }
+    }
+    SECTION("Each outcome runs the operation in its own slot of the face the quad presents")
+    {
+        struct Assignment
+        {
+            FaceOperations front;
+            FaceOperations back;
+        };
+        const Assignment assignments[] = {{k_first_table, k_second_table}, {k_second_table, k_first_table}};
+        for (const Assignment& assignment : assignments)
+        {
+            for (const WindingOrder winding : {WindingOrder::CCW, WindingOrder::CW})
+            {
+                // Flipping which winding counts as front flips which face the same quad presents.
+                const bool presents_front = (winding == WindingOrder::CCW) == quad_is_front_facing;
+                const FaceOperations& presented = presents_front ? assignment.front : assignment.back;
+                for (const Outcome outcome : k_outcomes)
+                {
+                    const StencilOperation expected_operation = slot(presented, outcome);
+                    INFO("the " << (presents_front ? "front" : "back") << " face, " << outcome_name(outcome)
+                                << ", expecting " << StencilOperationName(expected_operation));
+                    REQUIRE(static_cast<i32>(run(assignment.front, assignment.back, outcome, winding)) ==
+                            static_cast<i32>(ApplyStencilOperation(expected_operation, k_seed, k_reference)));
+                }
+            }
+        }
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
