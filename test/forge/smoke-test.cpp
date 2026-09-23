@@ -14316,3 +14316,316 @@ TEST_CASE("Forge a shader of a stage the device did not enable is refused", "[fo
     REQUIRE(vertex_shader.GetShaderStage() == ShaderTypeBits::Vertex);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+/*
+ * The device features that map onto a Vulkan feature bit in device.cpp and that nothing else in this file
+ * asks for or relies on. A field wired to the wrong bit is silent until a shader needs it, so each case below
+ * uses the feature the way a caller would, and where the validation layer checks that bit, also turns the
+ * feature off and makes sure the layer objects - which is what shows the field reaches the bit, rather than
+ * the bit being on for some other reason. shader_float64 is the fifth of them and is covered by the double
+ * specialization constant case, which asks for it and does arithmetic in double.
+ */
+namespace
+{
+
+/**
+ * A struct whose second member only lays out under scalar block layout: a float3 at offset 8 crosses a
+ * sixteen byte boundary, and an array of them has a stride of twenty. Both are refused by the relaxed rules
+ * a device without the feature validates against.
+ */
+constexpr const char* k_scalar_layout_source = R"(
+struct Packed
+{
+    float2 first;
+    float3 second;
+};
+[[vk::binding(0, 0)]] RWStructuredBuffer<Packed, ScalarDataLayout> packed;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_scalar_layout()
+{
+    packed[0].first = float2(1.0, 2.0);
+    packed[0].second = float3(3.0, 4.0, 5.0);
+    packed[1].first = float2(6.0, 7.0);
+    packed[1].second = float3(8.0, 9.0, 10.0);
+}
+)";
+
+/** An array of storage buffers whose length the shader does not state, which is the RuntimeDescriptorArray capability. */
+constexpr const char* k_runtime_array_source = R"(
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> buffers[];
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_runtime_array()
+{
+    buffers[0][0] = 4321;
+}
+)";
+
+/** A compute pipeline over one shader and one layout, with no push constants. */
+Forge::Pipeline MakeSetPipeline(const Forge::Device& device, const Forge::Shader& shader, const Forge::DescriptorSetLayout& layout)
+{
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    return ForgeTest::Unwrap(Forge::Pipeline::Create(device, pipeline_desc));
+}
+
+/**
+ * Bind `output` at binding zero of a set allocated from `layout`, dispatch the pipeline once, and hand back
+ * the buffer's first `word_count` words.
+ *
+ * @param variable_count Passed through to DescriptorSet::Create, for a layout whose binding has a variable count.
+ */
+Opal::DynamicArray<u32> DispatchIntoStorageBuffer(ForgeFixture& fixture, const Forge::Pipeline& pipeline,
+                                                  const Forge::DescriptorSetLayout& layout, i32 word_count, u32 variable_count = 0)
+{
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 4) == ErrorCode::Success);
+    const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+    Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout, variable_count));
+    const Forge::Buffer output = MakeWipedOutput(fixture.device, word_count);
+    REQUIRE(set.Update(0, output) == ErrorCode::Success);
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
+    Opal::DynamicArray<u32> words(word_count);
+    REQUIRE(output.Read({reinterpret_cast<u8*>(words.GetData()), words.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+    return words;
+}
+
+/** The desc of a layout of one storage buffer binding visible to compute, of `count` descriptors and the given flags. */
+Forge::DescriptorSetLayoutDesc MakeStorageLayoutDesc(u32 count = 1, Forge::DescriptorBindingFlagBits flags = Forge::DescriptorBindingFlagBits::None)
+{
+    Forge::DescriptorSetLayoutDesc layout_desc;
+    REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, count, ShaderTypeBits::Compute, {}, flags) ==
+            ErrorCode::Success);
+    return layout_desc;
+}
+
+}  // namespace
+
+TEST_CASE("Forge scalar block layout", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_scalar{.scalar_block_layout = true};
+    if (!CanCreateDevice(k_scalar))
+    {
+        SKIP("This device cannot lay out blocks the scalar way.");
+    }
+
+    SECTION("With the feature, a block that only lays out under it is written where scalar layout puts it")
+    {
+        ForgeFixture fixture(k_scalar);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_scalar_layout_source, {.entry_point = "main_scalar_layout", .cache = GetShaderCache()}));
+        const Forge::DescriptorSetLayout layout =
+            ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, MakeStorageLayoutDesc()));
+        const Forge::Pipeline pipeline = MakeSetPipeline(fixture.device, shader, layout);
+        // Twelve words rather than ten, so two elements packed any looser would spill into the last two.
+        const Opal::DynamicArray<u32> words = DispatchIntoStorageBuffer(fixture, pipeline, layout, 12);
+        for (i32 i = 0; i < 12; ++i)
+        {
+            f32 value = 0.0f;
+            memcpy(&value, &words[i], sizeof(value));
+            INFO("float " << i << " is " << value);
+            // Five floats an element with nothing between them, and nothing past the second element.
+            REQUIRE(value == (i < 10 ? static_cast<f32>(i + 1) : 0.0f));
+        }
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Without it, the layer refuses the same shader")
+    {
+        // What shows the field reaches scalarBlockLayout: the only thing different from the section above
+        // is the field, and the layer's answer changes with it. Nothing is built past the shader - a
+        // pipeline over a module the layer rejected is undefined behaviour.
+        ForgeFixture fixture;
+        REQUIRE_FALSE(fixture.device.GetFeatures().scalar_block_layout);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_scalar_layout_source, {.entry_point = "main_scalar_layout", .cache = GetShaderCache()}));
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+}
+
+TEST_CASE("Forge runtime descriptor arrays", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+
+    /** Build the runtime array shader on a device with these features and dispatch through element zero of it. */
+    auto run_on = [](const Forge::DeviceFeatures& features)
+    {
+        ForgeFixture fixture(features);
+        REQUIRE(fixture.status == ErrorCode::Success);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_runtime_array_source, {.entry_point = "main_runtime_array", .cache = GetShaderCache()}));
+        const Forge::DescriptorSetLayout layout =
+            ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, MakeStorageLayoutDesc()));
+        const Forge::Pipeline pipeline = MakeSetPipeline(fixture.device, shader, layout);
+        const Opal::DynamicArray<u32> words = DispatchIntoStorageBuffer(fixture, pipeline, layout, 1);
+        REQUIRE(words[0] == 4321u);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    };
+
+    SECTION("On by default, a shader with an unsized descriptor array builds and runs")
+    {
+        REQUIRE(Forge::DeviceFeatures{}.runtime_descriptor_array);
+        run_on({});
+    }
+    SECTION("Asked for alone, without the rest of descriptor indexing, it is still enough")
+    {
+        // The question the defaults hide: descriptor_indexing and variable_descriptor_count are on beside it
+        // everywhere else, so nothing had shown this field carries the capability by itself.
+        constexpr Forge::DeviceFeatures k_alone{.descriptor_indexing = false, .variable_descriptor_count = false};
+        if (!CanCreateDevice(k_alone))
+        {
+            SKIP("This device cannot be created with descriptor indexing turned off.");
+        }
+        run_on(k_alone);
+    }
+    SECTION("Turned off on its own, the layer refuses the same shader")
+    {
+        ForgeFixture fixture(Forge::DeviceFeatures{.runtime_descriptor_array = false});
+        REQUIRE(fixture.status == ErrorCode::Success);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_runtime_array_source, {.entry_point = "main_runtime_array", .cache = GetShaderCache()}));
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+}
+
+TEST_CASE("Forge variable descriptor count", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+
+    SECTION("On by default, a variable count binding with no other descriptor indexing flag passes the layer")
+    {
+        // The bindless cases only ever use it beside partially bound and update after bind, which want
+        // features of their own; this is the flag alone, on the device every other case gets. One of the
+        // four descriptors the layout allows is allocated, and it is the one written and read.
+        ForgeFixture fixture;
+        REQUIRE(fixture.device.GetFeatures().variable_descriptor_count);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_runtime_array_source, {.entry_point = "main_runtime_array", .cache = GetShaderCache()}));
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(
+            fixture.device, MakeStorageLayoutDesc(4, Forge::DescriptorBindingFlagBits::VariableDescriptorCount)));
+        const Forge::Pipeline pipeline = MakeSetPipeline(fixture.device, shader, layout);
+        const Opal::DynamicArray<u32> words = DispatchIntoStorageBuffer(fixture, pipeline, layout, 1, 1);
+        REQUIRE(words[0] == 4321u);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("On a device without it, a variable count binding is refused")
+    {
+        ForgeFixture fixture(Forge::DeviceFeatures{.variable_descriptor_count = false});
+        REQUIRE(fixture.status == ErrorCode::Success);
+        REQUIRE_FALSE(
+            Forge::DescriptorSetLayout::Create(fixture.device, MakeStorageLayoutDesc(4, Forge::DescriptorBindingFlagBits::VariableDescriptorCount))
+                .HasValue());
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
+
+/**
+ * A BC1 texture uploaded and sampled. One four by four block, encoded by hand: red and blue as the two end
+ * colours, and a two bit index per texel choosing between them. Only the two end colours are used, never
+ * the two BC1 interpolates between them, so every texel decodes to an exact value.
+ *
+ * The validation layer does not tie BC formats to textureCompressionBC - a device that reports the formats
+ * lets them be used either way - so unlike the cases above, this one cannot show the field reaches its bit.
+ * What it does cover is the path a compressed texture takes through Forge, which no case had taken: an
+ * upload sized in blocks rather than texels, and a sample that decodes it.
+ */
+TEST_CASE("Forge a BC compressed texture uploaded and sampled", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_bc{.texture_compression_bc = true};
+    if (!CanCreateDevice(k_bc))
+    {
+        SKIP("This device has no BC compressed formats.");
+    }
+    ForgeFixture fixture(k_bc);
+    constexpr i32 k_side = 4;
+
+    // Colour 0 is pure red and colour 1 pure blue in RGB565. Colour 0 is the larger of the two, which is what
+    // selects the four colour mode, in which index 0 is colour 0, index 1 is colour 1 and alpha is opaque.
+    constexpr u16 k_red_565 = 0xF800;
+    constexpr u16 k_blue_565 = 0x001F;
+    // Two bits a texel, texel (x, y) at bit 2 * (4 * y + x). Row 0 alternates red and blue, row 1 starts with
+    // two blues, the rest is red - a pattern with no symmetry to hide a transposed or reversed index.
+    constexpr u32 k_indices = (1u << 2) | (1u << 6) | (1u << 8) | (1u << 10);
+    u8 block[8] = {};
+    memcpy(block + 0, &k_red_565, sizeof(k_red_565));
+    memcpy(block + 2, &k_blue_565, sizeof(k_blue_565));
+    memcpy(block + 4, &k_indices, sizeof(k_indices));
+
+    Forge::Texture texture = ForgeTest::Unwrap(
+        Forge::Texture::Create(fixture.device, {.format = PixelFormat::BC1_RGBA_UNORM_BLOCK,
+                                                .width = k_side,
+                                                .height = k_side,
+                                                .usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination}));
+    UploadMip(fixture.device, fixture.GetQueue(), texture, {block, sizeof(block)}, 0);
+
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
+    SampleHarness harness = MakeSampleHarness(fixture.device, k_side * k_side);
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
+    pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+    const Forge::Sampler nearest =
+        ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
+
+    for (i32 y = 0; y < k_side; ++y)
+    {
+        for (i32 x = 0; x < k_side; ++x)
+        {
+            const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(
+                fixture.device,
+                {.size = sizeof(Vector4f), .usage = Forge::BufferUsageBits::StorageBuffer, .host_access = Forge::HostAccess::Random}));
+            Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(harness.pool, harness.layout));
+            REQUIRE(set.Update(0, texture, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+            REQUIRE(set.Update(1, output) == ErrorCode::Success);
+            // The centre of the texel, so a nearest filter has no neighbour to pick instead.
+            const SampleParams params{.uv = {(static_cast<f32>(x) + 0.5f) / k_side, (static_cast<f32>(y) + 0.5f) / k_side}};
+            REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                           [&](Forge::CommandBuffer& command_buffer)
+                                           {
+                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                               REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                               REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
+                                                                                       Opal::AsBytes(params)) == ErrorCode::Success);
+                                               REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                           }) == ErrorCode::Success);
+            Vector4f result;
+            REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
+
+            const bool is_blue = ((k_indices >> (2 * (y * k_side + x))) & 0x3u) == 1u;
+            INFO("texel " << x << "," << y << " rgba " << result.x << " " << result.y << " " << result.z << " " << result.w
+                          << ", expected " << (is_blue ? "blue" : "red"));
+            REQUIRE(result.x == Catch::Approx(is_blue ? 0.0f : 1.0f).margin(0.01));
+            REQUIRE(result.y == Catch::Approx(0.0f).margin(0.01));
+            REQUIRE(result.z == Catch::Approx(is_blue ? 1.0f : 0.0f).margin(0.01));
+            REQUIRE(result.w == Catch::Approx(1.0f).margin(0.01));
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
