@@ -347,6 +347,29 @@ public:
     [[nodiscard]] ErrorCode CmdCopyBuffer(const Buffer& source, const Buffer& destination);
 
     /**
+     * Write one 32-bit value over a range of a buffer, the way a counter or a draw count is zeroed before the
+     * pass that accumulates into it. The buffer needs BufferUsageBits::TransferDestination, and a barrier from
+     * the transfer stage stands between this and whatever reads the range.
+     * @param buffer Buffer to fill.
+     * @param value Written into every four bytes of the range.
+     * @param offset Where the range starts, a multiple of four.
+     * @param size Bytes to fill, a multiple of four. k_whole_buffer fills to the end, rounded down to a
+     *        multiple of four; a range with nothing left in it, or reaching past the end, is refused.
+     */
+    [[nodiscard]] ErrorCode CmdFillBuffer(const Buffer& buffer, u32 value, u64 offset = 0, u64 size = k_whole_buffer);
+
+    /**
+     * Write a few bytes into a buffer from the command stream, with no staging buffer: the data is copied into
+     * the command buffer when this is recorded, so the caller's array may go away straight after. Meant for
+     * small things - an indirect command, a handful of constants - and refused above 65536 bytes, which is
+     * Vulkan's limit. The buffer needs BufferUsageBits::TransferDestination.
+     * @param buffer Buffer to write into.
+     * @param data Bytes to write, a non-zero multiple of four of them.
+     * @param offset Where they go, a multiple of four. A range reaching past the end is refused.
+     */
+    [[nodiscard]] ErrorCode CmdUpdateBuffer(const Buffer& buffer, Opal::ArrayView<const u8> data, u64 offset = 0);
+
+    /**
      * Copy regions of a buffer into a texture. The buffer needs BufferUsageBits::TransferSource and the
      * texture TextureUsageBits::TransferDestination.
      * @param buffer Source buffer holding the pixels.

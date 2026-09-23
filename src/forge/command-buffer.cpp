@@ -573,6 +573,50 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyBuffer(const Buffer& source, 
     return CmdCopyBuffer(source, destination, {&region, 1});
 }
 
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdFillBuffer(const Buffer& buffer, u32 value, u64 offset, u64 size)
+{
+    RNDR_FORGE_CHECK(ValidateBufferUsage(buffer, BufferUsageBits::TransferDestination, "destination", "Buffer fill"));
+    if (offset % 4 != 0 || (size != k_whole_buffer && size % 4 != 0))
+    {
+        RNDR_LOG_ERROR("Forge: a buffer fill takes an offset and a size that are multiples of four, got {} and {}", offset, size);
+        return ErrorCode::InvalidArgument;
+    }
+    if (offset > buffer.GetSize())
+    {
+        RNDR_LOG_ERROR("Forge: a buffer fill starts past the end of the buffer");
+        return ErrorCode::OutOfBounds;
+    }
+    // Vulkan's whole size rounds down to the last full word, and says nothing when that leaves no word at all
+    // - resolved here so an empty fill is refused the same way an empty explicit one is.
+    const u64 resolved_size = size == k_whole_buffer ? (buffer.GetSize() - offset) / 4 * 4 : size;
+    if (resolved_size == 0)
+    {
+        RNDR_LOG_ERROR("Forge: a buffer fill over no bytes");
+        return ErrorCode::OutOfBounds;
+    }
+    RNDR_FORGE_CHECK(ValidateBufferRange(buffer, offset, resolved_size, "destination", "Buffer fill"));
+    vkCmdFillBuffer(m_native_command_buffer, buffer.GetNativeBuffer(), offset, resolved_size, value);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdUpdateBuffer(const Buffer& buffer, Opal::ArrayView<const u8> data, u64 offset)
+{
+    RNDR_FORGE_CHECK(ValidateBufferUsage(buffer, BufferUsageBits::TransferDestination, "destination", "Buffer update"));
+    constexpr u64 k_max_update_size = 65536;
+    const u64 data_size = data.GetSize();
+    if (offset % 4 != 0 || data_size % 4 != 0 || data_size == 0 || data_size > k_max_update_size)
+    {
+        RNDR_LOG_ERROR(
+            "Forge: a buffer update takes an offset that is a multiple of four and 4 to {} bytes in multiples of four, got offset {} "
+            "and {} bytes",
+            k_max_update_size, offset, data_size);
+        return ErrorCode::InvalidArgument;
+    }
+    RNDR_FORGE_CHECK(ValidateBufferRange(buffer, offset, data_size, "destination", "Buffer update"));
+    vkCmdUpdateBuffer(m_native_command_buffer, buffer.GetNativeBuffer(), offset, data_size, data.GetData());
+    return ErrorCode::Success;
+}
+
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdCopyBufferToTexture(const Buffer& buffer, Texture& texture,
                                                                    Opal::ArrayView<const BufferTextureCopyRegion> regions)
 {
