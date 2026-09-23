@@ -10036,6 +10036,38 @@ SampleHarness MakeSampleHarness(const Forge::Device& device, u32 set_count)
     return {std::move(pool), std::move(layout)};
 }
 
+/**
+ * Dispatch a sampling pipeline once through a set of its own, with the texture and the sampler at binding
+ * zero and a zeroed Vector4f at binding one, and hand back what the shader wrote there.
+ *
+ * @param push The push constant block, whatever shape the shader reads it in - SampleParams or a Vector4f.
+ */
+template <typename Push>
+Vector4f SampleOnce(ForgeFixture& fixture, const SampleHarness& harness, const Forge::Pipeline& pipeline, const Forge::Texture& texture,
+                    const Forge::Sampler& sampler, const Push& push)
+{
+    const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(
+        fixture.device, {.size = sizeof(Vector4f), .usage = Forge::BufferUsageBits::StorageBuffer, .host_access = Forge::HostAccess::Random}));
+    const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
+    REQUIRE(output.Update(zeros) == ErrorCode::Success);
+
+    Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(harness.pool, harness.layout));
+    REQUIRE(set.Update(0, texture, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+    REQUIRE(set.Update(1, output) == ErrorCode::Success);
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(push)) ==
+                                               ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
+    Vector4f result;
+    REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
+    return result;
+}
+
 }  // namespace
 
 TEST_CASE("Forge sampler filtering, LOD clamp and immutable samplers", "[forge]")
@@ -10050,13 +10082,11 @@ TEST_CASE("Forge sampler filtering, LOD clamp and immutable samplers", "[forge]"
     const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
 
-    SampleHarness harness = MakeSampleHarness(fixture.device, 8);
-    Forge::DescriptorPool& pool = harness.pool;
-    Forge::DescriptorSetLayout& layout = harness.layout;
+    const SampleHarness harness = MakeSampleHarness(fixture.device, 8);
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
-    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
@@ -10072,29 +10102,7 @@ TEST_CASE("Forge sampler filtering, LOD clamp and immutable samplers", "[forge]"
 
     /** Sample the texture through the given sampler and hand back the four floats it produced. */
     auto sample_with = [&](const Forge::Sampler& sampler, Forge::Texture& texture, const SampleParams& params)
-    {
-        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
-                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
-
-        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
-        REQUIRE(set.Update(0, texture, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
-        REQUIRE(set.Update(1, output) == ErrorCode::Success);
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params)) ==
-                                           ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
-        Vector4f result;
-        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
-        return result;
-    };
+    { return SampleOnce(fixture, harness, pipeline, texture, sampler, params); };
 
     SECTION("A linear and a nearest sampler differ between the two texels")
     {
@@ -10186,7 +10194,7 @@ TEST_CASE("Forge sampler filtering, LOD clamp and immutable samplers", "[forge]"
         const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
         REQUIRE(output.Update(zeros) == ErrorCode::Success);
 
-        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, immutable_layout));
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(harness.pool, immutable_layout));
         REQUIRE(set.Update(0, row, ignored, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
         REQUIRE(set.Update(1, output) == ErrorCode::Success);
         const SampleParams params{.uv = {0.4f, 0.5f}};
@@ -10359,9 +10367,7 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
     ForgeFixture fixture;
     constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
 
-    SampleHarness harness = MakeSampleHarness(fixture.device, 4);
-    Forge::DescriptorPool& pool = harness.pool;
-    Forge::DescriptorSetLayout& layout = harness.layout;
+    const SampleHarness harness = MakeSampleHarness(fixture.device, 4);
 
     const Forge::Sampler nearest =
         ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}));
@@ -10373,32 +10379,11 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
             Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = GetShaderCache()}));
         Forge::ComputePipelineDesc pipeline_desc;
         pipeline_desc.shader = shader;
-        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
         pipeline_desc.push_constant_ranges.PushBack(
             {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(Vector4f)});
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
-
-        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
-                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
-
-        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
-        REQUIRE(set.Update(0, texture, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
-        REQUIRE(set.Update(1, output) == ErrorCode::Success);
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(direction)) ==
-                                           ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
-        Vector4f result;
-        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
-        return result;
+        return SampleOnce(fixture, harness, pipeline, texture, nearest, direction);
     };
 
     SECTION("A three dimensional texture is sampled along its depth")
@@ -10616,13 +10601,11 @@ TEST_CASE("Forge a cube array view", "[forge]")
     const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_cube_array_sample_source, {.entry_point = "main_sample_cube_array", .cache = GetShaderCache()}));
 
-    SampleHarness harness = MakeSampleHarness(fixture.device, 4);
-    Forge::DescriptorPool& pool = harness.pool;
-    Forge::DescriptorSetLayout& layout = harness.layout;
+    const SampleHarness harness = MakeSampleHarness(fixture.device, 4);
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
-    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
     pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(Vector4f)});
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
@@ -10649,30 +10632,7 @@ TEST_CASE("Forge a cube array view", "[forge]")
 
     /** Sample one direction of one cube of the array, and hand back what came out. */
     auto sample_cube = [&](const Vector4f& direction_and_cube)
-    {
-        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
-                                                                                              .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                                                              .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
-
-        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
-        REQUIRE(set.Update(0, cubes, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
-        REQUIRE(set.Update(1, output) == ErrorCode::Success);
-        REQUIRE(Forge::ImmediateSubmit(
-                    fixture.device, fixture.GetQueue(),
-                    [&](Forge::CommandBuffer& command_buffer)
-                    {
-                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
-                                                                Opal::AsBytes(direction_and_cube)) == ErrorCode::Success);
-                        REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                    }) == ErrorCode::Success);
-        Vector4f result;
-        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
-        return result;
-    };
+    { return SampleOnce(fixture, harness, pipeline, cubes, nearest, direction_and_cube); };
 
     // Layer order within a cube is +X, -X, +Y, -Y, +Z, -Z, and the cubes follow one another: the first face
     // of the second cube is layer six.
@@ -12437,13 +12397,11 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
     const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
 
-    SampleHarness harness = MakeSampleHarness(fixture.device, 32);
-    Forge::DescriptorPool& pool = harness.pool;
-    Forge::DescriptorSetLayout& layout = harness.layout;
+    const SampleHarness harness = MakeSampleHarness(fixture.device, 32);
 
     Forge::ComputePipelineDesc pipeline_desc;
     pipeline_desc.shader = shader;
-    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
     pipeline_desc.push_constant_ranges.PushBack(
         {.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
     const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
@@ -12469,28 +12427,7 @@ TEST_CASE("Forge the sampler address modes and border colours", "[forge]")
                                                       .address_mode_v = mode,
                                                       .address_mode_w = mode,
                                                       .border_color = border_color}));
-        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(Vector4f),
-                                                    .usage = Forge::BufferUsageBits::StorageBuffer,
-                                                    .host_access = Forge::HostAccess::Random}));
-        const Opal::DynamicArray<u8> zeros(sizeof(Vector4f));
-        REQUIRE(output.Update(zeros) == ErrorCode::Success);
-
-        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
-        REQUIRE(set.Update(0, row, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
-        REQUIRE(set.Update(1, output) == ErrorCode::Success);
-        const SampleParams params{.uv = {u, 0.5f}};
-        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                               [&](Forge::CommandBuffer& command_buffer)
-                               {
-                                   REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(params)) ==
-                                           ErrorCode::Success);
-                                   REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                               }) == ErrorCode::Success);
-        Vector4f result;
-        REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
-        return result;
+        return SampleOnce(fixture, harness, pipeline, row, sampler, SampleParams{.uv = {u, 0.5f}});
     };
 
     /** The colour a texel index stands for: the two the row holds, or the border colour for k_border_texel. */
@@ -14492,25 +14429,9 @@ TEST_CASE("Forge a BC compressed texture uploaded and sampled", "[forge]")
     {
         for (i32 x = 0; x < k_side; ++x)
         {
-            const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(
-                fixture.device,
-                {.size = sizeof(Vector4f), .usage = Forge::BufferUsageBits::StorageBuffer, .host_access = Forge::HostAccess::Random}));
-            Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(harness.pool, harness.layout));
-            REQUIRE(set.Update(0, texture, nearest, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
-            REQUIRE(set.Update(1, output) == ErrorCode::Success);
             // The centre of the texel, so a nearest filter has no neighbour to pick instead.
             const SampleParams params{.uv = {(static_cast<f32>(x) + 0.5f) / k_side, (static_cast<f32>(y) + 0.5f) / k_side}};
-            REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
-                                           [&](Forge::CommandBuffer& command_buffer)
-                                           {
-                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
-                                               REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
-                                               REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute,
-                                                                                       Opal::AsBytes(params)) == ErrorCode::Success);
-                                               REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
-                                           }) == ErrorCode::Success);
-            Vector4f result;
-            REQUIRE(output.Read({reinterpret_cast<u8*>(&result), sizeof(result)}) == ErrorCode::Success);
+            const Vector4f result = SampleOnce(fixture, harness, pipeline, texture, nearest, params);
 
             const bool is_blue = ((k_indices >> (2 * (y * k_side + x))) & 0x3u) == 1u;
             INFO("texel " << x << "," << y << " rgba " << result.x << " " << result.y << " " << result.z << " " << result.w
