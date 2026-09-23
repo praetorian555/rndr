@@ -47,7 +47,9 @@ Rndr::ErrorCode Rndr::WindowsWindow::Initialize(const GenericWindowDesc& desc)
         window_class.lpszClassName = class_name;
         window_class.hInstance = instance;
         window_class.lpfnWndProc = RndrPrivate::WindowProc;
-        window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+        // CS_DBLCLKS turns the second press of a double click into WM_xBUTTONDBLCLK, delivered as
+        // OnMouseDoubleClick — the same signal the Linux backend synthesizes.
+        window_class.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
 
         const ATOM atom = RegisterClass(&window_class);
         if (atom == 0)
