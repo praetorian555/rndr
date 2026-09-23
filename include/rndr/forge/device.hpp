@@ -67,6 +67,11 @@ struct DeviceFeatures
     bool multi_draw_indirect = false;
     /** A non-zero first_instance in an indirect draw. */
     bool draw_indirect_first_instance = false;
+    /**
+     * CmdDrawIndirectCount and CmdDrawIndexedIndirectCount, whose command count the device reads out of a
+     * buffer - which is what lets a culling pass on the device decide how many draws there are.
+     */
+    bool draw_indirect_count = false;
 
     // Sampling.
     /** Anisotropic filtering, which SamplerDesc::max_anisotropy above one asks for. */

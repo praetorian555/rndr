@@ -1360,6 +1360,68 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawIndexedIndirect(const Buffer&
     return ErrorCode::Success;
 }
 
+/**
+ * What the two count draws check beyond the commands: the feature, a stride that is always read, and the count
+ * itself, which is one u32 in a buffer of its own that has to allow indirect use like the command buffer does.
+ */
+static Rndr::ErrorCode ValidateIndirectCount(const Rndr::Forge::Device& device, const Rndr::Forge::Buffer& count_buffer,
+                                             Rndr::u64 count_offset, Rndr::u32 stride, Rndr::u64 command_size, const char* what)
+{
+    using namespace Rndr;
+    if (!device.GetFeatures().draw_indirect_count)
+    {
+        RNDR_LOG_ERROR("Forge: {} needs the device created with DeviceFeatures::draw_indirect_count", what);
+        return ErrorCode::InvalidArgument;
+    }
+    // The plain indirect draws only read the stride past the first command; these read it whatever the count
+    // turns out to be, so it is checked whatever max_draw_count is.
+    if (stride % 4 != 0 || stride < command_size)
+    {
+        RNDR_LOG_ERROR("Forge: the {} stride must be a multiple of 4 and at least one command long, and is {}", what, stride);
+        return ErrorCode::InvalidArgument;
+    }
+    if (!(count_buffer.GetDesc().usage & Forge::BufferUsageBits::IndirectBuffer))
+    {
+        RNDR_LOG_ERROR("Forge: {} needs a count buffer created with BufferUsageBits::IndirectBuffer", what);
+        return ErrorCode::InvalidArgument;
+    }
+    if (count_offset % 4 != 0)
+    {
+        RNDR_LOG_ERROR("Forge: the {} count offset must be a multiple of 4, and is {}", what, count_offset);
+        return ErrorCode::InvalidArgument;
+    }
+    const u64 count_buffer_size = count_buffer.GetSize();
+    if (count_offset > count_buffer_size || sizeof(u32) > count_buffer_size - count_offset)
+    {
+        RNDR_LOG_ERROR("Forge: the {} count at offset {} reaches past the end of its buffer", what, count_offset);
+        return ErrorCode::OutOfBounds;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawIndirectCount(const Buffer& buffer, u64 offset, const Buffer& count_buffer,
+                                                                 u64 count_offset, u32 max_draw_count, u32 stride)
+{
+    RNDR_FORGE_CHECK(
+        ValidateIndirectCount(*m_device, count_buffer, count_offset, stride, sizeof(DrawIndirectCommand), "Indirect count draw"));
+    RNDR_FORGE_CHECK(ValidateIndirectRange(buffer, offset, max_draw_count, stride, sizeof(DrawIndirectCommand), "Indirect count draw"));
+    vkCmdDrawIndirectCount(m_native_command_buffer, buffer.GetNativeBuffer(), offset, count_buffer.GetNativeBuffer(), count_offset,
+                           max_draw_count, stride);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawIndexedIndirectCount(const Buffer& buffer, u64 offset, const Buffer& count_buffer,
+                                                                        u64 count_offset, u32 max_draw_count, u32 stride)
+{
+    RNDR_FORGE_CHECK(ValidateIndirectCount(*m_device, count_buffer, count_offset, stride, sizeof(DrawIndexedIndirectCommand),
+                                           "Indirect indexed count draw"));
+    RNDR_FORGE_CHECK(ValidateIndirectRange(buffer, offset, max_draw_count, stride, sizeof(DrawIndexedIndirectCommand),
+                                           "Indirect indexed count draw"));
+    vkCmdDrawIndexedIndirectCount(m_native_command_buffer, buffer.GetNativeBuffer(), offset, count_buffer.GetNativeBuffer(), count_offset,
+                                  max_draw_count, stride);
+    return ErrorCode::Success;
+}
+
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y, u32 group_count_z)
 {
     // The loader hands out a callable trampoline whether or not the device enabled the extension, so a null

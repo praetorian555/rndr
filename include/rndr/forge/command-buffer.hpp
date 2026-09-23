@@ -553,6 +553,34 @@ public:
                                                    u32 stride = static_cast<u32>(sizeof(DrawIndexedIndirectCommand)));
 
     /**
+     * CmdDrawIndirect with the number of commands read out of a buffer as well, when the device runs the
+     * command. What a culling pass on the device writes is the list of draws and how long it is, and this is
+     * the draw that reads both.
+     *
+     * Needs DeviceFeatures::draw_indirect_count, and is refused without it. More than one command does not
+     * need multi_draw_indirect here: the count is the device's to decide.
+     *
+     * @param buffer Buffer holding the commands. Must have been created with BufferUsageBits::IndirectBuffer.
+     * @param offset Byte offset of the first DrawIndirectCommand. Must be a multiple of 4.
+     * @param count_buffer Buffer holding the count, a u32. Must have been created with
+     *        BufferUsageBits::IndirectBuffer as well.
+     * @param count_offset Byte offset of the count. Must be a multiple of 4.
+     * @param max_draw_count The most commands the device may read, whatever the count says. All of them have
+     *        to fit in the buffer, since which of them are read is not known while recording.
+     * @param stride Bytes between commands. Always read, unlike the plain indirect draw, since the count is.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument without the feature, for a buffer without the
+     *         indirect usage, or for an unaligned offset or stride, or ErrorCode::OutOfBounds when the commands
+     *         or the count reach past their buffer.
+     */
+    [[nodiscard]] ErrorCode CmdDrawIndirectCount(const Buffer& buffer, u64 offset, const Buffer& count_buffer, u64 count_offset,
+                                                 u32 max_draw_count, u32 stride = static_cast<u32>(sizeof(DrawIndirectCommand)));
+
+    /** The indexed counterpart of CmdDrawIndirectCount, reading DrawIndexedIndirectCommand. */
+    [[nodiscard]] ErrorCode CmdDrawIndexedIndirectCount(const Buffer& buffer, u64 offset, const Buffer& count_buffer, u64 count_offset,
+                                                        u32 max_draw_count,
+                                                        u32 stride = static_cast<u32>(sizeof(DrawIndexedIndirectCommand)));
+
+    /**
      * Draw through the task and mesh shader stages, which replace vertex input and the vertex shader. The
      * counts are in workgroups, the way a compute dispatch counts them.
      * @note Needs the device created with DeviceFeatures::mesh_shader, which pulls in VK_EXT_mesh_shader.
