@@ -30,7 +30,8 @@ Everything a forward or deferred renderer of the usual kind asks for, and every 
 ## Gaps, in the order to close them
 
 The first four are what stands between Forge and a GPU-driven renderer. The rest are what a deferred
-renderer works around today, or what the next feature will trip over.
+renderer works around today, or what the next feature will trip over. A closed item keeps its text and says
+where it was closed, so the order and the reasoning stay readable.
 
 1. **Indirect draws with a device-written count.** `CmdDrawIndirect` and `CmdDrawIndexedIndirect` take
    `draw_count` at record time; `vkCmdDrawIndirectCount` and `vkCmdDrawIndexedIndirectCount` (core 1.2, the
@@ -40,12 +41,13 @@ renderer works around today, or what the next feature will trip over.
    onto `VkPhysicalDeviceVulkan12Features::drawIndirectCount`, `CmdDrawIndirectCount` and
    `CmdDrawIndexedIndirectCount` taking the count buffer, its offset and a `max_draw_count`, run through
    `ValidateIndirectRange` and a count-buffer range check of their own; a test on `HalvesFixture` where a
-   compute shader writes both the commands and the count.
+   compute shader writes both the commands and the count. *Closed* in `bf19ffc`, tested in `fe12e60`.
 2. **Mesh task draws driven from a buffer.** Only the direct `CmdDrawMeshTasks` exists;
    `vkCmdDrawMeshTasksIndirectEXT` and `vkCmdDrawMeshTasksIndirectCountEXT` are what a cluster list feeds.
    *Today:* nothing; the mesh-shader cluster path cannot be fed by a culling pass at all. *Takes:* the two
    commands, a `DrawMeshTasksIndirectCommand` beside the other command structs, the same range checks, the
    extension guard `CmdDrawMeshTasks` already has; a test writing the workgroup counts from a compute shader.
+   *Closed* in `12dd33d`, tested in `3537200`.
 3. **64-bit atomics.** `DeviceFeatures` has `shader_int64` and no `shaderBufferInt64Atomics` or
    `shaderSharedInt64Atomics` (core 1.2). A software rasterizer packs depth, cluster and triangle into one u64
    and resolves it with `InterlockedMax`, which needs the buffer one. `DeviceDesc::extensions` cannot turn it
@@ -53,7 +55,7 @@ renderer works around today, or what the next feature will trip over.
    atomics for depth and id, which race. *Takes:* `DeviceFeatures::shader_buffer_int64_atomics` and
    `shader_shared_int64_atomics` mapped onto the two bits; a test dispatching a u64 `InterlockedMax` over a
    storage buffer and reading the maximum back, and the layer refusing the same shader with the field off,
-   the way the scalar block layout case does.
+   the way the scalar block layout case does. *Closed* in `3dd1379`, tested in `26cfea7`.
 4. **A view apart from its texture.** A `Texture` owns one image and one view, and the view covers what
    `TextureDesc::subresource_range` says. Everything that wants two views of one image is stuck: a depth
    pyramid written one mip at a time as storage images, an array shadow map rendered into one layer per pass,
@@ -63,7 +65,8 @@ renderer works around today, or what the next feature will trip over.
    did. *Takes:* a `TextureView` type, or `Texture::CreateView(desc)`, that names the texture it was taken
    from and reads the tracked layout off it; `RenderingAttachmentDesc` and `DescriptorSetUpdateBinding` taking
    a view where they take a texture; a test writing a mip chain by level and sampling it whole. This also
-   unblocks item 5.
+   unblocks item 5. *Closed* in `0e99738` as `TextureView`, tested in `50148a1`. An attachment view is
+   refused over more than one mip level; a view over several layers waits on item 5.
 5. **Layered rendering.** `VkRenderingInfo::layerCount` is hardcoded to one (command-buffer.cpp) and there is
    no view mask, so one pass cannot render into the layers of an array attachment - a cube shadow map is six
    passes, a cascaded shadow map is one per cascade, and multiview is out of reach. *Takes:*

@@ -52,6 +52,9 @@ The references that are easy to miss:
 
 - Every resource holds the `Device`, and the device holds the `GraphicsContext` that made its instance.
 - `DescriptorSet` holds its `DescriptorPool`, and a set is invalid once the pool is reset or destroyed.
+- `TextureView` holds the `Texture` it was taken from, and reads that texture's tracked layouts rather than
+  keeping any of its own. A view written into a descriptor set has to outlive every use of the set, the
+  same as a texture.
 - `CommandBuffer` holds the `DeviceQueue` whose command pool it came from.
 - `SwapChain` holds the `Surface`, which holds the window.
 - `FrameContext` holds the swap chain and both queues.
