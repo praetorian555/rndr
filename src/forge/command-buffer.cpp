@@ -974,9 +974,123 @@ static Opal::Optional<VkAttachmentStoreOp> ToVkStoreOp(Rndr::Forge::AttachmentSt
     }
 }
 
+/** The texture an attachment names, the image view it names it through, and the range that view covers. */
+struct AttachmentTarget
+{
+    const Rndr::Forge::Texture* texture = nullptr;
+    VkImageView image_view = VK_NULL_HANDLE;
+    Rndr::Forge::ImageSubresourceRange range;
+};
+
+/**
+ * Read a texture or a view off an attachment desc - the one it renders into or the one it resolves into -
+ * and check it can be one: that there is an image view, that a view made for the purpose covers one mip
+ * level, and that it reaches as many layers as the pass renders.
+ *
+ * @param role What the attachment is, for the messages: "colour", "depth" or "stencil".
+ * @param is_resolve Whether this is the texture the attachment resolves into, also for the messages.
+ */
+static Opal::Expected<AttachmentTarget, Rndr::ErrorCode> ToAttachmentTarget(const Opal::Ref<const Rndr::Forge::Texture>& texture_ref,
+                                                                           const Opal::Ref<const Rndr::Forge::TextureView>& view_ref,
+                                                                           const char* role, bool is_resolve, Rndr::u32 required_layer_count)
+{
+    using namespace Rndr;
+    using Result = Opal::Expected<AttachmentTarget, ErrorCode>;
+    const char* prefix = is_resolve ? "the resolve target of the " : "the ";
+
+    const bool has_view = view_ref.IsValid() && view_ref->IsValid();
+    const Forge::Texture& texture = has_view ? view_ref->GetTexture() : texture_ref.Get();
+    AttachmentTarget target{.texture = &texture,
+                            .image_view = has_view ? view_ref->GetNativeImageView() : texture.GetNativeImageView(),
+                            .range = has_view ? view_ref->GetDesc().subresource_range : texture.GetDesc().subresource_range};
+    if (target.image_view == VK_NULL_HANDLE)
+    {
+        // A texture whose usage is transfer only, which Vulkan allows no view on and so cannot be rendered into.
+        RNDR_LOG_ERROR("Forge: {}{} attachment names a texture that has no image view", prefix, role);
+        return Result(ErrorCode::InvalidArgument);
+    }
+    // An attachment is one mip level. The texture's own view is whatever its desc made it, which the layer
+    // answers for; a view made for the purpose is checked here, where the level count is known.
+    if (has_view)
+    {
+        const u32 level_count = target.range.mip_level_count == Forge::k_all_mip_levels
+                                    ? texture.GetDesc().mip_level_count - target.range.first_mip_level
+                                    : target.range.mip_level_count;
+        if (level_count != 1)
+        {
+            RNDR_LOG_ERROR("Forge: {}{} attachment is a view over {} mip levels, and an attachment is one", prefix, role, level_count);
+            return Result(ErrorCode::InvalidArgument);
+        }
+    }
+    // A layered or multiview pass reaches into layers past the first, and a view that stops short of them
+    // leaves the layer a draw picks undefined rather than refused.
+    const u32 view_layer_count = target.range.array_layer_count == Forge::k_all_array_layers
+                                     ? texture.GetDesc().array_layer_count - target.range.first_array_layer
+                                     : target.range.array_layer_count;
+    if (view_layer_count < required_layer_count)
+    {
+        RNDR_LOG_ERROR("Forge: the pass renders {} layers, and the view of {}{} attachment covers {}", required_layer_count, prefix, role,
+                       view_layer_count);
+        return Result(ErrorCode::InvalidArgument);
+    }
+    return Result(target);
+}
+
+/**
+ * The layout an attachment target is in, over the range its view covers, refused unless it is one the role
+ * renders in. A resolve target is written the way the attachment is, so it takes the same layouts less the
+ * read-only depth one.
+ */
+static Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> ToAttachmentLayout(const AttachmentTarget& target, bool is_color,
+                                                                                   bool is_resolve, const char* role)
+{
+    using namespace Rndr;
+    using Result = Opal::Expected<Forge::ImageLayout, ErrorCode>;
+
+    const Opal::Expected<Forge::ImageLayout, ErrorCode> layout_result = target.texture->GetCurrentLayout(target.range);
+    if (!layout_result.HasValue())
+    {
+        return Result(layout_result.GetError());
+    }
+    const Forge::ImageLayout layout = layout_result.GetValue();
+    const bool layout_allowed = layout == Forge::ImageLayout::General ||
+                                (is_color ? layout == Forge::ImageLayout::ColorAttachment
+                                          : layout == Forge::ImageLayout::DepthStencilAttachment ||
+                                                (!is_resolve && layout == Forge::ImageLayout::DepthStencilReadOnly));
+    if (!layout_allowed)
+    {
+        const char* allowed = is_color     ? "ColorAttachment or General"
+                              : is_resolve ? "DepthStencilAttachment or General"
+                                           : "DepthStencilAttachment, DepthStencilReadOnly or General";
+        RNDR_LOG_ERROR(
+            "Forge: rendering needs the {}{} attachment texture in the {} layout, and it is in {}. Transition it before the "
+            "pass - CmdTransition, or the matching TextureBarrier preset.",
+            is_resolve ? "resolve target of the " : "", role, allowed, Forge::ImageLayoutToString(layout));
+        return Result(ErrorCode::InvalidArgument);
+    }
+    return Result(layout);
+}
+
+static Opal::Optional<VkResolveModeFlagBits> ToVkResolveMode(Rndr::Forge::ResolveMode mode)
+{
+    switch (mode)
+    {
+        case Rndr::Forge::ResolveMode::Average:
+            return Opal::Optional<VkResolveModeFlagBits>(VK_RESOLVE_MODE_AVERAGE_BIT);
+        case Rndr::Forge::ResolveMode::SampleZero:
+            return Opal::Optional<VkResolveModeFlagBits>(VK_RESOLVE_MODE_SAMPLE_ZERO_BIT);
+        case Rndr::Forge::ResolveMode::Min:
+            return Opal::Optional<VkResolveModeFlagBits>(VK_RESOLVE_MODE_MIN_BIT);
+        case Rndr::Forge::ResolveMode::Max:
+            return Opal::Optional<VkResolveModeFlagBits>(VK_RESOLVE_MODE_MAX_BIT);
+        default:
+            return {};
+    }
+}
+
 /**
  * What one rendering attachment contributes to Vulkan: the view of the texture it names, and the layout that
- * texture is in.
+ * texture is in - and the same two for the texture it resolves into, when it names one.
  *
  * The layout is read rather than asked for, the way the copies and the blits read theirs. That is what turns
  * the one thing the validation layer cannot catch - an attachment layout that is legal but not the one the
@@ -984,9 +1098,12 @@ static Opal::Optional<VkAttachmentStoreOp> ToVkStoreOp(Rndr::Forge::AttachmentSt
  *
  * @param role What this attachment is, for the messages: "colour", "depth" or "stencil".
  * @param is_color Whether the role wants the colour attachment layouts or the depth stencil ones.
+ * @param depth_stencil_resolve_modes The resolve modes the device supports for this role when it is depth or
+ *        stencil. Colour has none to ask for: Vulkan fixes it by the format.
  */
 static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingAttachment(
-    const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role, bool is_color, Rndr::u32 required_layer_count)
+    const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role, bool is_color, Rndr::u32 required_layer_count,
+    VkResolveModeFlags depth_stencil_resolve_modes)
 {
     using namespace Rndr;
     using Result = Opal::Expected<VkRenderingAttachmentInfo, ErrorCode>;
@@ -1002,61 +1119,22 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
             role);
         return Result(ErrorCode::InvalidArgument);
     }
-    const Forge::Texture& texture = has_view ? attachment.view->GetTexture() : attachment.texture.Get();
-    const VkImageView image_view = has_view ? attachment.view->GetNativeImageView() : texture.GetNativeImageView();
-    const Forge::ImageSubresourceRange& view_range =
-        has_view ? attachment.view->GetDesc().subresource_range : texture.GetDesc().subresource_range;
-    if (image_view == VK_NULL_HANDLE)
+    const Opal::Expected<AttachmentTarget, ErrorCode> target_result =
+        ToAttachmentTarget(attachment.texture, attachment.view, role, false, required_layer_count);
+    if (!target_result.HasValue())
     {
-        // A texture whose usage is transfer only, which Vulkan allows no view on and so cannot be rendered into.
-        RNDR_LOG_ERROR("Forge: the {} attachment names a texture that has no image view", role);
-        return Result(ErrorCode::InvalidArgument);
+        return Result(target_result.GetError());
     }
-    // An attachment is one mip level. The texture's own view is whatever its desc made it, which the layer
-    // answers for; a view made for the purpose is checked here, where the level count is known.
-    if (has_view)
-    {
-        const u32 level_count = view_range.mip_level_count == Forge::k_all_mip_levels
-                                    ? texture.GetDesc().mip_level_count - view_range.first_mip_level
-                                    : view_range.mip_level_count;
-        if (level_count != 1)
-        {
-            RNDR_LOG_ERROR("Forge: the {} attachment names a view over {} mip levels, and an attachment is one", role, level_count);
-            return Result(ErrorCode::InvalidArgument);
-        }
-    }
-    // A layered or multiview pass reaches into layers past the first, and a view that stops short of them
-    // leaves the layer a draw picks undefined rather than refused.
-    const u32 view_layer_count = view_range.array_layer_count == Forge::k_all_array_layers
-                                     ? texture.GetDesc().array_layer_count - view_range.first_array_layer
-                                     : view_range.array_layer_count;
-    if (view_layer_count < required_layer_count)
-    {
-        RNDR_LOG_ERROR("Forge: the pass renders {} layers, and the {} attachment's view covers {}", required_layer_count, role,
-                       view_layer_count);
-        return Result(ErrorCode::InvalidArgument);
-    }
-
+    const AttachmentTarget& target = target_result.GetValue();
+    const Forge::Texture& texture = *target.texture;
+    const VkImageView image_view = target.image_view;
     // Over the range the view covers rather than over the whole texture, since that is what is rendered into.
-    const Opal::Expected<Forge::ImageLayout, ErrorCode> layout_result = texture.GetCurrentLayout(view_range);
+    const Opal::Expected<Forge::ImageLayout, ErrorCode> layout_result = ToAttachmentLayout(target, is_color, false, role);
     if (!layout_result.HasValue())
     {
         return Result(layout_result.GetError());
     }
     const Forge::ImageLayout layout = layout_result.GetValue();
-    const bool layout_allowed =
-        layout == Forge::ImageLayout::General ||
-        (is_color ? layout == Forge::ImageLayout::ColorAttachment
-                  : layout == Forge::ImageLayout::DepthStencilAttachment || layout == Forge::ImageLayout::DepthStencilReadOnly);
-    if (!layout_allowed)
-    {
-        const char* allowed = is_color ? "ColorAttachment or General" : "DepthStencilAttachment, DepthStencilReadOnly or General";
-        RNDR_LOG_ERROR(
-            "Forge: rendering needs the {} attachment texture in the {} layout, and it is in {}. Transition it before the "
-            "pass - CmdTransition, or the matching TextureBarrier preset.",
-            role, allowed, Forge::ImageLayoutToString(layout));
-        return Result(ErrorCode::InvalidArgument);
-    }
 
     RNDR_FORGE_TRANSLATE_EXPECTED(load_op, ToVkLoadOp(attachment.load_operation), "RenderingAttachmentDesc::load_operation", Result);
     RNDR_FORGE_TRANSLATE_EXPECTED(store_op, ToVkStoreOp(attachment.store_operation), "RenderingAttachmentDesc::store_operation", Result);
@@ -1067,6 +1145,58 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
         .loadOp = load_op,
         .storeOp = store_op,
     };
+    const bool has_resolve = (attachment.resolve_view.IsValid() && attachment.resolve_view->IsValid()) || attachment.resolve_texture.IsValid();
+    if (has_resolve)
+    {
+        const Opal::Expected<AttachmentTarget, ErrorCode> resolve_result =
+            ToAttachmentTarget(attachment.resolve_texture, attachment.resolve_view, role, true, required_layer_count);
+        if (!resolve_result.HasValue())
+        {
+            return Result(resolve_result.GetError());
+        }
+        const AttachmentTarget& resolve = resolve_result.GetValue();
+        // The three things the pair has to agree on, each of which the layer would report in terms of image
+        // views rather than of the two textures the desc named.
+        if (texture.GetDesc().sample_count == Forge::SampleCount::Count1)
+        {
+            RNDR_LOG_ERROR("Forge: the {} attachment resolves, and has one sample to resolve", role);
+            return Result(ErrorCode::InvalidArgument);
+        }
+        if (resolve.texture->GetDesc().sample_count != Forge::SampleCount::Count1)
+        {
+            RNDR_LOG_ERROR("Forge: the resolve target of the {} attachment has more than one sample, and a resolve writes one", role);
+            return Result(ErrorCode::InvalidArgument);
+        }
+        if (resolve.texture->GetDesc().format != texture.GetDesc().format)
+        {
+            RNDR_LOG_ERROR("Forge: the resolve target of the {} attachment has a format other than the attachment's", role);
+            return Result(ErrorCode::InvalidArgument);
+        }
+        // Colour is resolved the one way its format allows - an average of a float or normalized format, the
+        // first sample of an integer one. Depth and stencil each take the modes the device reports for them.
+        RNDR_FORGE_TRANSLATE_EXPECTED(resolve_mode, ToVkResolveMode(attachment.resolve_mode), "RenderingAttachmentDesc::resolve_mode",
+                                      Result);
+        const FormatNumericClass numeric_class = GetFormatNumericClass(texture.GetDesc().format);
+        const VkResolveModeFlags supported_modes =
+            !is_color ? depth_stencil_resolve_modes
+                      : (numeric_class == FormatNumericClass::SignedInt || numeric_class == FormatNumericClass::UnsignedInt
+                             ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT
+                             : VK_RESOLVE_MODE_AVERAGE_BIT);
+        if ((supported_modes & resolve_mode) == 0)
+        {
+            RNDR_LOG_ERROR("Forge: the {} attachment cannot be resolved with ResolveMode {} here", role,
+                           static_cast<i32>(attachment.resolve_mode));
+            return Result(ErrorCode::InvalidArgument);
+        }
+        const Opal::Expected<Forge::ImageLayout, ErrorCode> resolve_layout = ToAttachmentLayout(resolve, is_color, true, role);
+        if (!resolve_layout.HasValue())
+        {
+            return Result(resolve_layout.GetError());
+        }
+        info.resolveMode = resolve_mode;
+        info.resolveImageView = resolve.image_view;
+        info.resolveImageLayout = static_cast<VkImageLayout>(resolve_layout.GetValue());
+    }
     // Only a Clear reads the value, so an attachment that loads or discards is left alone whichever kind it
     // carries. Where it is read, the variant says which kind was written - the one thing VkClearValue cannot,
     // being the same union, and so the one misuse the layer cannot catch either.
@@ -1133,10 +1263,12 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
         }
     }
 
+    const VkPhysicalDeviceDepthStencilResolveProperties& resolve_properties =
+        m_device->GetPhysicalDevice().GetDepthStencilResolveProperties();
     Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments;
     for (const auto& attachment : desc.color_attachments)
     {
-        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info = ToVkRenderingAttachment(attachment, "colour", true, required_layer_count);
+        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info = ToVkRenderingAttachment(attachment, "colour", true, required_layer_count, 0);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1151,7 +1283,8 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     if (has_depth)
     {
         Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
-            ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false, required_layer_count);
+            ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false, required_layer_count,
+                                    resolve_properties.supportedDepthResolveModes);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1166,7 +1299,8 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     if (has_stencil)
     {
         Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
-            ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false, required_layer_count);
+            ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false, required_layer_count,
+                                    resolve_properties.supportedStencilResolveModes);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1183,6 +1317,30 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
             "Forge: a pass with both a depth and a stencil attachment needs them on one texture. A stencil texture of its own "
             "is only allowed in a pass with no depth attachment.");
         return ErrorCode::InvalidArgument;
+    }
+    // The same image both ways, so a pass resolving both sides resolves them into one texture too - and in
+    // modes the device can pair: the same one unless it resolves the two independently, or leaves one alone
+    // only if it says it can.
+    if (has_depth && has_stencil)
+    {
+        const VkResolveModeFlagBits depth_mode = depth_attachment.resolveMode;
+        const VkResolveModeFlagBits stencil_mode = stencil_attachment.resolveMode;
+        if (depth_mode != VK_RESOLVE_MODE_NONE && stencil_mode != VK_RESOLVE_MODE_NONE &&
+            depth_attachment.resolveImageView != stencil_attachment.resolveImageView)
+        {
+            RNDR_LOG_ERROR("Forge: a pass resolving both depth and stencil needs them resolved into one texture");
+            return ErrorCode::InvalidArgument;
+        }
+        const bool one_left_alone = depth_mode == VK_RESOLVE_MODE_NONE || stencil_mode == VK_RESOLVE_MODE_NONE;
+        const bool modes_pair = depth_mode == stencil_mode || resolve_properties.independentResolve == VK_TRUE ||
+                                (one_left_alone && resolve_properties.independentResolveNone == VK_TRUE);
+        if (!modes_pair)
+        {
+            RNDR_LOG_ERROR(
+                "Forge: this device resolves depth and stencil in one mode, and the pass names two - or resolves one side and not "
+                "the other, which it cannot do either");
+            return ErrorCode::InvalidArgument;
+        }
     }
 
     const VkRenderingInfo rendering_info{

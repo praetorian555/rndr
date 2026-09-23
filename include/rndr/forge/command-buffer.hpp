@@ -30,6 +30,20 @@ enum class AttachmentStoreOperation : u8
     DontCare
 };
 
+/**
+ * How the samples of a texel become the one sample a resolve writes. A colour attachment takes the one its
+ * format allows - Average for a float or normalized format, SampleZero for an integer one. Depth and stencil
+ * take what the device reports in VkPhysicalDeviceDepthStencilResolveProperties, where SampleZero is the one
+ * every device has; stencil is never averaged.
+ */
+enum class ResolveMode : u8
+{
+    Average,
+    SampleZero,
+    Min,
+    Max
+};
+
 /** What a Clear load operation writes into a depth or a stencil attachment. */
 struct DepthStencilClearValue
 {
@@ -72,8 +86,20 @@ struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
      * bytes happen to mean.
      */
     Opal::Variant<Vector4f, DepthStencilClearValue> clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
+    /**
+     * A texture with one sample the attachment is resolved into when the pass ends, which is the only resolve
+     * there is for depth and stencil and for a transient multisampled attachment - CmdResolveTexture reads a
+     * transfer source, and a transient texture cannot be one. Empty for no resolve. Same format as the
+     * attachment, and in the layout the attachment's role renders in, less DepthStencilReadOnly: it is written.
+     * A combined depth-stencil pass resolving both sides names the same texture on both.
+     */
+    Opal::Ref<const Texture> resolve_texture;
+    /** A view to resolve into instead of resolve_texture's own, one mip level of it, the way `view` is to `texture`. */
+    Opal::Ref<const TextureView> resolve_view;
+    /** How the samples are combined, refused when the format or the device does not take it. */
+    ResolveMode resolve_mode = ResolveMode::Average;
 
-    OPAL_CLONE_FIELDS(texture, view, load_operation, store_operation, clear_value);
+    OPAL_CLONE_FIELDS(texture, view, load_operation, store_operation, clear_value, resolve_texture, resolve_view, resolve_mode);
 };
 
 struct RenderingDesc

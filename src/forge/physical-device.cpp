@@ -17,6 +17,11 @@ Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::Physic
     vkGetPhysicalDeviceProperties(physical_device, &device.m_properties);
     vkGetPhysicalDeviceFeatures(physical_device, &device.m_features);
     vkGetPhysicalDeviceMemoryProperties(physical_device, &device.m_memory_properties);
+    // Core since Vulkan 1.2, and Forge needs 1.3, so asked for without checking the version first.
+    VkPhysicalDeviceProperties2 properties2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+                                            .pNext = &device.m_depth_stencil_resolve_properties};
+    vkGetPhysicalDeviceProperties2(physical_device, &properties2);
+    device.m_depth_stencil_resolve_properties.pNext = nullptr;
 
     u32 queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
@@ -55,6 +60,7 @@ Rndr::Forge::PhysicalDevice::PhysicalDevice(PhysicalDevice&& other) noexcept
       m_properties(other.m_properties),
       m_features(other.m_features),
       m_memory_properties(other.m_memory_properties),
+      m_depth_stencil_resolve_properties(other.m_depth_stencil_resolve_properties),
       m_queue_family_properties(Opal::Move(other.m_queue_family_properties)),
       m_supported_extensions(Opal::Move(other.m_supported_extensions))
 {
@@ -81,6 +87,7 @@ Rndr::Forge::PhysicalDevice& Rndr::Forge::PhysicalDevice::operator=(PhysicalDevi
     m_properties = other.m_properties;
     m_features = other.m_features;
     m_memory_properties = other.m_memory_properties;
+    m_depth_stencil_resolve_properties = other.m_depth_stencil_resolve_properties;
     m_queue_family_properties = Opal::Move(other.m_queue_family_properties);
     m_supported_extensions = Opal::Move(other.m_supported_extensions);
 

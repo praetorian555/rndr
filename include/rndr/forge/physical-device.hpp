@@ -44,6 +44,11 @@ public:
     [[nodiscard]] const VkPhysicalDeviceProperties& GetProperties() const { return m_properties; }
     [[nodiscard]] const VkPhysicalDeviceFeatures& GetFeatures() const { return m_features; }
     [[nodiscard]] const VkPhysicalDeviceMemoryProperties& GetMemoryProperties() const { return m_memory_properties; }
+    /** The resolve modes for depth and stencil, and whether the two sides of one pass may be resolved apart. */
+    [[nodiscard]] const VkPhysicalDeviceDepthStencilResolveProperties& GetDepthStencilResolveProperties() const
+    {
+        return m_depth_stencil_resolve_properties;
+    }
     [[nodiscard]] const Opal::DynamicArray<VkQueueFamilyProperties>& GetQueueFamilyProperties() const { return m_queue_family_properties; }
     [[nodiscard]] const Opal::DynamicArray<Opal::StringUtf8>& GetSupportedExtensions() const { return m_supported_extensions; }
     /**
@@ -103,6 +108,8 @@ private:
     VkPhysicalDeviceProperties m_properties = {};
     VkPhysicalDeviceFeatures m_features = {};
     VkPhysicalDeviceMemoryProperties m_memory_properties = {};
+    VkPhysicalDeviceDepthStencilResolveProperties m_depth_stencil_resolve_properties = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES};
     Opal::DynamicArray<VkQueueFamilyProperties> m_queue_family_properties;
     Opal::DynamicArray<Opal::StringUtf8> m_supported_extensions;
 };
