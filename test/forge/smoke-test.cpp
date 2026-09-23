@@ -1592,6 +1592,11 @@ TEST_CASE("Forge debug names on every headless object", "[forge]")
     const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f}));
     Forge::SetDebugName(fixture.device, sampler, "probe-sampler");
 
+    const Forge::Texture texture = ForgeTest::Unwrap(Forge::Texture::Create(
+        fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4, .usage = Forge::TextureUsageBits::Sampled}));
+    const Forge::TextureView view = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, texture));
+    Forge::SetDebugName(fixture.device, view, "probe-texture-view");
+
     const Forge::Shader shader = ForgeTest::Unwrap(
         Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
     Forge::SetDebugName(fixture.device, shader, "probe-shader");
@@ -6406,6 +6411,17 @@ TEST_CASE("Forge empty state and moves of the resources", "[forge]")
                                                   .height = k_side,
                                                   .usage = Forge::TextureUsageBits::Sampled}));
 
+    // A view holds its device, its texture and its handle; writing it into a descriptor uses all three.
+    CheckLifetimeContract("TextureView", [&] { return ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, sampled)); },
+                          [&](const Forge::TextureView& view)
+                          {
+                              REQUIRE(view.GetNativeImageView() != VK_NULL_HANDLE);
+                              REQUIRE(&view.GetTexture() == &sampled);
+                              const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f}));
+                              Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(sampler_pool, sampler_layout));
+                              REQUIRE(set.Update(0, view, sampler) == ErrorCode::Success);
+                          });
+
     CheckLifetimeContract("Sampler", [&] { return ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.max_anisotropy = 1.0f})); },
                           [&](const Forge::Sampler& sampler)
                           {
@@ -10699,8 +10715,8 @@ SampleHarness MakeSampleHarness(const Forge::Device& device, u32 set_count)
  *
  * @param push The push constant block, whatever shape the shader reads it in - SampleParams or a Vector4f.
  */
-template <typename Push>
-Vector4f SampleOnce(ForgeFixture& fixture, const SampleHarness& harness, const Forge::Pipeline& pipeline, const Forge::Texture& texture,
+template <typename Push, typename Resource>
+Vector4f SampleOnce(ForgeFixture& fixture, const SampleHarness& harness, const Forge::Pipeline& pipeline, const Resource& texture,
                     const Forge::Sampler& sampler, const Push& push)
 {
     const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(
@@ -11235,6 +11251,270 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
                                                           .array_layer_count = 4,
                                                           .usage = Forge::TextureUsageBits::Sampled,
                                                           .view_type = Forge::TextureViewType::Cube}).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
+/** Fills one mip level through a storage view, a constant colour over the texels the level has. */
+constexpr const char* k_write_level_source = R"(
+struct LevelParams
+{
+    float4 color;
+    uint side;
+};
+[[vk::push_constant]] LevelParams params;
+
+[[vk::image_format("rgba8")]]
+[[vk::binding(0, 0)]] RWTexture2D<float4> level_image;
+
+[shader("compute")]
+[numthreads(4, 4, 1)]
+void main_write_level(uint3 thread_id : SV_DispatchThreadID)
+{
+    if (thread_id.x < params.side && thread_id.y < params.side)
+    {
+        level_image[thread_id.xy] = params.color;
+    }
+}
+)";
+
+/** What that shader reads out of its push constant block. */
+struct LevelParams
+{
+    Vector4f color;
+    u32 side = 0;
+    u32 padding[3] = {};
+};
+
+}  // namespace
+
+/**
+ * TextureView: more than one view of one image, each over part of it, all reading the layout the texture
+ * tracks. The three shapes that need one - a mip chain written by level and sampled whole, one level rendered
+ * into, one layer of an array sampled flat - and what a view refuses.
+ */
+TEST_CASE("Forge views of one texture", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr i32 k_side = 4;
+    constexpr u32 k_level_count = 3;
+    const Vector4f k_level_colors[k_level_count] = {{1.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
+
+    /** A range of one mip level, or one layer, of every aspect. */
+    auto level = [](u32 mip_level) { return Forge::ImageSubresourceRange{.first_mip_level = mip_level, .mip_level_count = 1}; };
+    auto layer = [](u32 array_layer) { return Forge::ImageSubresourceRange{.first_array_layer = array_layer, .array_layer_count = 1}; };
+
+    const Forge::Shader sample_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_combined_sample_source, {.entry_point = "main_sample_combined", .cache = GetShaderCache()}));
+    const SampleHarness harness = MakeSampleHarness(fixture.device, 4);
+    Forge::ComputePipelineDesc sample_pipeline_desc;
+    sample_pipeline_desc.shader = sample_shader;
+    sample_pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
+    sample_pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+    const Forge::Pipeline sample_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, sample_pipeline_desc));
+    const Forge::Sampler nearest = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest,
+                                                                                             .mag_filter = ImageFilter::Nearest,
+                                                                                             .mip_map_filter = ImageFilter::Nearest,
+                                                                                             .min_lod = 0.0f,
+                                                                                             .max_lod = static_cast<f32>(k_level_count)}));
+
+    auto require_color = [](const Vector4f& measured, const Vector4f& expected)
+    {
+        INFO("measured " << measured.x << " " << measured.y << " " << measured.z << " " << measured.w);
+        REQUIRE(measured.x == Catch::Approx(expected.x).margin(0.01));
+        REQUIRE(measured.y == Catch::Approx(expected.y).margin(0.01));
+        REQUIRE(measured.z == Catch::Approx(expected.z).margin(0.01));
+        REQUIRE(measured.w == Catch::Approx(expected.w).margin(0.01));
+    };
+
+    SECTION("A mip chain written a level at a time through storage views is sampled whole")
+    {
+        // A depth pyramid's shape: each level a storage image of its own while it is written, the whole chain
+        // one sampled texture afterwards. The texture's own view covers every level; the three written
+        // through are views of one level each.
+        Forge::Texture chain = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                                         .width = k_side,
+                                                                                         .height = k_side,
+                                                                                         .mip_level_count = k_level_count,
+                                                                                         .usage = Forge::TextureUsageBits::Storage |
+                                                                                                  Forge::TextureUsageBits::Sampled}));
+        const Forge::Shader write_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_write_level_source, {.entry_point = "main_write_level", .cache = GetShaderCache()}));
+        Forge::DescriptorPoolDesc pool_desc;
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageImage, k_level_count) == ErrorCode::Success);
+        pool_desc.max_sets = k_level_count;
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::StorageImage, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+        Forge::ComputePipelineDesc write_pipeline_desc;
+        write_pipeline_desc.shader = write_shader;
+        write_pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        write_pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(LevelParams)});
+        const Forge::Pipeline write_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, write_pipeline_desc));
+        const Forge::Sampler unused = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {}));
+
+        Opal::DynamicArray<Forge::TextureView> views;
+        Opal::DynamicArray<Forge::DescriptorSet> sets;
+        for (u32 mip = 0; mip < k_level_count; ++mip)
+        {
+            views.PushBack(ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, chain, {.subresource_range = level(mip)})));
+            sets.PushBack(ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout)));
+            REQUIRE(sets[mip].Update(0, views[mip], unused, Forge::ImageLayout::General) == ErrorCode::Success);
+        }
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBindPipeline(write_pipeline) == ErrorCode::Success);
+                                           for (u32 mip = 0; mip < k_level_count; ++mip)
+                                           {
+                                               // One level at a time into General, the way a pyramid build moves
+                                               // down it; the levels below are still Undefined while this runs.
+                                               Forge::TextureBarrier to_general = Forge::TextureBarrier::ToGeneral(chain, Forge::ImageLayout::Undefined);
+                                               to_general.subresource_range = level(mip);
+                                               REQUIRE(command_buffer.CmdTextureBarrier(to_general) == ErrorCode::Success);
+                                               REQUIRE(ForgeTest::Unwrap(chain.GetCurrentLayout(level(mip))) == Forge::ImageLayout::General);
+                                               const LevelParams params{.color = k_level_colors[mip], .side = static_cast<u32>(k_side >> mip)};
+                                               REQUIRE(command_buffer.CmdBindDescriptorSet(write_pipeline, sets[mip]) == ErrorCode::Success);
+                                               REQUIRE(command_buffer.CmdPushConstants(write_pipeline, ShaderTypeBits::Compute,
+                                                                                       Opal::AsBytes(params)) == ErrorCode::Success);
+                                               REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                           }
+                                           REQUIRE(command_buffer.CmdTextureBarrier(
+                                                       Forge::TextureBarrier::ToShaderRead(chain, Forge::PipelineStageBits::ComputeShader)) ==
+                                                   ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+
+        // The texture's own view, over every level, sees what each level's view wrote.
+        for (u32 mip = 0; mip < k_level_count; ++mip)
+        {
+            INFO("level " << mip);
+            require_color(SampleOnce(fixture, harness, sample_pipeline, chain, nearest,
+                                     SampleParams{.uv = {0.5f, 0.5f}, .lod = static_cast<f32>(mip)}),
+                          k_level_colors[mip]);
+        }
+    }
+    SECTION("One mip level is rendered into through a view of it")
+    {
+        Forge::Texture target = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                                          .width = k_side,
+                                                                                          .height = k_side,
+                                                                                          .mip_level_count = 2,
+                                                                                          .usage = Forge::TextureUsageBits::ColorAttachment |
+                                                                                                   Forge::TextureUsageBits::TransferSource}));
+        const Forge::TextureView second_level =
+            ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, target, {.subresource_range = level(1)}));
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(target)) ==
+                                                   ErrorCode::Success);
+                                           // The render area is the size of the level, not of the texture.
+                                           const Forge::RenderingDesc rendering_desc{
+                                               .render_area_extent = {k_side / 2, k_side / 2},
+                                               .color_attachments = {Forge::RenderingAttachmentDesc{
+                                                   .view = second_level,
+                                                   .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                   .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                   .clear_value = Vector4f{0.0f, 1.0f, 0.0f, 1.0f}}}};
+                                           REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        Opal::DynamicArray<u8> pixels((k_side / 2) * (k_side / 2) * 4);
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), target, pixels, 1, Forge::ImageLayout::TransferSource) ==
+                ErrorCode::Success);
+        for (i32 texel = 0; texel < (k_side / 2) * (k_side / 2); ++texel)
+        {
+            INFO("texel " << texel);
+            REQUIRE(static_cast<i32>(pixels[texel * 4 + 0]) == 0);
+            REQUIRE(static_cast<i32>(pixels[texel * 4 + 1]) == 255);
+            REQUIRE(static_cast<i32>(pixels[texel * 4 + 2]) == 0);
+        }
+    }
+    SECTION("Two layers of one array are sampled as two flat textures")
+    {
+        // The texture's own view is the array; each layer is a view of its own besides it, and the three
+        // coexist over the one image.
+        Forge::Texture layers = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                                          .width = 1,
+                                                                                          .height = 1,
+                                                                                          .array_layer_count = 2,
+                                                                                          .usage = Forge::TextureUsageBits::Sampled |
+                                                                                                   Forge::TextureUsageBits::TransferDestination,
+                                                                                          .view_type = Forge::TextureViewType::Texture2DArray}));
+        const Opal::DynamicArray<u8> two_colors = MakeTwoTexelRow();
+        UploadMip(fixture.device, fixture.GetQueue(), layers, {two_colors.GetData(), two_colors.GetSize()}, 0);
+        const Forge::TextureView first = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, layers, {.subresource_range = layer(0)}));
+        const Forge::TextureView second = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, layers, {.subresource_range = layer(1)}));
+        require_color(SampleOnce(fixture, harness, sample_pipeline, first, nearest, SampleParams{.uv = {0.5f, 0.5f}}), k_level_colors[0]);
+        require_color(SampleOnce(fixture, harness, sample_pipeline, second, nearest, SampleParams{.uv = {0.5f, 0.5f}}), k_level_colors[1]);
+    }
+    SECTION("A view the image cannot take, or of a texture that cannot have one, is refused")
+    {
+        constexpr Forge::TextureUsageBits k_sampled = Forge::TextureUsageBits::Sampled;
+        const Forge::Texture flat = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format, .width = k_side, .height = k_side, .mip_level_count = 2, .usage = k_sampled}));
+        const Forge::Texture array = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                                               .width = k_side,
+                                                                                               .height = k_side,
+                                                                                               .array_layer_count = 6,
+                                                                                               .usage = k_sampled,
+                                                                                               .view_type = Forge::TextureViewType::Texture2DArray}));
+        auto refused = [&](const Forge::Texture& texture, const Forge::TextureViewDesc& desc)
+        { return Forge::TextureView::Create(fixture.device, texture, desc).GetErrorOr(ErrorCode::Success); };
+
+        REQUIRE(refused(flat, {.subresource_range = level(2)}) == ErrorCode::OutOfBounds);
+        REQUIRE(refused(array, {.view_type = Forge::TextureViewType::Texture2DArray, .subresource_range = layer(6)}) == ErrorCode::OutOfBounds);
+        // A flat view over the six layers, a cube over an image not made cube compatible, and views of a
+        // dimension the image does not have.
+        REQUIRE(refused(array, {}) == ErrorCode::InvalidArgument);
+        REQUIRE(refused(array, {.view_type = Forge::TextureViewType::Cube}) == ErrorCode::InvalidArgument);
+        REQUIRE(refused(flat, {.view_type = Forge::TextureViewType::Texture1D}) == ErrorCode::InvalidArgument);
+        REQUIRE(refused(flat, {.view_type = Forge::TextureViewType::Texture3D}) == ErrorCode::InvalidArgument);
+
+        // An image made cube compatible takes a cube view over its six layers, one of them flat, but not a cube
+        // over fewer - and, on this device, no cube array, since the fixture did not ask for the feature.
+        const Forge::Texture cube = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                                              .width = 1,
+                                                                                              .height = 1,
+                                                                                              .array_layer_count = 6,
+                                                                                              .usage = k_sampled,
+                                                                                              .view_type = Forge::TextureViewType::Cube}));
+        REQUIRE(refused(cube, {.view_type = Forge::TextureViewType::Cube}) == ErrorCode::Success);
+        REQUIRE(refused(cube, {.subresource_range = layer(4)}) == ErrorCode::Success);
+        REQUIRE(refused(cube, {.view_type = Forge::TextureViewType::Cube,
+                               .subresource_range = {.first_array_layer = 3, .array_layer_count = 3}}) == ErrorCode::InvalidArgument);
+        REQUIRE_FALSE(fixture.device.GetFeatures().image_cube_array);
+        REQUIRE(refused(cube, {.view_type = Forge::TextureViewType::CubeArray}) == ErrorCode::InvalidArgument);
+
+        const Forge::Texture transfer_only = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = Forge::TextureUsageBits::TransferSource}));
+        REQUIRE(refused(transfer_only, {}) == ErrorCode::InvalidArgument);
+        REQUIRE(refused(Forge::Texture{}, {}) == ErrorCode::InvalidArgument);
+    }
+    SECTION("An attachment view over more than one mip level is refused")
+    {
+        Forge::Texture target = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                                          .width = k_side,
+                                                                                          .height = k_side,
+                                                                                          .mip_level_count = 2,
+                                                                                          .usage = Forge::TextureUsageBits::ColorAttachment}));
+        const Forge::TextureView both_levels = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, target));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(target)) == ErrorCode::Success);
+        const Forge::RenderingDesc rendering_desc{.render_area_extent = {k_side, k_side},
+                                                  .color_attachments = {Forge::RenderingAttachmentDesc{.view = both_levels}}};
+        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
