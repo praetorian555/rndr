@@ -169,6 +169,7 @@ struct FeatureChain
         vk12.scalarBlockLayout = features.scalar_block_layout;
         vk12.hostQueryReset = features.host_query_reset;
         vk12.samplerMirrorClampToEdge = features.sampler_mirror_clamp_to_edge;
+        vk12.samplerFilterMinmax = features.sampler_filter_minmax;
         vk12.drawIndirectCount = features.draw_indirect_count;
         vk12.shaderBufferInt64Atomics = features.shader_buffer_int64_atomics;
         vk12.shaderSharedInt64Atomics = features.shader_shared_int64_atomics;
@@ -313,6 +314,7 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.scalar_block_layout, supported.vk12.scalarBlockLayout, "scalar_block_layout");
     require(requested.host_query_reset, supported.vk12.hostQueryReset, "host_query_reset");
     require(requested.sampler_mirror_clamp_to_edge, supported.vk12.samplerMirrorClampToEdge, "sampler_mirror_clamp_to_edge");
+    require(requested.sampler_filter_minmax, supported.vk12.samplerFilterMinmax, "sampler_filter_minmax");
     require(requested.draw_indirect_count, supported.vk12.drawIndirectCount, "draw_indirect_count");
     require(requested.shader_buffer_int64_atomics, supported.vk12.shaderBufferInt64Atomics, "shader_buffer_int64_atomics");
     require(requested.shader_shared_int64_atomics, supported.vk12.shaderSharedInt64Atomics, "shader_shared_int64_atomics");

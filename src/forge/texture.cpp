@@ -722,6 +722,21 @@ static Opal::Optional<VkCompareOp> ToVkCompareOp(Rndr::Comparator comparator)
     }
 }
 
+static Opal::Optional<VkSamplerReductionMode> ToVkSamplerReductionMode(Rndr::SamplerReduction reduction)
+{
+    switch (reduction)
+    {
+        case Rndr::SamplerReduction::WeightedAverage:
+            return Opal::Optional<VkSamplerReductionMode>(VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE);
+        case Rndr::SamplerReduction::Min:
+            return Opal::Optional<VkSamplerReductionMode>(VK_SAMPLER_REDUCTION_MODE_MIN);
+        case Rndr::SamplerReduction::Max:
+            return Opal::Optional<VkSamplerReductionMode>(VK_SAMPLER_REDUCTION_MODE_MAX);
+        default:
+            return {};
+    }
+}
+
 Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Create(const Device& device, const SamplerDesc& desc)
 {
     using Result = Opal::Expected<Sampler, ErrorCode>;
@@ -748,10 +763,30 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
     // Translated whether or not the comparison is on, so an operator out of range is refused either way
     // rather than only once someone turns it on.
     RNDR_FORGE_TRANSLATE_EXPECTED(compare_op, ToVkCompareOp(desc.compare_operator), "SamplerDesc::compare_operator", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(reduction_mode, ToVkSamplerReductionMode(desc.reduction), "SamplerDesc::reduction", Result);
+    // A reduction is a feature of its own, and Vulkan has no answer for one that also compares: the two are
+    // different ways of turning the texels read into one value.
+    if (desc.reduction != SamplerReduction::WeightedAverage)
+    {
+        if (!device.GetFeatures().sampler_filter_minmax)
+        {
+            RNDR_LOG_ERROR("Forge: a min or max sampler needs the device created with DeviceFeatures::sampler_filter_minmax");
+            return Result(ErrorCode::InvalidArgument);
+        }
+        if (desc.compare_enabled)
+        {
+            RNDR_LOG_ERROR("Forge: a sampler cannot both compare and reduce to a min or a max");
+            return Result(ErrorCode::InvalidArgument);
+        }
+    }
+    // Chained only when it changes something, so a device without the feature never sees the structure.
+    const VkSamplerReductionModeCreateInfo reduction_create_info{.sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
+                                                                 .reductionMode = reduction_mode};
     Sampler sampler;
     sampler.m_device = device;
     const VkSamplerCreateInfo sampler_create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext = desc.reduction != SamplerReduction::WeightedAverage ? &reduction_create_info : nullptr,
         .magFilter = ToVkFilter(desc.mag_filter),
         .minFilter = ToVkFilter(desc.min_filter),
         .mipmapMode = ToVkSamplerMipmapMode(desc.mip_map_filter),

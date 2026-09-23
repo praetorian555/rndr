@@ -34,6 +34,21 @@ enum class TextureType : u8
 };
 
 /**
+ * How a filter combines the texels it reads: weighted by distance, which is ordinary filtering, or the least
+ * or the greatest of them - one sample taking the farthest depth of a two by two block, the way a depth pyramid
+ * is built.
+ */
+enum class SamplerReduction
+{
+    WeightedAverage = 0,
+    Min,
+    Max,
+
+    /** Represents number of elements in the enum. */
+    EnumCount
+};
+
+/**
  * Represents the filtering used to resolve the value of the image when it is sampled.
  */
 enum class ImageFilter
@@ -589,6 +604,13 @@ struct SamplerDesc
 
     /** The test a compare_enabled sampler runs, with the reference on the left and the stored texel on the right. */
     Comparator compare_operator = Comparator::LessEqual;
+
+    /**
+     * How the texels a filter reads are combined. Anything but WeightedAverage needs a Forge device created with
+     * DeviceFeatures::sampler_filter_minmax and cannot be a comparison sampler as well. Forge only, like the
+     * comparison above.
+     */
+    SamplerReduction reduction = SamplerReduction::WeightedAverage;
 
     // OPAL_CLONE_FIELDS(min_filter, mag_filter, mip_map_filter, max_anisotropy, address_mode_u, address_mode_v, address_mode_w,
     // border_color,

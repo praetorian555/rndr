@@ -98,6 +98,8 @@ struct DeviceFeatures
      * device created without this is refused.
      */
     bool sampler_mirror_clamp_to_edge = false;
+    /** SamplerDesc::reduction other than WeightedAverage: a filter returning the least or the greatest texel it reads. */
+    bool sampler_filter_minmax = false;
     /** BC compressed texture formats, which a texture naming one is refused without. */
     bool texture_compression_bc = false;
     /** Views of TextureViewType::CubeArray, which a texture naming one is refused without. */
