@@ -167,9 +167,9 @@ while (!window->IsClosed())
     application->ProcessSystemEvents();
 
     auto begin_status = frame_context.BeginFrame();
-    if (!begin_status.HasValue() || begin_status.GetValue() == SwapChainStatus::OutOfDate)
+    if (!begin_status.HasValue() || begin_status.GetValue() != SwapChainStatus::Success)
     {
-        continue;  // the swap chain was rebuilt, nothing was recorded
+        continue;  // the swap chain was rebuilt, or no texture came free in time; nothing was recorded
     }
 
     CommandBuffer& command_buffer = frame_context.GetCommandBuffer().GetValue();
@@ -195,7 +195,9 @@ keeps the first one instead.
 
 Resizing and minimizing are ordinary outcomes rather than errors. `BeginFrame` answering `OutOfDate` means
 the swap chain has already been rebuilt, nothing was recorded, the fence of that slot was not reset and the
-frame index did not advance - there is nothing to undo, so the loop just continues. A window with no client
+frame index did not advance - there is nothing to undo, so the loop just continues. `NotReady` is skipped
+the same way: no texture came free within `SwapChainDesc::acquire_timeout`, which is forever unless the
+swap chain was made with a shorter one, and the swap chain itself is unchanged. A window with no client
 area, as while minimized, has no swap chain at all; `swap_chain.IsValid()` says so, and an application that
 does not want to spin should idle for a frame.
 
@@ -371,7 +373,8 @@ carry `SwapChainStatus::OutOfDate` on the *value* side of their `Expected` and t
 
 A timeout is the same shape. `Fence::TryWait` answers `Expected<bool, ErrorCode>`: false means the fence was
 not signalled in time, which is the one thing the timeout parameter exists for, and only a failed wait is an
-error.
+error. An acquire that runs out of `SwapChainDesc::acquire_timeout` answers `SwapChainStatus::NotReady` the
+same way, beside `OutOfDate`.
 
 The same applies to queries whose answer may legitimately be "there is none". A device with no queue family
 matching a set of flags is not a broken device, so `PhysicalDevice::GetQueueFamilyIndex` returns an
