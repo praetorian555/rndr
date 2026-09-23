@@ -14322,6 +14322,11 @@ TEST_CASE("Forge a mesh shader draw without the extension", "[forge]")
     Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
     REQUIRE(command_buffer.Begin() == ErrorCode::Success);
     REQUIRE(command_buffer.CmdDrawMeshTasks(1) == ErrorCode::InvalidArgument);
+    // The two indirect forms go through the same trampoline question, with a buffer that is otherwise fine.
+    const Forge::Buffer commands = ForgeTest::Unwrap(Forge::Buffer::Create(
+        fixture.device, {.size = sizeof(Forge::DrawMeshTasksIndirectCommand), .usage = Forge::BufferUsageBits::IndirectBuffer}));
+    REQUIRE(command_buffer.CmdDrawMeshTasksIndirect(commands) == ErrorCode::InvalidArgument);
+    REQUIRE(command_buffer.CmdDrawMeshTasksIndirectCount(commands, 0, commands, 0, 1) == ErrorCode::InvalidArgument);
     REQUIRE(command_buffer.End() == ErrorCode::Success);
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -14502,6 +14507,216 @@ Forge::GraphicsPipelineDesc MakeStagePipelineDesc(PixelFormat format)
  * The positive half of the task stage. The mesh case above proves a mesh shader draws; this is the stage in
  * front of it deciding how many mesh workgroups run and what they are told.
  */
+/**
+ * One quad per mesh workgroup, each a quarter of the target wide and side by side from the left, so how many
+ * columns come back covered is how many workgroups ran. And the writer of the two commands the indirect mesh
+ * draws read: two workgroups, then three.
+ */
+constexpr const char* k_mesh_column_source = R"(
+struct MeshVertex
+{
+    float4 position : SV_Position;
+};
+
+[shader("mesh")]
+[outputtopology("triangle")]
+[numthreads(1, 1, 1)]
+void main_column_mesh(uint3 group_id : SV_GroupID, out vertices MeshVertex vertices[4], out indices uint3 triangles[2])
+{
+    SetMeshOutputCounts(4, 2);
+    float left = -1.0 + 0.5 * float(group_id.x);
+    float right = left + 0.5;
+    vertices[0].position = float4(left, -1.0, 0.0, 1.0);
+    vertices[1].position = float4(right, -1.0, 0.0, 1.0);
+    vertices[2].position = float4(right, 1.0, 0.0, 1.0);
+    vertices[3].position = float4(left, 1.0, 0.0, 1.0);
+    triangles[0] = uint3(0, 1, 2);
+    triangles[1] = uint3(0, 2, 3);
+}
+
+[shader("fragment")]
+float4 main_column_fragment() : SV_Target
+{
+    return float4(0.0, 1.0, 0.0, 1.0);
+}
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_write_mesh_tasks(uniform uint32_t *output)
+{
+    output[0] = 2; output[1] = 1; output[2] = 1;
+    output[3] = 3; output[4] = 1; output[5] = 1;
+}
+)";
+
+/**
+ * CmdDrawMeshTasksIndirect and CmdDrawMeshTasksIndirectCount, the mesh draws a culling pass on the device
+ * feeds. The workgroup counts come off a compute shader, so a draw that took them from anywhere else - or
+ * read the wrong command, or ignored the count - covers the wrong number of columns.
+ */
+TEST_CASE("Forge mesh task draws read from a buffer", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    if (!CanCreateDevice({.mesh_shader = true}))
+    {
+        SKIP("This device has no VK_EXT_mesh_shader.");
+    }
+    const bool has_multi_draw = CanCreateDevice({.multi_draw_indirect = true, .mesh_shader = true});
+    const bool has_count = CanCreateDevice({.draw_indirect_count = true, .mesh_shader = true});
+    ForgeFixture fixture({.multi_draw_indirect = has_multi_draw, .draw_indirect_count = has_count, .mesh_shader = true});
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+
+    auto load = [&](const char* source, const char* entry_point)
+    {
+        return ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, source, {.entry_point = entry_point, .cache = GetShaderCache()}));
+    };
+    const Forge::Shader mesh_shader = load(k_mesh_column_source, "main_column_mesh");
+    const Forge::Shader fragment_shader = load(k_mesh_column_source, "main_column_fragment");
+    const Forge::Pipeline write_tasks = MakeAddressPipeline(fixture.device, load(k_mesh_column_source, "main_write_mesh_tasks"));
+    const Forge::Pipeline write_count_one = MakeAddressPipeline(fixture.device, load(k_indirect_count_source, "main_write_count_one"));
+    const Forge::Pipeline write_count_two = MakeAddressPipeline(fixture.device, load(k_indirect_count_source, "main_write_count_two"));
+
+    Forge::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.mesh_shader = mesh_shader;
+    pipeline_desc.fragment_shader = fragment_shader;
+    pipeline_desc.rasterizer.cull_mode = Face::None;
+    pipeline_desc.color_blend_attachments.PushBack(Forge::ColorBlendDesc{});
+    pipeline_desc.color_attachment_formats.PushBack(k_format);
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    auto make_device_buffer = [&](u64 size)
+    {
+        return ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = size,
+                                                                        .usage = Forge::BufferUsageBits::IndirectBuffer |
+                                                                                 Forge::BufferUsageBits::StorageBuffer,
+                                                                        .host_access = Forge::HostAccess::None,
+                                                                        .use_device_address = true}));
+    };
+    const Forge::Buffer commands = make_device_buffer(2 * sizeof(Forge::DrawMeshTasksIndirectCommand));
+    const Forge::Buffer count = make_device_buffer(sizeof(u32));
+
+    /**
+     * Write the commands - and the count, when a writer for it is given - on the device, then draw with
+     * whatever `record_draw` records, and hand back how many columns from the left came back covered. Every
+     * column past that one has to be as the clear left it, which is what makes the answer a count and not a
+     * shape.
+     */
+    auto columns_drawn = [&](const Forge::Pipeline* count_writer, auto&& record_draw)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_format);
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        const VkDeviceAddress command_address = commands.GetNativeDeviceAddress();
+                        REQUIRE(command_buffer.CmdBindPipeline(write_tasks) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(write_tasks, ShaderTypeBits::Compute, Opal::AsBytes(command_address)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                        if (count_writer != nullptr)
+                        {
+                            const VkDeviceAddress count_address = count.GetNativeDeviceAddress();
+                            REQUIRE(command_buffer.CmdBindPipeline(*count_writer) == ErrorCode::Success);
+                            REQUIRE(command_buffer.CmdPushConstants(*count_writer, ShaderTypeBits::Compute,
+                                                                    Opal::AsBytes(count_address)) == ErrorCode::Success);
+                            REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                        }
+                        const Forge::BufferBarrier barriers[] = {
+                            Forge::BufferBarrier::WriteThenRead(commands, Forge::PipelineStageBits::ComputeShader,
+                                                                Forge::PipelineStageBits::IndirectDraw),
+                            Forge::BufferBarrier::WriteThenRead(count, Forge::PipelineStageBits::ComputeShader,
+                                                                Forge::PipelineStageBits::IndirectDraw)};
+                        REQUIRE(command_buffer.CmdBufferBarriers(Opal::ArrayView<const Forge::BufferBarrier>(barriers, count_writer != nullptr ? 2 : 1)) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = RenderRaster(fixture, color, k_side,
+                                                           [&](Forge::CommandBuffer& command_buffer)
+                                                           {
+                                                               REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                                               record_draw(command_buffer);
+                                                           });
+        i32 columns = 0;
+        while (columns < k_side && IsCovered(pixels, k_side, columns, 0))
+        {
+            ++columns;
+        }
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                INFO("texel " << x << "," << y << " with " << columns << " columns covered");
+                REQUIRE(IsCovered(pixels, k_side, x, y) == (x < columns));
+            }
+        }
+        return columns;
+    };
+
+    SECTION("One command draws the workgroups it names")
+    {
+        const i32 columns = columns_drawn(nullptr, [&](Forge::CommandBuffer& command_buffer)
+                                          { REQUIRE(command_buffer.CmdDrawMeshTasksIndirect(commands) == ErrorCode::Success); });
+        REQUIRE(columns == 2);
+    }
+    SECTION("A second command at the stride is read as well")
+    {
+        INFO("multi_draw_indirect supported: " << has_multi_draw);
+        if (!has_multi_draw)
+        {
+            SKIP("This device cannot read more than one indirect command per call.");
+        }
+        // Three workgroups after two: the second command covers what the first did and one column more.
+        const i32 columns = columns_drawn(nullptr, [&](Forge::CommandBuffer& command_buffer)
+                                          { REQUIRE(command_buffer.CmdDrawMeshTasksIndirect(commands, 0, 2) == ErrorCode::Success); });
+        REQUIRE(columns == 3);
+    }
+    SECTION("A count the device wrote decides how many commands are read")
+    {
+        INFO("draw_indirect_count supported: " << has_count);
+        if (!has_count)
+        {
+            SKIP("This device cannot read an indirect draw count from a buffer.");
+        }
+        auto draw_counted = [&](Forge::CommandBuffer& command_buffer)
+        { REQUIRE(command_buffer.CmdDrawMeshTasksIndirectCount(commands, 0, count, 0, 2) == ErrorCode::Success); };
+        const i32 counted_one = columns_drawn(&write_count_one, draw_counted);
+        REQUIRE(counted_one == 2);
+        const i32 counted_two = columns_drawn(&write_count_two, draw_counted);
+        REQUIRE(counted_two == 3);
+        // The maximum still wins over what the device wrote.
+        const i32 capped = columns_drawn(&write_count_two,
+                                         [&](Forge::CommandBuffer& command_buffer) {
+                                             REQUIRE(command_buffer.CmdDrawMeshTasksIndirectCount(commands, 0, count, 0, 1) ==
+                                                     ErrorCode::Success);
+                                         });
+        REQUIRE(capped == 2);
+    }
+    SECTION("The arguments the other indirect draws check are checked here too")
+    {
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        const Forge::Buffer storage_only =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = 64, .usage = Forge::BufferUsageBits::StorageBuffer}));
+        REQUIRE(command_buffer.CmdDrawMeshTasksIndirect(storage_only) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawMeshTasksIndirect(commands, 2) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawMeshTasksIndirect(commands, sizeof(Forge::DrawMeshTasksIndirectCommand) + 4) == ErrorCode::OutOfBounds);
+        if (has_count)
+        {
+            REQUIRE(command_buffer.CmdDrawMeshTasksIndirectCount(commands, 0, count, 0, 3) == ErrorCode::OutOfBounds);
+            REQUIRE(command_buffer.CmdDrawMeshTasksIndirectCount(commands, 0, count, 0, 1, 8) == ErrorCode::InvalidArgument);
+        }
+        else
+        {
+            REQUIRE(command_buffer.CmdDrawMeshTasksIndirectCount(commands, 0, count, 0, 1) == ErrorCode::InvalidArgument);
+        }
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge a task shader in front of a mesh one", "[forge]")
 {
     if (!IsForgeAvailable())
