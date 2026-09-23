@@ -5231,6 +5231,176 @@ TEST_CASE("Forge a resolve at the end of the pass", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+namespace
+{
+
+/**
+ * The colour the first draw of the pass left at this texel, read back through an input attachment and
+ * written over it with its red and green swapped - so the result is neither what the first draw wrote nor
+ * what the clear under it was, and each of those three reads back differently.
+ */
+constexpr const char* k_input_attachment_source = R"(
+[[vk::input_attachment_index(0)]]
+[[vk::binding(0, 0)]] SubpassInput<float4> previous;
+
+[shader("fragment")]
+float4 main_swap_fragment() : SV_Target
+{
+    const float4 color = previous.SubpassLoad();
+    return float4(color.g, color.r, 1.0, 1.0);
+}
+)";
+
+}  // namespace
+
+/**
+ * DescriptorType::InputAttachment and DeviceFeatures::dynamic_rendering_local_read: one pass draws green over
+ * a red clear, orders that write before a read with a ByRegion barrier, and draws again reading what the first
+ * draw left at each texel. Magenta means the second draw read green; cyan would mean it read the clear.
+ */
+TEST_CASE("Forge input attachments", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_features{.dynamic_rendering_local_read = true};
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr i32 k_side = 4;
+    constexpr Forge::TextureUsageBits k_usage =
+        Forge::TextureUsageBits::ColorAttachment | Forge::TextureUsageBits::InputAttachment | Forge::TextureUsageBits::TransferSource;
+
+    auto make_layout_desc = [](ShaderTypeBits stages)
+    {
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::InputAttachment, 1, stages) == ErrorCode::Success);
+        return layout_desc;
+    };
+
+    SECTION("A draw reads what an earlier draw of the pass wrote at its texel")
+    {
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device cannot read an attachment inside a dynamic rendering pass.");
+        }
+        ForgeFixture fixture(k_features);
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader green_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
+        const Forge::Shader swap_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_input_attachment_source, {.entry_point = "main_swap_fragment", .cache = GetShaderCache()}));
+
+        // Checked against the shader, which is also what shows reflection reads the binding as an input attachment.
+        Forge::DescriptorSetLayoutDesc layout_desc = make_layout_desc(ShaderTypeBits::Fragment);
+        layout_desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(swap_shader));
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+        REQUIRE(layout.GetDesc().bindings[0].name == Opal::StringUtf8("previous"));
+
+        const Forge::Pipeline green_pipeline =
+            ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, MakeFullscreenPipelineDesc(vertex_shader, green_shader, k_format)));
+        Forge::GraphicsPipelineDesc swap_desc = MakeFullscreenPipelineDesc(vertex_shader, swap_shader, k_format);
+        swap_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline swap_pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, swap_desc));
+
+        Forge::Texture color = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = k_usage}));
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {}));
+        Forge::DescriptorPoolDesc pool_desc;
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::InputAttachment, 1) == ErrorCode::Success);
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, color, sampler, Forge::ImageLayout::General) == ErrorCode::Success);
+        const Forge::Buffer vertices = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = sizeof(k_fullscreen_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+            Opal::AsBytes(k_fullscreen_vertices)));
+
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTransition(color, Forge::ImageLayout::General) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(green_pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+
+                        const Forge::MemoryBarrier write_before_read{
+                            .stages_must_finish = Forge::PipelineStageBits::ColorAttachmentOutput,
+                            .stages_must_finish_access = Forge::PipelineStageAccessBits::ColorAttachmentWrite,
+                            .before_stages_start = Forge::PipelineStageBits::FragmentShader,
+                            .before_stages_start_access = Forge::PipelineStageAccessBits::InputAttachmentRead};
+                        REQUIRE(command_buffer.CmdBarriers({.memory = {&write_before_read, 1}, .flags = Forge::DependencyFlagBits::ByRegion}) ==
+                                ErrorCode::Success);
+
+                        REQUIRE(command_buffer.CmdBindPipeline(swap_pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindDescriptorSet(swap_pipeline, set) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(3) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side, Forge::ImageLayout::General);
+        for (i32 texel = 0; texel < k_side * k_side; ++texel)
+        {
+            const Texel actual{pixels[texel * 4], pixels[texel * 4 + 1], pixels[texel * 4 + 2], pixels[texel * 4 + 3]};
+            INFO("texel " << texel << " rgba " << actual.r << " " << actual.g << " " << actual.b << " " << actual.a);
+            REQUIRE((actual.r == 255 && actual.g == 0 && actual.b == 255 && actual.a == 255));
+        }
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("An input attachment binding or descriptor the pass could not read is refused")
+    {
+        {
+            // Without the feature there is no pass that could read one.
+            ForgeFixture fixture;
+            REQUIRE(Forge::DescriptorSetLayout::Create(fixture.device, make_layout_desc(ShaderTypeBits::Fragment))
+                        .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+            REQUIRE_NO_VALIDATION_ERROR(fixture);
+        }
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device cannot read an attachment inside a dynamic rendering pass.");
+        }
+        ForgeFixture fixture(k_features);
+        REQUIRE(Forge::DescriptorSetLayout::Create(fixture.device, make_layout_desc(ShaderTypeBits::Compute))
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE(Forge::DescriptorSetLayout::Create(fixture.device, make_layout_desc(ShaderTypeBits::AllGraphics))
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+
+        // A binding the shader reads as an input attachment and the layout declares as something else.
+        const Forge::Shader swap_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_input_attachment_source, {.entry_point = "main_swap_fragment", .cache = GetShaderCache()}));
+        Forge::DescriptorSetLayoutDesc mismatched;
+        mismatched.shaders.PushBack(Opal::Ref<const Forge::Shader>(swap_shader));
+        REQUIRE(mismatched.AddBinding(0, Forge::DescriptorType::SampledImage, 1, ShaderTypeBits::Fragment) == ErrorCode::Success);
+        REQUIRE(Forge::DescriptorSetLayout::Create(fixture.device, mismatched).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+
+        const Forge::DescriptorSetLayout layout =
+            ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, make_layout_desc(ShaderTypeBits::Fragment)));
+        Forge::DescriptorPoolDesc pool_desc;
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::InputAttachment, 1) == ErrorCode::Success);
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {}));
+        const Forge::Texture readable = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = k_usage}));
+        const Forge::Texture not_an_input = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_format, .width = k_side, .height = k_side, .usage = Forge::TextureUsageBits::ColorAttachment}));
+        REQUIRE(set.Update(0, not_an_input, sampler, Forge::ImageLayout::General) == ErrorCode::InvalidArgument);
+        REQUIRE(set.Update(0, readable, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::InvalidArgument);
+        REQUIRE(set.Update(0, readable, sampler, Forge::ImageLayout::General) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
+
 TEST_CASE("Forge a pipeline that fails to build leaves nothing behind", "[forge]")
 {
     if (!IsForgeAvailable())
