@@ -15200,6 +15200,148 @@ TEST_CASE("Forge scalar block layout", "[forge]")
     }
 }
 
+namespace
+{
+
+/**
+ * Every invocation packs a key into the high word and its own index into the low one and takes the maximum
+ * of the lot into one u64, the way a visibility buffer resolves depth and triangle id together. The key
+ * repeats, so the winner is decided by both words and a maximum taken over 32 bits of either would differ.
+ */
+constexpr const char* k_int64_atomics_source = R"(
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint64_t> output;
+
+uint64_t Packed(uint index)
+{
+    return (uint64_t((index * 37u) % 64u) << 32) | uint64_t(index);
+}
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_buffer_max(uint3 thread_id : SV_DispatchThreadID)
+{
+    InterlockedMax(output[0], Packed(thread_id.x));
+}
+
+groupshared uint64_t g_group_max;
+
+[shader("compute")]
+[numthreads(64, 1, 1)]
+void main_shared_max(uint3 thread_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThreadID, uint3 group_id : SV_GroupID)
+{
+    if (local_id.x == 0)
+    {
+        g_group_max = 0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    InterlockedMax(g_group_max, Packed(thread_id.x));
+    GroupMemoryBarrierWithGroupSync();
+    if (local_id.x == 0)
+    {
+        output[group_id.x] = g_group_max;
+    }
+}
+)";
+
+/** The same packing on the CPU. */
+u64 PackedKey(u32 index)
+{
+    return (static_cast<u64>((index * 37u) % 64u) << 32) | index;
+}
+
+}  // namespace
+
+/**
+ * DeviceFeatures::shader_buffer_int64_atomics and shader_shared_int64_atomics. Each is used and read back,
+ * and each is shown to reach its own Vulkan bit by building a device with only the other one on: the layer
+ * then refuses the shader that needs the missing one, so the two fields exchanged on the way to the driver
+ * would make both of those refusals disappear.
+ */
+TEST_CASE("Forge 64-bit atomics", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_both{.shader_int64 = true, .shader_buffer_int64_atomics = true, .shader_shared_int64_atomics = true};
+    if (!CanCreateDevice(k_both))
+    {
+        SKIP("This device has no 64-bit atomics on both storage buffers and shared memory.");
+    }
+    constexpr i32 k_group_size = 64;
+    constexpr i32 k_group_count = 4;
+    constexpr u32 k_invocation_count = k_group_size * k_group_count;
+
+    /** Dispatch one entry point over the buffer of u64 and hand back what it holds. */
+    auto run = [&](ForgeFixture& fixture, const char* entry_point, i32 word_count)
+    {
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_int64_atomics_source, {.entry_point = entry_point, .cache = GetShaderCache()}));
+        const Forge::DescriptorSetLayout layout =
+            ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, MakeStorageLayoutDesc()));
+        const Forge::Pipeline pipeline = MakeSetPipeline(fixture.device, shader, layout);
+        Forge::DescriptorPoolDesc pool_desc;
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        const Forge::Buffer output = MakeWipedOutput(fixture.device, 2 * word_count);
+        REQUIRE(set.Update(0, output) == ErrorCode::Success);
+        DispatchWithSet(fixture.device, fixture.GetQueue(), pipeline, set, k_group_count);
+        Opal::DynamicArray<u64> words(word_count);
+        REQUIRE(output.Read({reinterpret_cast<u8*>(words.GetData()), words.GetSize() * sizeof(u64)}) == ErrorCode::Success);
+        return words;
+    };
+
+    SECTION("A maximum taken over a storage buffer is the largest of every invocation's key")
+    {
+        ForgeFixture fixture(k_both);
+        u64 expected = 0;
+        for (u32 index = 0; index < k_invocation_count; ++index)
+        {
+            expected = Opal::Max(expected, PackedKey(index));
+        }
+        const Opal::DynamicArray<u64> words = run(fixture, "main_buffer_max", 1);
+        INFO("expected " << expected << ", got " << words[0]);
+        REQUIRE(words[0] == expected);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A maximum taken in shared memory is each workgroup's own largest key")
+    {
+        ForgeFixture fixture(k_both);
+        const Opal::DynamicArray<u64> words = run(fixture, "main_shared_max", k_group_count);
+        for (u32 group = 0; group < k_group_count; ++group)
+        {
+            u64 expected = 0;
+            for (u32 index = group * k_group_size; index < (group + 1) * k_group_size; ++index)
+            {
+                expected = Opal::Max(expected, PackedKey(index));
+            }
+            INFO("group " << group << " expected " << expected << ", got " << words[group]);
+            REQUIRE(words[group] == expected);
+        }
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("With only the shared field on, the layer refuses the buffer atomics")
+    {
+        // Nothing is built past the shader - a pipeline over a module the layer rejected is undefined.
+        ForgeFixture fixture({.shader_int64 = true, .shader_shared_int64_atomics = true});
+        REQUIRE(fixture.status == ErrorCode::Success);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_int64_atomics_source, {.entry_point = "main_buffer_max", .cache = GetShaderCache()}));
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+    SECTION("With only the buffer field on, the layer refuses the shared atomics")
+    {
+        ForgeFixture fixture({.shader_int64 = true, .shader_buffer_int64_atomics = true});
+        REQUIRE(fixture.status == ErrorCode::Success);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_int64_atomics_source, {.entry_point = "main_shared_max", .cache = GetShaderCache()}));
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+}
+
 TEST_CASE("Forge runtime descriptor arrays", "[forge]")
 {
     if (!IsForgeAvailable())
