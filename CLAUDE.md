@@ -27,10 +27,11 @@ Guessing at those produces code that compiles and is wrong.
 - [docs/audio.md](docs/audio.md) — `src/audio/` reports the same way and got there first. `Rndr::ErrorCode` is
   shared between the two, so a code added for one is visible to the other.
 
-- [docs/forge-test-review.md](docs/forge-test-review.md) — before touching `test/forge/`: what the suite
-  covers, the gaps in order of value, the sections that duplicate another, and the work split into buckets
-  by difficulty with a model and effort per bucket. Work down it one item per commit, buckets in order. Its
-  line numbers are pinned to a commit and drift; the case and section titles beside them do not.
+- [docs/forge-api-gaps.md](docs/forge-api-gaps.md) — what the Forge API cannot express yet, in the order
+  to close it, each with what a caller does about it today and what closing it takes. Read it before adding
+  a Forge feature, since the item is usually already there with its test sketched, and before writing a
+  Forge sample, since it says which workaround the sample will need. The test items the third suite review
+  left open are at the end.
 
 ## Building here
 
