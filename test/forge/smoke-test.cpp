@@ -11000,6 +11000,123 @@ TEST_CASE("Forge sampler filtering, LOD clamp and immutable samplers", "[forge]"
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+namespace
+{
+
+/** One comparison through a shadow sampler, the reference in the slot SampleParams keeps its LOD in. */
+constexpr const char* k_compare_sample_source = R"(
+struct CompareParams
+{
+    float2 uv;
+    float reference;
+    float padding;
+};
+[[vk::push_constant]] CompareParams params;
+
+[[vk::binding(0, 0)]] Sampler2DShadow shadow;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_sample_compare()
+{
+    output[0] = float4(shadow.SampleCmpLevelZero(params.uv, params.reference), 0.0, 0.0, 1.0);
+}
+)";
+
+}  // namespace
+
+/**
+ * SamplerDesc::compare_enabled and compare_operator, over a two texel depth texture holding 0.25 and 0.75. A
+ * comparison reads back as one or zero from a nearest filter, and as the share of the two texels that passed
+ * from a linear one sampled halfway between them - which is the hardware doing percentage closer filtering.
+ */
+TEST_CASE("Forge comparison samplers", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr PixelFormat k_format = PixelFormat::D32_SFLOAT;
+    constexpr f32 k_depths[] = {0.25f, 0.75f};
+    constexpr Vector2f k_first_texel{0.25f, 0.5f};
+    constexpr Vector2f k_second_texel{0.75f, 0.5f};
+    constexpr Vector2f k_between{0.5f, 0.5f};
+
+    Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(
+        fixture.device, {.format = k_format,
+                         .width = 2,
+                         .height = 1,
+                         .usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination}));
+    UploadMip(fixture.device, fixture.GetQueue(), depth, Opal::AsBytes(k_depths), 0);
+
+    const SampleHarness harness = MakeSampleHarness(fixture.device, 8);
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_compare_sample_source, {.entry_point = "main_sample_compare", .cache = GetShaderCache()}));
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(harness.layout));
+    pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(SampleParams)});
+    const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+    auto make_sampler = [&](ImageFilter filter, Comparator comparator)
+    {
+        return ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device, {.min_filter = filter,
+                                                                         .mag_filter = filter,
+                                                                         .mip_map_filter = ImageFilter::Nearest,
+                                                                         .address_mode_u = ImageAddressMode::Clamp,
+                                                                         .address_mode_v = ImageAddressMode::Clamp,
+                                                                         .address_mode_w = ImageAddressMode::Clamp,
+                                                                         .compare_enabled = true,
+                                                                         .compare_operator = comparator}));
+    };
+    /** The comparison of the reference against the texel at uv, which is all the shader writes. */
+    auto compare = [&](const Forge::Sampler& sampler, const Vector2f& uv, f32 reference)
+    {
+        const Vector4f result = SampleOnce(fixture, harness, pipeline, depth, sampler, SampleParams{.uv = uv, .lod = reference});
+        INFO("uv " << uv.x << "," << uv.y << " reference " << reference << " compared to " << result.x);
+        return result.x;
+    };
+
+    SECTION("A nearest comparison passes or fails against the one texel it reads")
+    {
+        const Forge::Sampler less_equal = make_sampler(ImageFilter::Nearest, Comparator::LessEqual);
+        REQUIRE(compare(less_equal, k_first_texel, 0.2f) == 1.0f);
+        REQUIRE(compare(less_equal, k_first_texel, 0.3f) == 0.0f);
+        REQUIRE(compare(less_equal, k_second_texel, 0.5f) == 1.0f);
+        REQUIRE(compare(less_equal, k_second_texel, 0.8f) == 0.0f);
+    }
+    SECTION("The operator is the one the desc named")
+    {
+        // The opposite answers to the section above at the same references, so an operator that did not
+        // reach the sampler would give the answers of the default.
+        const Forge::Sampler greater = make_sampler(ImageFilter::Nearest, Comparator::Greater);
+        REQUIRE(compare(greater, k_first_texel, 0.2f) == 0.0f);
+        REQUIRE(compare(greater, k_first_texel, 0.3f) == 1.0f);
+        const Forge::Sampler never = make_sampler(ImageFilter::Nearest, Comparator::Never);
+        REQUIRE(compare(never, k_first_texel, 0.0f) == 0.0f);
+    }
+    SECTION("A linear comparison is the share of the texels it reads that passed")
+    {
+        if (!fixture.device.GetPhysicalDevice().SupportsLinearFilter(k_format))
+        {
+            SKIP("This device cannot filter the depth format linearly.");
+        }
+        const Forge::Sampler less_equal = make_sampler(ImageFilter::Linear, Comparator::LessEqual);
+        // Halfway between the two texels a reference of one half passes the second and fails the first.
+        REQUIRE(compare(less_equal, k_between, 0.5f) == Catch::Approx(0.5f).margin(0.01));
+        REQUIRE(compare(less_equal, k_between, 0.1f) == Catch::Approx(1.0f).margin(0.01));
+        REQUIRE(compare(less_equal, k_between, 0.9f) == Catch::Approx(0.0f).margin(0.01));
+    }
+    SECTION("A comparison operator out of range is refused")
+    {
+        REQUIRE(Forge::Sampler::Create(fixture.device, {.compare_operator = Comparator::EnumCount}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge separate sampler and sampled image", "[forge]")
 {
     if (!IsForgeAvailable())
