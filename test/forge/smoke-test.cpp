@@ -5000,6 +5000,237 @@ void main_specialized(uint3 thread_id : SV_DispatchThreadID, uniform RWStructure
  * Nothing noticed: the layer only names an object that outlived its device, and that report arrives at
  * vkDestroyDevice, after the assertion at the end of a case has already passed.
  */
+/**
+ * RenderingAttachmentDesc::resolve_texture, resolve_view and resolve_mode: a resolve Vulkan runs as the pass
+ * ends. Both attachments rendered into are transient, which CmdResolveTexture cannot read at all, so what
+ * reaches the one-sample texture can only have come through the pass.
+ */
+TEST_CASE("Forge a resolve at the end of the pass", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const VkPhysicalDeviceLimits& limits = fixture.device.GetPhysicalDevice().GetProperties().limits;
+    if ((limits.framebufferColorSampleCounts & VK_SAMPLE_COUNT_4_BIT) == 0 || (limits.framebufferDepthSampleCounts & VK_SAMPLE_COUNT_4_BIT) == 0)
+    {
+        SKIP("This device cannot render four samples per texel.");
+    }
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr PixelFormat k_depth_format = PixelFormat::D32_SFLOAT;
+    constexpr i32 k_side = 2;
+
+    auto make_texture = [&](PixelFormat format, Forge::SampleCount sample_count, Forge::TextureUsageBits usage)
+    {
+        return ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = format, .width = k_side, .height = k_side, .sample_count = sample_count, .usage = usage}));
+    };
+    constexpr Forge::TextureUsageBits k_transient_color = Forge::TextureUsageBits::ColorAttachment | Forge::TextureUsageBits::TransientAttachment;
+    constexpr Forge::TextureUsageBits k_transient_depth =
+        Forge::TextureUsageBits::DepthStencilAttachment | Forge::TextureUsageBits::TransientAttachment;
+    constexpr Forge::TextureUsageBits k_resolved_color = Forge::TextureUsageBits::ColorAttachment | Forge::TextureUsageBits::TransferSource;
+    constexpr Forge::TextureUsageBits k_resolved_depth =
+        Forge::TextureUsageBits::DepthStencilAttachment | Forge::TextureUsageBits::TransferSource;
+
+    SECTION("A transient colour attachment resolves to the average of its samples")
+    {
+        if (limits.standardSampleLocations == VK_FALSE)
+        {
+            SKIP("This device places its samples somewhere of its own, so the coverage of a half-covered texel is unknown.");
+        }
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_fullscreen_source, {.entry_point = "main_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_fullscreen_source, {.entry_point = "main_fragment", .cache = GetShaderCache()}));
+        const Forge::Buffer vertices = ForgeTest::Unwrap(
+            Forge::Buffer::Create(fixture.device, {.size = sizeof(k_left_quarter_vertices), .usage = Forge::BufferUsageBits::VertexBuffer},
+                                  Opal::AsBytes(k_left_quarter_vertices)));
+        Forge::GraphicsPipelineDesc pipeline_desc = MakeFullscreenPipelineDesc(vertex_shader, fragment_shader, k_format);
+        pipeline_desc.sample_count = Forge::SampleCount::Count4;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture multisampled = make_texture(k_format, Forge::SampleCount::Count4, k_transient_color);
+        Forge::Texture resolved = make_texture(k_format, Forge::SampleCount::Count1, k_resolved_color);
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(multisampled)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(resolved)) == ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = multisampled,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::DontCare,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f},
+                                                                                 .resolve_texture = resolved}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(vertices, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, resolved, k_side, Forge::ImageLayout::ColorAttachment);
+
+        // The same picture the standalone resolve case reads: green with alpha zero over half of each left texel
+        // on a clear of opaque black, averaged to the middle in both channels, and the right column untouched.
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                const i32 offset = (y * k_side + x) * 4;
+                const Texel texel{pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]};
+                INFO("texel (" << x << ", " << y << ") rgba " << texel.r << " " << texel.g << " " << texel.b << " " << texel.a);
+                REQUIRE(texel.r == 0);
+                REQUIRE(texel.b == 0);
+                REQUIRE(Opal::Abs(texel.g - (x == 0 ? 128 : 0)) <= 1);
+                REQUIRE(Opal::Abs(texel.a - (x == 0 ? 128 : 255)) <= 1);
+            }
+        }
+    }
+    SECTION("A transient depth attachment resolves its first sample")
+    {
+        // SampleZero is the one depth resolve every device has. A clear writes every sample, so the resolved
+        // depth is the clear value exactly - and a pass that never resolved leaves the target undefined.
+        constexpr f32 k_depth = 0.375f;
+        Forge::Texture multisampled = make_texture(k_depth_format, Forge::SampleCount::Count4, k_transient_depth);
+        Forge::Texture resolved = make_texture(k_depth_format, Forge::SampleCount::Count1, k_resolved_depth);
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(multisampled)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(resolved)) ==
+                                ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .depth_attachment = Forge::RenderingAttachmentDesc{.texture = multisampled,
+                                                                               .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                               .store_operation = Forge::AttachmentStoreOperation::DontCare,
+                                                                               .clear_value = Forge::DepthStencilClearValue{.depth = k_depth},
+                                                                               .resolve_texture = resolved,
+                                                                               .resolve_mode = Forge::ResolveMode::SampleZero}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        f32 depths[k_side * k_side] = {};
+        REQUIRE(Forge::ReadBackTexture(fixture.device, fixture.GetQueue(), resolved, Opal::AsWritableBytes(depths), 0,
+                                       Forge::ImageLayout::DepthStencilAttachment) == ErrorCode::Success);
+        for (i32 texel = 0; texel < k_side * k_side; ++texel)
+        {
+            INFO("texel " << texel << " depth " << depths[texel]);
+            REQUIRE(depths[texel] == k_depth);
+        }
+    }
+    SECTION("A resolve the textures or the device cannot take is refused")
+    {
+        Forge::Texture multisampled = make_texture(k_format, Forge::SampleCount::Count4, k_transient_color);
+        Forge::Texture single = make_texture(k_format, Forge::SampleCount::Count1, k_resolved_color);
+        Forge::Texture other_single = make_texture(k_format, Forge::SampleCount::Count1, k_resolved_color);
+        Forge::Texture multisampled_target = make_texture(k_format, Forge::SampleCount::Count4, k_transient_color);
+        Forge::Texture other_format = make_texture(PixelFormat::B8G8R8A8_UNORM, Forge::SampleCount::Count1, k_resolved_color);
+        Forge::Texture unready = make_texture(k_format, Forge::SampleCount::Count1, k_resolved_color);
+        Forge::Texture multisampled_depth = make_texture(k_depth_format, Forge::SampleCount::Count4, k_transient_depth);
+        Forge::Texture single_depth = make_texture(k_depth_format, Forge::SampleCount::Count1, k_resolved_depth);
+
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        for (Forge::Texture* texture : {&multisampled, &single, &other_single, &multisampled_target, &other_format})
+        {
+            REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(*texture)) == ErrorCode::Success);
+        }
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(multisampled_depth)) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(single_depth)) == ErrorCode::Success);
+
+        auto begin_color = [&](const Forge::Texture& attachment, const Forge::Texture& target, Forge::ResolveMode mode)
+        {
+            Forge::RenderingDesc rendering_desc{.render_area_extent = {k_side, k_side}};
+            rendering_desc.color_attachments.PushBack(
+                Forge::RenderingAttachmentDesc{.texture = attachment, .resolve_texture = target, .resolve_mode = mode});
+            return command_buffer.CmdBeginRendering(rendering_desc);
+        };
+        REQUIRE(begin_color(multisampled, multisampled_target, Forge::ResolveMode::Average) == ErrorCode::InvalidArgument);
+        REQUIRE(begin_color(single, other_single, Forge::ResolveMode::Average) == ErrorCode::InvalidArgument);
+        REQUIRE(begin_color(multisampled, other_format, Forge::ResolveMode::Average) == ErrorCode::InvalidArgument);
+        REQUIRE(begin_color(multisampled, unready, Forge::ResolveMode::Average) == ErrorCode::InvalidArgument);
+        // A normalized colour format is averaged and nothing else.
+        REQUIRE(begin_color(multisampled, single, Forge::ResolveMode::SampleZero) == ErrorCode::InvalidArgument);
+        REQUIRE(begin_color(multisampled, single, static_cast<Forge::ResolveMode>(9)) == ErrorCode::InvalidArgument);
+
+        // Depth takes the modes this device reports, and one it does not report is refused.
+        const VkResolveModeFlags depth_modes = fixture.device.GetPhysicalDevice().GetDepthStencilResolveProperties().supportedDepthResolveModes;
+        REQUIRE((depth_modes & VK_RESOLVE_MODE_SAMPLE_ZERO_BIT) != 0);
+        const struct
+        {
+            Forge::ResolveMode mode;
+            VkResolveModeFlagBits bit;
+        } k_depth_modes[] = {{Forge::ResolveMode::Average, VK_RESOLVE_MODE_AVERAGE_BIT},
+                             {Forge::ResolveMode::Min, VK_RESOLVE_MODE_MIN_BIT},
+                             {Forge::ResolveMode::Max, VK_RESOLVE_MODE_MAX_BIT}};
+        for (const auto& depth_mode : k_depth_modes)
+        {
+            if ((depth_modes & depth_mode.bit) != 0)
+            {
+                continue;
+            }
+            const Forge::RenderingDesc rendering_desc{
+                .render_area_extent = {k_side, k_side},
+                .depth_attachment = Forge::RenderingAttachmentDesc{
+                    .texture = multisampled_depth, .resolve_texture = single_depth, .resolve_mode = depth_mode.mode}};
+            INFO("resolve mode " << static_cast<i32>(depth_mode.mode));
+            REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::InvalidArgument);
+        }
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    SECTION("Stencil is never averaged, and a pass resolving both sides resolves them into one texture")
+    {
+        if ((limits.framebufferStencilSampleCounts & VK_SAMPLE_COUNT_4_BIT) == 0)
+        {
+            SKIP("This device cannot render four stencil samples per texel.");
+        }
+        constexpr PixelFormat k_combined_format = PixelFormat::D32_SFLOAT_S8_UINT;
+        Forge::Texture multisampled = make_texture(k_combined_format, Forge::SampleCount::Count4, k_transient_depth);
+        Forge::Texture target = make_texture(k_combined_format, Forge::SampleCount::Count1, k_resolved_depth);
+        Forge::Texture other_target = make_texture(k_combined_format, Forge::SampleCount::Count1, k_resolved_depth);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        for (Forge::Texture* texture : {&multisampled, &target, &other_target})
+        {
+            REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(*texture)) == ErrorCode::Success);
+        }
+        auto side = [&](const Forge::Texture& resolve_target, Forge::ResolveMode mode)
+        {
+            return Forge::RenderingAttachmentDesc{.texture = multisampled,
+                                                  .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                  .store_operation = Forge::AttachmentStoreOperation::DontCare,
+                                                  .clear_value = Forge::DepthStencilClearValue{},
+                                                  .resolve_texture = resolve_target,
+                                                  .resolve_mode = mode};
+        };
+
+        const VkResolveModeFlags stencil_modes = fixture.device.GetPhysicalDevice().GetDepthStencilResolveProperties().supportedStencilResolveModes;
+        REQUIRE((stencil_modes & VK_RESOLVE_MODE_AVERAGE_BIT) == 0);
+        REQUIRE(command_buffer.CmdBeginRendering({.render_area_extent = {k_side, k_side},
+                                                  .stencil_attachment = side(target, Forge::ResolveMode::Average)}) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdBeginRendering({.render_area_extent = {k_side, k_side},
+                                                  .depth_attachment = side(target, Forge::ResolveMode::SampleZero),
+                                                  .stencil_attachment = side(other_target, Forge::ResolveMode::SampleZero)}) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdBeginRendering({.render_area_extent = {k_side, k_side},
+                                                  .depth_attachment = side(target, Forge::ResolveMode::SampleZero),
+                                                  .stencil_attachment = side(target, Forge::ResolveMode::SampleZero)}) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge a pipeline that fails to build leaves nothing behind", "[forge]")
 {
     if (!IsForgeAvailable())
