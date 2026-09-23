@@ -14655,3 +14655,118 @@ TEST_CASE("Forge a BC compressed texture uploaded and sampled", "[forge]")
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
+
+/**
+ * TextureUsageBits::TransientAttachment, which no case had used. A transient attachment is one whose contents
+ * never outlive the pass that renders into it - cleared on the way in, thrown away on the way out - which is
+ * what lets a tiled device keep it in tile memory and never back it at all. A depth buffer is the everyday
+ * one, so that is what is drawn with: the colour target is the only thing read back, and whether the depth
+ * test used the transient buffer is decided by which of two quads ends up on top.
+ *
+ * A multisampled transient colour attachment is the other textbook use, and it cannot be written here:
+ * resolving it needs either a resolve at the end of the rendering pass, which Forge does not have yet, or
+ * CmdResolveTexture, which reads its source as a transfer source - a usage Vulkan does not allow beside
+ * the transient one.
+ */
+TEST_CASE("Forge a transient attachment", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_depth_format = PixelFormat::D32_SFLOAT;
+    constexpr Forge::TextureUsageBits k_transient_depth =
+        Forge::TextureUsageBits::DepthStencilAttachment | Forge::TextureUsageBits::TransientAttachment;
+
+    SECTION("A transient depth buffer, cleared in and discarded out, still decides what is drawn on top")
+    {
+        const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+        const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+        const Forge::Buffer near_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.25f));
+        const Forge::Buffer far_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(0.75f));
+        const Vector4f near_color = ByteColor(0, 255, 0, 255);
+        const Vector4f far_color = ByteColor(255, 0, 0, 255);
+
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, PixelFormat::R8G8B8A8_UNORM);
+        pipeline_desc.depth_stencil.depth_test_enabled = true;
+        pipeline_desc.depth_stencil.depth_write_enabled = true;
+        pipeline_desc.depth_stencil.depth_comparator = Comparator::Less;
+        pipeline_desc.depth_attachment_format = k_depth_format;
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side);
+        Forge::Texture depth = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_depth_format, .width = k_side, .height = k_side, .usage = k_transient_depth}));
+
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth)) ==
+                                ErrorCode::Success);
+                        const Forge::RenderingDesc rendering_desc{
+                            .render_area_extent = {k_side, k_side},
+                            .color_attachments = {Forge::RenderingAttachmentDesc{.texture = color,
+                                                                                 .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                                 .store_operation = Forge::AttachmentStoreOperation::Store,
+                                                                                 .clear_value = Vector4f{0.0f, 0.0f, 1.0f, 1.0f}}},
+                            // Cleared in and never stored: the whole of the depth buffer's life is this pass.
+                            .depth_attachment = Forge::RenderingAttachmentDesc{.texture = depth,
+                                                                               .load_operation = Forge::AttachmentLoadOperation::Clear,
+                                                                               .store_operation = Forge::AttachmentStoreOperation::DontCare,
+                                                                               .clear_value = Forge::DepthStencilClearValue{1.0f, 0}}};
+                        REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        // Near first, then far. Without a working depth buffer the later draw wins and the target
+                        // is red; with one, the far quad fails the test against what the near one wrote.
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(near_quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(near_color)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBindVertexBuffer(far_quad, 0) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(far_color)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndRendering() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+
+        const Opal::DynamicArray<u8> pixels = ReadColorPixels(fixture, color, k_side);
+        REQUIRE(CountCovered(pixels, k_side) == k_side * k_side);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Transient beside a usage that is not an attachment is refused")
+    {
+        // Vulkan allows a transient image only the attachment usages, since memory that is never backed has
+        // nothing to sample, store to or copy out of. A texture asking for more is refused before it reaches
+        // the driver rather than left for the layer.
+        constexpr Forge::TextureUsageBits k_not_attachments[] = {Forge::TextureUsageBits::Sampled, Forge::TextureUsageBits::Storage,
+                                                                 Forge::TextureUsageBits::TransferSource,
+                                                                 Forge::TextureUsageBits::TransferDestination};
+        for (const Forge::TextureUsageBits extra : k_not_attachments)
+        {
+            INFO("extra usage " << static_cast<u32>(extra));
+            REQUIRE_FALSE(Forge::Texture::Create(fixture.device,
+                                                 {.format = k_depth_format, .width = k_side, .height = k_side, .usage = k_transient_depth | extra})
+                              .HasValue());
+        }
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Transient with no attachment usage at all is refused")
+    {
+        // The other half of the same rule: transient says how an attachment is backed, so on its own it names
+        // nothing the texture is for.
+        REQUIRE_FALSE(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                                              .width = k_side,
+                                                              .height = k_side,
+                                                              .usage = Forge::TextureUsageBits::TransientAttachment})
+                          .HasValue());
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
