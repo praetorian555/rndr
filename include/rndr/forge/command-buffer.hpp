@@ -104,6 +104,18 @@ struct DispatchIndirectCommand
     u32 group_count_z = 0;
 };
 
+/**
+ * The workgroup counts of one mesh task draw, laid out the way CmdDrawMeshTasksIndirect reads them. The same
+ * three numbers as a dispatch, counted in task workgroups where there is a task stage and in mesh workgroups
+ * where there is not.
+ */
+struct DrawMeshTasksIndirectCommand
+{
+    u32 group_count_x = 0;
+    u32 group_count_y = 0;
+    u32 group_count_z = 0;
+};
+
 /** The arguments of one indirect draw, laid out the way CmdDrawIndirect reads them out of a buffer. */
 struct DrawIndirectCommand
 {
@@ -591,6 +603,30 @@ public:
      * @param group_count_z Number of workgroups in the Z dimension.
      */
     [[nodiscard]] ErrorCode CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y = 1, u32 group_count_z = 1);
+
+    /**
+     * CmdDrawMeshTasks with the workgroup counts read out of a buffer when the device runs the command, which is
+     * how a culling pass on the device hands its surviving clusters to the mesh stage.
+     *
+     * Needs DeviceFeatures::mesh_shader, and more than one command needs multi_draw_indirect as well - both
+     * refused without them.
+     *
+     * @param buffer Buffer holding the commands. Must have been created with BufferUsageBits::IndirectBuffer.
+     * @param offset Byte offset of the first DrawMeshTasksIndirectCommand. Must be a multiple of 4.
+     * @param draw_count Number of commands to read.
+     * @param stride Bytes between commands. Only read when draw_count is above one.
+     */
+    [[nodiscard]] ErrorCode CmdDrawMeshTasksIndirect(const Buffer& buffer, u64 offset = 0, u32 draw_count = 1,
+                                                     u32 stride = static_cast<u32>(sizeof(DrawMeshTasksIndirectCommand)));
+
+    /**
+     * CmdDrawMeshTasksIndirect with the number of commands read out of a buffer too, the way
+     * CmdDrawIndirectCount reads it. Needs DeviceFeatures::mesh_shader and DeviceFeatures::draw_indirect_count,
+     * and takes the same arguments and the same checks as that draw.
+     */
+    [[nodiscard]] ErrorCode CmdDrawMeshTasksIndirectCount(const Buffer& buffer, u64 offset, const Buffer& count_buffer, u64 count_offset,
+                                                          u32 max_draw_count,
+                                                          u32 stride = static_cast<u32>(sizeof(DrawMeshTasksIndirectCommand)));
 
     /**
      * Dispatch a compute workload. The counts are in local workgroups, not invocations, so the total invocation

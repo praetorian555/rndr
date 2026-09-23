@@ -1422,16 +1422,48 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawIndexedIndirectCount(const Bu
     return ErrorCode::Success;
 }
 
-Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y, u32 group_count_z)
+/**
+ * Whether the mesh shader commands can be called at all. The loader hands out a callable trampoline whether or
+ * not the device enabled the extension, so a null check does not catch this - calling one without the
+ * extension is an access violation, not a failure.
+ */
+static Rndr::ErrorCode ValidateMeshShaderExtension(const Rndr::Forge::Device& device, bool has_function)
 {
-    // The loader hands out a callable trampoline whether or not the device enabled the extension, so a null
-    // check does not catch this - calling it without the extension is an access violation, not a failure.
-    if (!m_device->IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME) || vkCmdDrawMeshTasksEXT == nullptr)
+    if (!device.IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME) || !has_function)
     {
         RNDR_LOG_ERROR("Forge: mesh shader drawing needs VK_EXT_mesh_shader, which the device did not enable");
-        return ErrorCode::InvalidArgument;
+        return Rndr::ErrorCode::InvalidArgument;
     }
+    return Rndr::ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawMeshTasks(u32 group_count_x, u32 group_count_y, u32 group_count_z)
+{
+    RNDR_FORGE_CHECK(ValidateMeshShaderExtension(*m_device, vkCmdDrawMeshTasksEXT != nullptr));
     vkCmdDrawMeshTasksEXT(m_native_command_buffer, group_count_x, group_count_y, group_count_z);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawMeshTasksIndirect(const Buffer& buffer, u64 offset, u32 draw_count, u32 stride)
+{
+    RNDR_FORGE_CHECK(ValidateMeshShaderExtension(*m_device, vkCmdDrawMeshTasksIndirectEXT != nullptr));
+    RNDR_FORGE_CHECK(
+        ValidateIndirectRange(buffer, offset, draw_count, stride, sizeof(DrawMeshTasksIndirectCommand), "Indirect mesh task draw"));
+    RNDR_FORGE_CHECK(ValidateIndirectDrawCount(*m_device, draw_count, "Indirect mesh task draw"));
+    vkCmdDrawMeshTasksIndirectEXT(m_native_command_buffer, buffer.GetNativeBuffer(), offset, draw_count, stride);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDrawMeshTasksIndirectCount(const Buffer& buffer, u64 offset, const Buffer& count_buffer,
+                                                                          u64 count_offset, u32 max_draw_count, u32 stride)
+{
+    RNDR_FORGE_CHECK(ValidateMeshShaderExtension(*m_device, vkCmdDrawMeshTasksIndirectCountEXT != nullptr));
+    RNDR_FORGE_CHECK(ValidateIndirectCount(*m_device, count_buffer, count_offset, stride, sizeof(DrawMeshTasksIndirectCommand),
+                                           "Indirect mesh task count draw"));
+    RNDR_FORGE_CHECK(ValidateIndirectRange(buffer, offset, max_draw_count, stride, sizeof(DrawMeshTasksIndirectCommand),
+                                           "Indirect mesh task count draw"));
+    vkCmdDrawMeshTasksIndirectCountEXT(m_native_command_buffer, buffer.GetNativeBuffer(), offset, count_buffer.GetNativeBuffer(),
+                                       count_offset, max_draw_count, stride);
     return ErrorCode::Success;
 }
 
