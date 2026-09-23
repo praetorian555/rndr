@@ -294,7 +294,7 @@ void Run()
         controller.Tick(delta_seconds);
 
         // Waits for this frame's slot, acquires a texture, and begins its command buffer.
-        if (Require(frame_context.BeginFrame()) == Rndr::Forge::SwapChainStatus::OutOfDate)
+        if (Require(frame_context.BeginFrame()) != Rndr::Forge::SwapChainStatus::Success)
         {
             if (!swap_chain.IsValid())
             {

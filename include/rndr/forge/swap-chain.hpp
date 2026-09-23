@@ -8,6 +8,7 @@
 #include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/graphics-context.hpp"
+#include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/types.hpp"
 #include "rndr/pixel-format.hpp"
@@ -42,6 +43,14 @@ struct SwapChainDesc
      * dropping it, so a caller that asked to read the frame back is never quietly given a texture it cannot.
      */
     bool allow_readback = false;
+    /**
+     * How long AcquireTexture waits for a texture to come free, in nanoseconds, before it gives up with
+     * SwapChainStatus::NotReady. Forever by default, which is what a frame loop that presents every texture
+     * it acquires wants. Anything shorter turns an acquire that could never be satisfied - more textures
+     * held than the presentation engine can spare - into a status instead of a hang, and zero asks without
+     * waiting at all.
+     */
+    u64 acquire_timeout = k_infinite_wait;
 };
 
 /** Outcome of acquiring or presenting a swap chain texture. */
@@ -53,7 +62,12 @@ enum class SwapChainStatus : u8
      * The swap chain no longer matched the surface and was recreated. The current frame has to be skipped and
      * anything the caller cached about the swap chain - its textures, their count, the extent - is stale.
      */
-    OutOfDate
+    OutOfDate,
+    /**
+     * No texture came free within SwapChainDesc::acquire_timeout. Nothing was acquired and the semaphore was
+     * not signaled, so the frame is skipped the way an out of date one is; the swap chain itself is fine.
+     */
+    NotReady
 };
 
 /** Index of no texture, returned by AcquireTexture when the swap chain went out of date. */
@@ -154,7 +168,8 @@ public:
      * Acquire the next texture to render into. The semaphore is signaled once it is ready to be written to.
      *
      * On SwapChainStatus::OutOfDate the swap chain has been recreated, no texture was acquired and the semaphore was
-     * not signaled, so the caller has to skip the frame. Because nothing was submitted for that frame, the caller
+     * not signaled, so the caller has to skip the frame. SwapChainStatus::NotReady is the same for a frame, with
+     * the swap chain left as it was: no texture came free within SwapChainDesc::acquire_timeout. Because nothing was submitted for that frame, the caller
      * must not reset its per-frame fence before this call returns Success, otherwise the next wait on that fence
      * never completes.
      */

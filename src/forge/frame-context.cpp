@@ -181,6 +181,11 @@ Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::Frame
         RNDR_FORGE_CHECK_EXPECTED(MatchRenderSemaphoresToSwapChain(), Result);
         return Result(SwapChainStatus::OutOfDate);
     }
+    if (acquired_texture.GetValue().status == SwapChainStatus::NotReady)
+    {
+        // Nothing came free in time. Nothing was acquired or submitted, and the swap chain is unchanged.
+        return Result(SwapChainStatus::NotReady);
+    }
 
     const CommandBuffer& command_buffer = m_command_buffers[frame_index];
     RNDR_FORGE_CHECK_EXPECTED(command_buffer.Reset(), Result);

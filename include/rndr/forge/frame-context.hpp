@@ -40,9 +40,9 @@ struct FrameContextDesc
  *
  *     while (!window->IsClosed())
  *     {
- *         if (frame_context.BeginFrame() == SwapChainStatus::OutOfDate)
+ *         if (frame_context.BeginFrame() != SwapChainStatus::Success)
  *         {
- *             continue;  // the swap chain was rebuilt, nothing was recorded
+ *             continue;  // the swap chain was rebuilt, or no texture came free in time; nothing was recorded
  *         }
  *         CommandBuffer& command_buffer = frame_context.GetCommandBuffer();
  *         ...
@@ -87,8 +87,9 @@ public:
     /**
      * Wait for the slot this frame reuses, acquire a texture, and begin its command buffer.
      * @return Success when the frame can be recorded, OutOfDate when the swap chain was rebuilt and this frame
-     *         has to be skipped - nothing was recorded and nothing has to be undone - or the code the wait,
-     *         the acquire or the command buffer reported.
+     *         has to be skipped - nothing was recorded and nothing has to be undone - NotReady when no texture
+     *         came free within SwapChainDesc::acquire_timeout, skipped the same way, or the code the wait, the
+     *         acquire or the command buffer reported.
      */
     [[nodiscard]] Opal::Expected<SwapChainStatus, ErrorCode> BeginFrame();
 

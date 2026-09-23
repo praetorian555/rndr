@@ -292,12 +292,18 @@ Opal::Expected<Rndr::Forge::AcquiredTexture, Rndr::ErrorCode> Rndr::Forge::SwapC
     }
 
     u32 texture_index = k_invalid_texture_index;
-    const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, UINT64_MAX, semaphore.GetNativeSemaphore(),
-                                                  VK_NULL_HANDLE, &texture_index);
+    const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, m_desc.acquire_timeout,
+                                                  semaphore.GetNativeSemaphore(), VK_NULL_HANDLE, &texture_index);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         RNDR_FORGE_CHECK_EXPECTED(Recreate(), Result);
         return Result(AcquiredTexture{});
+    }
+    // Both are the timeout running out: NOT_READY when it was zero, TIMEOUT otherwise. Neither acquired
+    // anything or signals the semaphore, and neither is a failure - the timeout exists to be run out.
+    if (result == VK_TIMEOUT || result == VK_NOT_READY)
+    {
+        return Result(AcquiredTexture{.status = SwapChainStatus::NotReady});
     }
     // A suboptimal swap chain still hands out a usable texture and signals the semaphore, so the frame is rendered with
     // it and the recreation happens after the matching present reports the same thing.
