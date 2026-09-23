@@ -697,6 +697,31 @@ void Rndr::Forge::TextureView::Destroy()
 
 // Sampler
 
+static Opal::Optional<VkCompareOp> ToVkCompareOp(Rndr::Comparator comparator)
+{
+    switch (comparator)
+    {
+        case Rndr::Comparator::Never:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_NEVER);
+        case Rndr::Comparator::Always:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_ALWAYS);
+        case Rndr::Comparator::Less:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_LESS);
+        case Rndr::Comparator::Greater:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_GREATER);
+        case Rndr::Comparator::Equal:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_EQUAL);
+        case Rndr::Comparator::NotEqual:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_NOT_EQUAL);
+        case Rndr::Comparator::LessEqual:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_LESS_OR_EQUAL);
+        case Rndr::Comparator::GreaterEqual:
+            return Opal::Optional<VkCompareOp>(VK_COMPARE_OP_GREATER_OR_EQUAL);
+        default:
+            return {};
+    }
+}
+
 Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Create(const Device& device, const SamplerDesc& desc)
 {
     using Result = Opal::Expected<Sampler, ErrorCode>;
@@ -720,6 +745,9 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
     RNDR_FORGE_TRANSLATE_EXPECTED(address_mode_v, ToVkSamplerAddressMode(desc.address_mode_v), "SamplerDesc::address_mode_v", Result);
     RNDR_FORGE_TRANSLATE_EXPECTED(address_mode_w, ToVkSamplerAddressMode(desc.address_mode_w), "SamplerDesc::address_mode_w", Result);
     RNDR_FORGE_TRANSLATE_EXPECTED(border_color, ToVkBorderColor(desc.border_color), "SamplerDesc::border_color", Result);
+    // Translated whether or not the comparison is on, so an operator out of range is refused either way
+    // rather than only once someone turns it on.
+    RNDR_FORGE_TRANSLATE_EXPECTED(compare_op, ToVkCompareOp(desc.compare_operator), "SamplerDesc::compare_operator", Result);
     Sampler sampler;
     sampler.m_device = device;
     const VkSamplerCreateInfo sampler_create_info = {
@@ -733,6 +761,8 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
         .mipLodBias = desc.lod_bias,
         .anisotropyEnable = desc.max_anisotropy > 1.0f ? VK_TRUE : VK_FALSE,
         .maxAnisotropy = desc.max_anisotropy,
+        .compareEnable = desc.compare_enabled ? VK_TRUE : VK_FALSE,
+        .compareOp = compare_op,
         .minLod = desc.min_lod,
         .maxLod = desc.max_lod,
         .borderColor = border_color,

@@ -579,6 +579,17 @@ struct SamplerDesc
     /** Maximum LOD level to use. This value can't be larger than max_mip_level. */
     f32 max_lod = 0.0f;
 
+    /**
+     * Whether a sample compares a reference against the texel instead of returning it, which is how a shadow
+     * map is read: SampleCmp in the shader, over a depth texture. Each texel the filter reads passes or fails,
+     * so with a linear filter the result is the share of them that passed - percentage closer filtering done
+     * by the sampler. Forge only; Canvas samplers are described by Canvas::TextureDesc.
+     */
+    bool compare_enabled = false;
+
+    /** The test a compare_enabled sampler runs, with the reference on the left and the stored texel on the right. */
+    Comparator compare_operator = Comparator::LessEqual;
+
     // OPAL_CLONE_FIELDS(min_filter, mag_filter, mip_map_filter, max_anisotropy, address_mode_u, address_mode_v, address_mode_w,
     // border_color,
     //                   lod_bias, base_mip_level, max_mip_level, min_lod, max_lod);
