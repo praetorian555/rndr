@@ -5016,6 +5016,133 @@ TEST_CASE("Forge descriptor bindings checked against the shader", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * One binding of each of the six descriptor kinds Forge models, in the order of k_every_kind_declared below.
+ * Every one of them is read or written, since a descriptor the entry point never touches is optimised out of
+ * the SPIR-V and reflection would not report it.
+ */
+constexpr const char* k_every_kind_source = R"(
+struct Scale
+{
+    float4 value;
+};
+
+[[vk::binding(0, 0)]] Sampler2D combined_texture;
+[[vk::binding(1, 0)]] Texture2D<float4> sampled_texture;
+[[vk::binding(2, 0)]] SamplerState plain_sampler;
+[[vk::image_format("rgba8")]]
+[[vk::binding(3, 0)]] RWTexture2D<float4> storage_image;
+[[vk::binding(4, 0)]] ConstantBuffer<Scale> scale;
+[[vk::binding(5, 0)]] RWStructuredBuffer<float4> output;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_every_kind()
+{
+    float4 sampled = combined_texture.SampleLevel(float2(0.5, 0.5), 0.0) +
+                     sampled_texture.SampleLevel(plain_sampler, float2(0.5, 0.5), 0.0);
+    storage_image[uint2(0, 0)] = sampled;
+    output[0] = sampled * scale.value;
+}
+)";
+
+/**
+ * The layout check for the four kinds the case above never reaches - it only ever declares combined image
+ * samplers, and the storage buffer cases elsewhere cover a fifth. Each of the six SPIR-V kinds
+ * `ToDescriptorType` maps is read back through reflection, accepted when the layout agrees, and refused
+ * against every other kind, so an entry of the table swapped with another shows up here and not at a draw.
+ */
+TEST_CASE("Forge descriptor bindings of every kind checked against the shader", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Forge::Shader shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_every_kind_source, {.entry_point = "main_every_kind", .cache = GetShaderCache()}));
+
+    constexpr i32 k_kind_count = static_cast<i32>(Forge::DescriptorType::EnumCount);
+    // Indexed by binding. Every kind appears exactly once, which is what lets the wrong-kind section below
+    // try each binding against all five kinds it is not.
+    constexpr Forge::DescriptorType k_every_kind_declared[k_kind_count] = {
+        Forge::DescriptorType::CombinedImageSampler, Forge::DescriptorType::SampledImage,   Forge::DescriptorType::Sampler,
+        Forge::DescriptorType::StorageImage,         Forge::DescriptorType::ConstantBuffer, Forge::DescriptorType::StorageBuffer};
+    constexpr const char* k_every_kind_names[k_kind_count] = {"combined_texture", "sampled_texture", "plain_sampler",
+                                                              "storage_image",    "scale",           "output"};
+
+    /** A layout checked against the shader, declaring binding i as kinds[i]. */
+    auto make_desc = [&](const Forge::DescriptorType* kinds)
+    {
+        Forge::DescriptorSetLayoutDesc desc;
+        desc.shaders.PushBack(Opal::Ref<const Forge::Shader>(shader));
+        for (i32 i = 0; i < k_kind_count; ++i)
+        {
+            REQUIRE(desc.AddBinding(static_cast<u32>(i), kinds[i], 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        }
+        return desc;
+    };
+
+    SECTION("Reflection reports each binding as the kind it is declared as")
+    {
+        const Opal::ArrayView<const Forge::ShaderBindingInfo> bindings = shader.GetBindings();
+        REQUIRE(bindings.GetSize() == k_kind_count);
+        bool seen[k_kind_count] = {};
+        for (i32 i = 0; i < bindings.GetSize(); ++i)
+        {
+            const Forge::ShaderBindingInfo& binding = bindings[i];
+            INFO("binding " << binding.binding << " named " << reinterpret_cast<const char*>(binding.name.GetData()));
+            REQUIRE(binding.set == 0);
+            REQUIRE(binding.binding < static_cast<u32>(k_kind_count));
+            REQUIRE_FALSE(seen[binding.binding]);
+            seen[binding.binding] = true;
+            REQUIRE(binding.descriptor_type == k_every_kind_declared[binding.binding]);
+            REQUIRE(binding.descriptor_count == 1);
+            REQUIRE(binding.name == Opal::StringUtf8(k_every_kind_names[binding.binding]));
+        }
+    }
+    SECTION("A layout that agrees on every kind is given the names and builds a pipeline")
+    {
+        const Forge::DescriptorSetLayout layout =
+            ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, make_desc(k_every_kind_declared)));
+        for (i32 i = 0; i < k_kind_count; ++i)
+        {
+            REQUIRE(layout.GetDesc().bindings[i].name == Opal::StringUtf8(k_every_kind_names[i]));
+        }
+
+        // The validation layer compares the pipeline layout against the SPIR-V on its own, which makes it a
+        // second opinion on the table above that does not go through Forge's reflection at all.
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+        REQUIRE(pipeline.IsValid());
+    }
+    SECTION("A binding declared as any other kind is refused")
+    {
+        for (i32 binding = 0; binding < k_kind_count; ++binding)
+        {
+            for (i32 kind = 0; kind < k_kind_count; ++kind)
+            {
+                const auto wrong_kind = static_cast<Forge::DescriptorType>(kind);
+                if (wrong_kind == k_every_kind_declared[binding])
+                {
+                    continue;
+                }
+                Forge::DescriptorType kinds[k_kind_count];
+                for (i32 i = 0; i < k_kind_count; ++i)
+                {
+                    kinds[i] = k_every_kind_declared[i];
+                }
+                kinds[binding] = wrong_kind;
+                INFO("binding " << binding << " declared as kind " << kind);
+                REQUIRE_FALSE(Forge::DescriptorSetLayout::Create(fixture.device, make_desc(kinds)).HasValue());
+            }
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 constexpr const char* k_named_storage_source = R"(
 [[vk::binding(0, 0)]] RWStructuredBuffer<uint> value_buffer;
 
