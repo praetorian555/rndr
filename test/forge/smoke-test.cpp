@@ -4685,6 +4685,224 @@ TEST_CASE("Forge specialization constants that are not a word wide", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+namespace
+{
+
+/** One float constant, written out as its bit pattern so what comes back can be compared exactly. */
+constexpr const char* k_float_specialized_source = R"(
+[SpecializationConstant]
+const float SCALE = 0.5;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_float_constant(uniform uint32_t *output)
+{
+    output[0] = asuint(SCALE);
+}
+)";
+
+/**
+ * An unsigned sixty four bit constant written out in halves, and a double one read back through arithmetic
+ * done in double: the whole part, and the fraction scaled by two to the fortieth. A fraction that fine lives
+ * in the low word of the double's bit pattern, so it only comes back right when both words arrived.
+ */
+constexpr const char* k_wide_specialized_source = R"(
+[SpecializationConstant]
+const uint64_t WIDE_UNSIGNED = 7;
+
+[SpecializationConstant]
+const double PRECISE = 1.0;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_wide_constants(uniform uint32_t *output)
+{
+    output[0] = (uint)(WIDE_UNSIGNED & 0xFFFFFFFF);
+    output[1] = (uint)((WIDE_UNSIGNED >> 32) & 0xFFFFFFFF);
+    output[2] = (uint)PRECISE;
+    output[3] = (uint)((PRECISE - 1.0) * 1099511627776.0);
+}
+)";
+
+/**
+ * Build a compute pipeline over `shader` with the given values, dispatch it once with the output's address
+ * pushed, and hand back the words it wrote - or what refused to build it.
+ */
+Opal::Expected<Opal::DynamicArray<u32>, ErrorCode> DispatchSpecialized(ForgeFixture& fixture, const Forge::Shader& shader,
+                                                                       Opal::ArrayView<const Forge::SpecializationConstant> values,
+                                                                       i32 word_count)
+{
+    using Result = Opal::Expected<Opal::DynamicArray<u32>, ErrorCode>;
+
+    Forge::ComputePipelineDesc pipeline_desc;
+    pipeline_desc.shader = shader;
+    pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+    for (i32 i = 0; i < values.GetSize(); ++i)
+    {
+        pipeline_desc.specialization.PushBack(Forge::SpecializationConstant{.name = values[i].name.Clone(), .value = values[i].value});
+    }
+    Opal::Expected<Forge::Pipeline, ErrorCode> pipeline_result = Forge::Pipeline::Create(fixture.device, pipeline_desc);
+    if (!pipeline_result.HasValue())
+    {
+        return Result(pipeline_result.GetError());
+    }
+
+    const Forge::Buffer output = MakeWipedOutput(fixture.device, word_count);
+    const VkDeviceAddress output_address = output.GetNativeDeviceAddress();
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdBindPipeline(pipeline_result.GetValue()) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdPushConstants(pipeline_result.GetValue(), ShaderTypeBits::Compute,
+                                                                               Opal::AsBytes(output_address)) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                   }) == ErrorCode::Success);
+    Opal::DynamicArray<u32> words(word_count);
+    REQUIRE(output.Read({reinterpret_cast<u8*>(words.GetData()), words.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+    return Result(std::move(words));
+}
+
+/** The reported constant of that name, which a case reads the declared type and width off. */
+const Forge::SpecializationConstantInfo& SpecializationConstantNamed(const Forge::Shader& shader, const char* name)
+{
+    const Opal::ArrayView<const Forge::SpecializationConstantInfo> constants = shader.GetSpecializationConstants();
+    for (i32 i = 0; i < constants.GetSize(); ++i)
+    {
+        if (constants[i].name == Opal::StringUtf8(name))
+        {
+            return constants[i];
+        }
+    }
+    FAIL("the shader declares no specialization constant called " << name);
+    return constants[0];
+}
+
+/** The bits of a float as a word, the way the shader's asuint hands them back. */
+u32 FloatBits(f32 value)
+{
+    u32 bits = 0;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+}  // namespace
+
+/**
+ * A Float32 specialization constant, which until now only ever reached a pipeline as the wrong type being
+ * refused. The value is compared as a bit pattern, so a float stored through the integer path - converted
+ * to 0 rather than copied - or read back from the wrong half of the eight bytes, shows as a different word.
+ */
+TEST_CASE("Forge a floating point specialization constant", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_word_count = 1;
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_float_specialized_source, {.entry_point = "main_float_constant", .cache = GetShaderCache()}));
+
+    SECTION("Reflection reports the type, the width and the declared default")
+    {
+        const Forge::SpecializationConstantInfo& scale = SpecializationConstantNamed(shader, "SCALE");
+        REQUIRE(scale.type == Forge::SpecializationType::Float32);
+        REQUIRE(scale.byte_size == 4);
+        REQUIRE(scale.default_value.bits == FloatBits(0.5f));
+    }
+    SECTION("A float value reaches the shader bit for bit")
+    {
+        // A value with a mantissa that runs to the last bit, so nothing about it survives a conversion.
+        constexpr f32 k_value = 0.1f;
+        const Forge::SpecializationConstant values[] = {{.name = "SCALE", .value = k_value}};
+        const Opal::DynamicArray<u32> written = ForgeTest::Unwrap(DispatchSpecialized(fixture, shader, {values, 1}, k_word_count));
+        REQUIRE(written[0] == FloatBits(k_value));
+    }
+    SECTION("Nothing supplied leaves the declared default")
+    {
+        const Opal::DynamicArray<u32> written = ForgeTest::Unwrap(DispatchSpecialized(fixture, shader, {}, k_word_count));
+        REQUIRE(written[0] == FloatBits(0.5f));
+    }
+    SECTION("A double for a float constant is refused")
+    {
+        // Twice the width, and the one mistake an unsuffixed literal makes easy to write.
+        const Forge::SpecializationConstant wrong[] = {{.name = "SCALE", .value = 0.1}};
+        REQUIRE_FALSE(DispatchSpecialized(fixture, shader, {wrong, 1}, k_word_count).HasValue());
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+/**
+ * UInt64 and Float64 specialization constants, the two constructors of SpecializationValue nothing had
+ * called. Both carry information in each of their two words, so a value stored or packed as four bytes
+ * loses half of itself, and the unsigned one has its top bit set, so it is also not a signed value in
+ * disguise.
+ */
+TEST_CASE("Forge sixty four bit specialization constants of unsigned and floating point type", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_wide_types{.shader_int64 = true, .shader_float64 = true};
+    if (!CanCreateDevice(k_wide_types))
+    {
+        SKIP("This device has no sixty four bit integers or doubles in shaders.");
+    }
+    ForgeFixture fixture(k_wide_types);
+    constexpr i32 k_word_count = 4;
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_wide_specialized_source, {.entry_point = "main_wide_constants", .cache = GetShaderCache()}));
+
+    SECTION("Reflection reports each type at eight bytes, with its declared default")
+    {
+        const Forge::SpecializationConstantInfo& wide = SpecializationConstantNamed(shader, "WIDE_UNSIGNED");
+        REQUIRE(wide.type == Forge::SpecializationType::UInt64);
+        REQUIRE(wide.byte_size == 8);
+        REQUIRE(wide.default_value.bits == 7u);
+
+        const Forge::SpecializationConstantInfo& precise = SpecializationConstantNamed(shader, "PRECISE");
+        REQUIRE(precise.type == Forge::SpecializationType::Float64);
+        REQUIRE(precise.byte_size == 8);
+        f64 declared = 0.0;
+        memcpy(&declared, &precise.default_value.bits, sizeof(declared));
+        REQUIRE(declared == 1.0);
+    }
+    SECTION("Both constants arrive whole")
+    {
+        constexpr u64 k_wide_value = (u64{0x80001234} << 32) | 0x5678ABCDu;
+        // One and three parts in two to the fortieth: the fraction sits in the low word of the bit pattern,
+        // and the shader's (value - 1) * 2^40 turns it back into exactly three.
+        const f64 precise_value = 1.0 + 3.0 / 1099511627776.0;
+        const Forge::SpecializationConstant values[] = {{.name = "WIDE_UNSIGNED", .value = k_wide_value},
+                                                        {.name = "PRECISE", .value = precise_value}};
+        const Opal::DynamicArray<u32> written = ForgeTest::Unwrap(DispatchSpecialized(fixture, shader, {values, 2}, k_word_count));
+        INFO("words " << written[0] << " " << written[1] << " " << written[2] << " " << written[3]);
+        REQUIRE(written[0] == 0x5678ABCDu);
+        REQUIRE(written[1] == 0x80001234u);
+        REQUIRE(written[2] == 1u);
+        REQUIRE(written[3] == 3u);
+    }
+    SECTION("Nothing supplied leaves the declared defaults")
+    {
+        const Opal::DynamicArray<u32> written = ForgeTest::Unwrap(DispatchSpecialized(fixture, shader, {}, k_word_count));
+        REQUIRE(written[0] == 7u);
+        REQUIRE(written[1] == 0u);
+        REQUIRE(written[2] == 1u);
+        REQUIRE(written[3] == 0u);
+    }
+    SECTION("A value of the right width and the wrong type is refused")
+    {
+        // Signed for unsigned and float for double: the first is the same eight bytes read differently, the
+        // second is half of them.
+        const Forge::SpecializationConstant signed_for_unsigned[] = {{.name = "WIDE_UNSIGNED", .value = i64{7}}};
+        REQUIRE_FALSE(DispatchSpecialized(fixture, shader, {signed_for_unsigned, 1}, k_word_count).HasValue());
+        const Forge::SpecializationConstant float_for_double[] = {{.name = "PRECISE", .value = 1.0f}};
+        REQUIRE_FALSE(DispatchSpecialized(fixture, shader, {float_for_double, 1}, k_word_count).HasValue());
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge shader reflection", "[forge]")
 {
     if (!IsForgeAvailable())
