@@ -14758,6 +14758,37 @@ TEST_CASE("Forge a transient attachment", "[forge]")
         }
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
+    SECTION("A transient attachment is lazily allocated exactly when the device has lazy memory it can use")
+    {
+        // Whether the device offers such memory is worked out here from Vulkan directly, not from anything
+        // Forge reports: the memory types the image is allowed in, against the properties of each. Desktop
+        // devices have none, and there this checks the fallback; a tiled one takes the other branch.
+        const Forge::Texture transient = ForgeTest::Unwrap(
+            Forge::Texture::Create(fixture.device, {.format = k_depth_format, .width = k_side, .height = k_side, .usage = k_transient_depth}));
+        VkMemoryRequirements requirements{};
+        vkGetImageMemoryRequirements(fixture.device.GetNativeDevice(), transient.GetNativeImage(), &requirements);
+        const VkPhysicalDeviceMemoryProperties& memory = fixture.device.GetPhysicalDevice().GetMemoryProperties();
+        bool device_has_lazy_memory = false;
+        for (u32 i = 0; i < memory.memoryTypeCount; ++i)
+        {
+            const bool allowed = (requirements.memoryTypeBits & (1u << i)) != 0;
+            device_has_lazy_memory = device_has_lazy_memory || (allowed && !!(memory.memoryTypes[i].propertyFlags &
+                                                                               VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT));
+        }
+        INFO("the device " << (device_has_lazy_memory ? "has" : "has no") << " lazily allocated memory this image can use");
+        const VkMemoryPropertyFlags transient_properties = transient.GetMemoryProperties();
+        REQUIRE(transient_properties != 0);
+        REQUIRE(!!(transient_properties & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) == device_has_lazy_memory);
+
+        // An ordinary texture is never put there, whatever the device has, and is in device local memory.
+        const Forge::Texture ordinary = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = k_side, .height = k_side, .usage = Forge::TextureUsageBits::Sampled}));
+        REQUIRE_FALSE(!!(ordinary.GetMemoryProperties() & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT));
+        REQUIRE(!!(ordinary.GetMemoryProperties() & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+        // And a texture with no image has no memory to describe.
+        REQUIRE(Forge::Texture{}.GetMemoryProperties() == 0);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
     SECTION("Transient with no attachment usage at all is refused")
     {
         // The other half of the same rule: transient says how an attachment is backed, so on its own it names
