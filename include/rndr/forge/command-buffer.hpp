@@ -285,6 +285,9 @@ public:
      * one with the other two groups left empty, so batching through it is one pipeline barrier where separate
      * calls would be several.
      * @param barriers Memory, buffer and texture barriers, any of which may be empty.
+     * @return ErrorCode::Success, ErrorCode::OutOfBounds when a buffer or texture barrier reaches past its
+     *         resource, or ErrorCode::InvalidArgument for a buffer barrier of no bytes or a stage the device did
+     *         not enable. Nothing is recorded, and no tracked layout moves, when any of them is refused.
      */
     [[nodiscard]] ErrorCode CmdBarriers(const Barriers& barriers);
 

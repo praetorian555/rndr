@@ -169,6 +169,37 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers
         RNDR_LOG_ERROR("Forge: a barrier naming the task or mesh stage needs VK_EXT_mesh_shader, which the device did not enable");
         return ErrorCode::InvalidArgument;
     }
+    // Every range is checked before anything is recorded. A range past the end of its resource is a barrier the
+    // driver would be handed and the layer would object to, and the layout bookkeeping below would otherwise
+    // have moved the textures ahead of the one that failed while the command itself was already in the buffer.
+    for (const BufferBarrier& barrier : barriers.buffer)
+    {
+        const u64 buffer_size = barrier.buffer.Get().GetSize();
+        if (barrier.offset >= buffer_size)
+        {
+            RNDR_LOG_ERROR("Forge: a buffer barrier starts at {}, past the end of a buffer of {}", barrier.offset, buffer_size);
+            return ErrorCode::OutOfBounds;
+        }
+        if (barrier.size != k_whole_buffer)
+        {
+            if (barrier.size == 0)
+            {
+                RNDR_LOG_ERROR("Forge: a buffer barrier covers no bytes - k_whole_buffer is the rest of the buffer");
+                return ErrorCode::InvalidArgument;
+            }
+            // Written so that neither the offset nor the size can overflow the sum and pass.
+            if (barrier.size > buffer_size - barrier.offset)
+            {
+                RNDR_LOG_ERROR("Forge: a buffer barrier of {} bytes at offset {} reaches past the end of a buffer of {}", barrier.size,
+                               barrier.offset, buffer_size);
+                return ErrorCode::OutOfBounds;
+            }
+        }
+    }
+    for (const TextureBarrier& barrier : barriers.texture)
+    {
+        RNDR_FORGE_CHECK(barrier.texture.Get().CheckRange(barrier.subresource_range));
+    }
     // Eight of each covers every batch this repository issues, and a bigger one still works.
     constexpr i32 k_in_place_count = 8;
     BarrierBatch<VkMemoryBarrier2, k_in_place_count> memory_barriers(static_cast<i32>(barriers.memory.GetSize()));

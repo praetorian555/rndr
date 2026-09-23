@@ -523,6 +523,15 @@ Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> Rndr::Forge::Texture::
     return Result(common);
 }
 
+Rndr::ErrorCode Rndr::Forge::Texture::CheckRange(const ImageSubresourceRange& range) const
+{
+    u32 first_mip = 0;
+    u32 last_mip = 0;
+    u32 first_layer = 0;
+    u32 last_layer = 0;
+    return ResolveRange(m_desc, range, first_mip, last_mip, first_layer, last_layer);
+}
+
 Rndr::ErrorCode Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout)
 {
     u32 first_mip = 0;
