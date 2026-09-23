@@ -942,7 +942,7 @@ static Opal::Optional<VkAttachmentStoreOp> ToVkStoreOp(Rndr::Forge::AttachmentSt
  * @param is_color Whether the role wants the colour attachment layouts or the depth stencil ones.
  */
 static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingAttachment(
-    const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role, bool is_color)
+    const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role, bool is_color, Rndr::u32 required_layer_count)
 {
     using namespace Rndr;
     using Result = Opal::Expected<VkRenderingAttachmentInfo, ErrorCode>;
@@ -980,6 +980,17 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
             RNDR_LOG_ERROR("Forge: the {} attachment names a view over {} mip levels, and an attachment is one", role, level_count);
             return Result(ErrorCode::InvalidArgument);
         }
+    }
+    // A layered or multiview pass reaches into layers past the first, and a view that stops short of them
+    // leaves the layer a draw picks undefined rather than refused.
+    const u32 view_layer_count = view_range.array_layer_count == Forge::k_all_array_layers
+                                     ? texture.GetDesc().array_layer_count - view_range.first_array_layer
+                                     : view_range.array_layer_count;
+    if (view_layer_count < required_layer_count)
+    {
+        RNDR_LOG_ERROR("Forge: the pass renders {} layers, and the {} attachment's view covers {}", required_layer_count, role,
+                       view_layer_count);
+        return Result(ErrorCode::InvalidArgument);
     }
 
     // Over the range the view covers rather than over the whole texture, since that is what is rendered into.
@@ -1047,10 +1058,41 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
 {
+    // A multiview pass takes its layers from the mask, and Vulkan ignores layerCount beside one - so a desc
+    // asking for both says two things and only one would be done.
+    if (desc.view_mask != 0 && !m_device->GetFeatures().multiview)
+    {
+        RNDR_LOG_ERROR("Forge: a pass with a view mask needs the device created with DeviceFeatures::multiview");
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.view_mask != 0 && desc.layer_count != 1)
+    {
+        RNDR_LOG_ERROR("Forge: a pass with a view mask renders the layers the mask names, so its layer count stays at one, got {}",
+                       desc.layer_count);
+        return ErrorCode::InvalidArgument;
+    }
+    const u32 max_layer_count = m_device->GetPhysicalDevice().GetProperties().limits.maxFramebufferLayers;
+    if (desc.layer_count == 0 || desc.layer_count > max_layer_count)
+    {
+        RNDR_LOG_ERROR("Forge: a pass renders 1 to {} layers on this device, got {}", max_layer_count, desc.layer_count);
+        return ErrorCode::InvalidArgument;
+    }
+    // The views of a multiview pass land in the layers of their bits, so the highest bit decides how far into
+    // each attachment the pass reaches.
+    u32 required_layer_count = desc.layer_count;
+    if (desc.view_mask != 0)
+    {
+        required_layer_count = 32;
+        while ((desc.view_mask & (1u << (required_layer_count - 1))) == 0)
+        {
+            --required_layer_count;
+        }
+    }
+
     Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments;
     for (const auto& attachment : desc.color_attachments)
     {
-        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info = ToVkRenderingAttachment(attachment, "colour", true);
+        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info = ToVkRenderingAttachment(attachment, "colour", true, required_layer_count);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1065,7 +1107,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     if (has_depth)
     {
         Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
-            ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false);
+            ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false, required_layer_count);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1080,7 +1122,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     if (has_stencil)
     {
         Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
-            ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false);
+            ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false, required_layer_count);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1103,7 +1145,8 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = {.extent = {.width = static_cast<u32>(desc.render_area_extent.x),
                                   .height = static_cast<u32>(desc.render_area_extent.y)}},
-        .layerCount = 1,
+        .layerCount = desc.layer_count,
+        .viewMask = desc.view_mask,
         .colorAttachmentCount = static_cast<u32>(color_attachments.GetSize()),
         .pColorAttachments = color_attachments.GetData(),
         .pDepthAttachment = has_depth ? &depth_attachment : nullptr,

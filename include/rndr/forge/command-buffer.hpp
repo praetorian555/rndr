@@ -98,6 +98,21 @@ struct RenderingDesc
      * Present with no texture is a mistake and is refused, the way the depth attachment does.
      */
     Opal::Optional<RenderingAttachmentDesc> stencil_attachment;
+    /**
+     * How many attachment layers the pass renders, from the first layer of each attachment's view. A shader
+     * picks the layer a primitive lands in with SV_RenderTargetArrayIndex - from a geometry stage, or from
+     * the vertex stage with DeviceFeatures::shader_output_layer. Every attachment's view has to cover this
+     * many layers, which for a texture's own view means one made with an array view type.
+     */
+    u32 layer_count = 1;
+    /**
+     * Views rendered by every draw of the pass, one bit per view; view i lands in attachment layer i, and a
+     * shader reads which view it is running for as SV_ViewID. Zero is a pass without multiview. Needs
+     * DeviceFeatures::multiview, a pipeline made with the same GraphicsPipelineDesc::view_mask, and every
+     * attachment's view covering the highest layer the mask names. Leaves layer_count at one: Vulkan ignores
+     * the layer count of a multiview pass, so a desc naming both is refused rather than half read.
+     */
+    u32 view_mask = 0;
 };
 
 /**

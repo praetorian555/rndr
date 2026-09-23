@@ -263,6 +263,14 @@ struct GraphicsPipelineDesc
     Opal::DynamicArray<PixelFormat> color_attachment_formats;
     PixelFormat depth_attachment_format = PixelFormat::Undefined;
     PixelFormat stencil_attachment_format = PixelFormat::Undefined;
+
+    /**
+     * The views a pass using this pipeline renders, which has to be the RenderingDesc::view_mask of every pass
+     * it is drawn in. Zero is a pipeline for passes without multiview. Needs DeviceFeatures::multiview, and a
+     * pipeline with a geometry, tessellation or mesh stage takes none: multiview over those is a feature of
+     * its own that Forge does not ask for.
+     */
+    u32 view_mask = 0;
 };
 
 struct ComputePipelineDesc

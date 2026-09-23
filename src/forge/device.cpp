@@ -141,6 +141,8 @@ struct FeatureChain
         features2.features.shaderInt64 = features.shader_int64;
         features2.features.shaderFloat64 = features.shader_float64;
 
+        vk11.multiview = features.multiview;
+
         vk12.descriptorIndexing = features.descriptor_indexing;
         vk12.runtimeDescriptorArray = features.runtime_descriptor_array;
         vk12.descriptorBindingVariableDescriptorCount = features.variable_descriptor_count;
@@ -161,6 +163,7 @@ struct FeatureChain
         vk12.drawIndirectCount = features.draw_indirect_count;
         vk12.shaderBufferInt64Atomics = features.shader_buffer_int64_atomics;
         vk12.shaderSharedInt64Atomics = features.shader_shared_int64_atomics;
+        vk12.shaderOutputLayer = features.shader_output_layer;
 
         // Forge is written on all of these, so they are not the caller's to turn off.
         vk12.timelineSemaphore = VK_TRUE;
@@ -264,6 +267,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.shader_int64, core.shaderInt64, "shader_int64");
     require(requested.shader_float64, core.shaderFloat64, "shader_float64");
 
+    require(requested.multiview, supported.vk11.multiview, "multiview");
+
     require(requested.descriptor_indexing, supported.vk12.descriptorIndexing, "descriptor_indexing");
     require(requested.runtime_descriptor_array, supported.vk12.runtimeDescriptorArray, "runtime_descriptor_array");
     require(requested.variable_descriptor_count, supported.vk12.descriptorBindingVariableDescriptorCount, "variable_descriptor_count");
@@ -296,6 +301,7 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.draw_indirect_count, supported.vk12.drawIndirectCount, "draw_indirect_count");
     require(requested.shader_buffer_int64_atomics, supported.vk12.shaderBufferInt64Atomics, "shader_buffer_int64_atomics");
     require(requested.shader_shared_int64_atomics, supported.vk12.shaderSharedInt64Atomics, "shader_shared_int64_atomics");
+    require(requested.shader_output_layer, supported.vk12.shaderOutputLayer, "shader_output_layer");
 
     // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
     require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");

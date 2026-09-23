@@ -704,6 +704,16 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
         RNDR_LOG_ERROR("Forge: the tessellation stages and PrimitiveTopology::Patch go together, and this desc has one without the other");
         return Result(ErrorCode::InvalidArgument);
     }
+    if (desc.view_mask != 0 && !device.GetFeatures().multiview)
+    {
+        RNDR_LOG_ERROR("Forge: a pipeline with a view mask needs the device created with DeviceFeatures::multiview");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (desc.view_mask != 0 && (has_mesh || has_geometry || has_tessellation))
+    {
+        RNDR_LOG_ERROR("Forge: a pipeline with a view mask cannot have a geometry, tessellation or mesh stage");
+        return Result(ErrorCode::InvalidArgument);
+    }
     const u32 max_patch_size = device.GetPhysicalDevice().GetProperties().limits.maxTessellationPatchSize;
     if (has_tessellation && (desc.patch_control_points == 0 || desc.patch_control_points > max_patch_size))
     {
@@ -1016,6 +1026,7 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
 
     const VkPipelineRenderingCreateInfo rendering_create_info{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .viewMask = desc.view_mask,
         .colorAttachmentCount = static_cast<u32>(vk_color_formats.GetSize()),
         .pColorAttachmentFormats = vk_color_formats.GetData(),
         .depthAttachmentFormat = ToVkFormat(desc.depth_attachment_format),

@@ -61,6 +61,17 @@ struct DeviceFeatures
     bool geometry_shader = false;
     /** The two tessellation stages, and with them PrimitiveTopology::Patch. */
     bool tessellation_shader = false;
+    /**
+     * A pass that renders every view named by RenderingDesc::view_mask with one draw, each view into the
+     * attachment layer of its index - the pipeline says the same mask in GraphicsPipelineDesc::view_mask.
+     * Forge asks for multiview alone, so a pipeline with a geometry, tessellation or mesh stage takes no mask.
+     */
+    bool multiview = false;
+    /**
+     * SV_RenderTargetArrayIndex written by a vertex shader, which picks the attachment layer of a layered
+     * pass (RenderingDesc::layer_count) without a geometry stage to do it.
+     */
+    bool shader_output_layer = false;
     /** Blend state per color attachment rather than one shared by all of them. */
     bool independent_blend = false;
     /** More than one command in a CmdDrawIndirect or CmdDrawIndexedIndirect. */
