@@ -1093,6 +1093,116 @@ TEST_CASE("Forge buffer copy and readback", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * CmdFillBuffer and CmdUpdateBuffer. The buffer starts out holding a pattern and a size that is not a multiple
+ * of four, and every case reads all of it back: what was written has to land where it was asked to and
+ * nowhere else, which a range off by one word shows as a mismatch at either edge.
+ */
+TEST_CASE("Forge buffer fill and update from the command stream", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_size = 62;
+    const Opal::DynamicArray<u8> pattern = MakeBytes(k_size, 17);
+    const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(
+        fixture.device, {.size = k_size, .usage = Forge::BufferUsageBits::TransferSource | Forge::BufferUsageBits::TransferDestination},
+        pattern));
+    Opal::DynamicArray<u8> expected(pattern.GetData(), pattern.GetSize());
+
+    /** The pattern with the given bytes put over it from an offset, the way the device should have left it. */
+    auto write_expected = [&](u64 offset, Opal::ArrayView<const u8> bytes)
+    {
+        for (u64 i = 0; i < bytes.GetSize(); ++i)
+        {
+            expected[offset + i] = bytes[i];
+        }
+    };
+    auto require_contents = [&]()
+    {
+        Opal::DynamicArray<u8> read_back(k_size);
+        REQUIRE(Forge::ReadBackBuffer(fixture.device, fixture.GetQueue(), buffer, read_back) == ErrorCode::Success);
+        for (i32 i = 0; i < k_size; ++i)
+        {
+            INFO("byte " << i << " expected " << +expected[i] << ", got " << +read_back[i]);
+            REQUIRE(read_back[i] == expected[i]);
+        }
+    };
+
+    SECTION("A fill writes its value over the range and leaves the bytes either side alone")
+    {
+        // Four distinct bytes, so a value written in the wrong byte order does not read back the same.
+        constexpr u32 k_value = 0x04030201;
+        constexpr u8 k_value_bytes[] = {0x01, 0x02, 0x03, 0x04};
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdFillBuffer(buffer, k_value, 8, 16) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
+        for (u64 offset = 8; offset < 24; offset += 4)
+        {
+            write_expected(offset, k_value_bytes);
+        }
+        require_contents();
+    }
+    SECTION("A fill to the end stops at the last whole word")
+    {
+        // 62 bytes from 52 leave ten: two words are filled and the two bytes after them are not.
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(), [&](Forge::CommandBuffer& command_buffer)
+                                       { REQUIRE(command_buffer.CmdFillBuffer(buffer, 0, 52) == ErrorCode::Success); }) ==
+                ErrorCode::Success);
+        const u8 zeros[8] = {};
+        write_expected(52, zeros);
+        require_contents();
+    }
+    SECTION("An update lands its bytes at its offset, copied when it was recorded")
+    {
+        const u8 written[] = {0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB};
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           // Gone before the command buffer is submitted, so what runs can only be
+                                           // the copy the recording took.
+                                           Opal::DynamicArray<u8> data(written, sizeof(written));
+                                           REQUIRE(command_buffer.CmdUpdateBuffer(buffer, data, 20) == ErrorCode::Success);
+                                           for (u64 i = 0; i < data.GetSize(); ++i)
+                                           {
+                                               data[i] = 0;
+                                           }
+                                       }) == ErrorCode::Success);
+        write_expected(20, written);
+        require_contents();
+    }
+    SECTION("A fill or an update the buffer cannot take is refused")
+    {
+        const Forge::Buffer no_transfer =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = 64, .usage = Forge::BufferUsageBits::StorageBuffer}));
+        const Opal::DynamicArray<u8> eight(8);
+        const Opal::DynamicArray<u8> six(6);
+        const Opal::DynamicArray<u8> too_large(65540);
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+
+        REQUIRE(command_buffer.CmdFillBuffer(no_transfer, 0) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdFillBuffer(buffer, 0, 2, 4) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdFillBuffer(buffer, 0, 0, 6) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdFillBuffer(buffer, 0, 0, 0) == ErrorCode::OutOfBounds);
+        REQUIRE(command_buffer.CmdFillBuffer(buffer, 0, 56, 8) == ErrorCode::OutOfBounds);
+        REQUIRE(command_buffer.CmdFillBuffer(buffer, 0, 64, 4) == ErrorCode::OutOfBounds);
+        // Two bytes past offset 60 hold no whole word, so filling to the end would fill nothing.
+        REQUIRE(command_buffer.CmdFillBuffer(buffer, 0, 60) == ErrorCode::OutOfBounds);
+
+        REQUIRE(command_buffer.CmdUpdateBuffer(no_transfer, eight) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdUpdateBuffer(buffer, eight, 2) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdUpdateBuffer(buffer, six) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdUpdateBuffer(buffer, {}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdUpdateBuffer(buffer, too_large) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdUpdateBuffer(buffer, eight, 56) == ErrorCode::OutOfBounds);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge buffer edges", "[forge]")
 {
     if (!IsForgeAvailable())
