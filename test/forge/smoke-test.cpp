@@ -4224,6 +4224,182 @@ TEST_CASE("Forge indirect draws", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(halves.forge);
 }
 
+/**
+ * How many of the commands above to draw, written by the device beside the commands themselves. Two entry
+ * points rather than one reading a push constant, so each pipeline pushes one address the way every writer in
+ * this file does.
+ */
+constexpr const char* k_indirect_count_source = R"(
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_write_count_one(uniform uint32_t *output)
+{
+    output[0] = 1;
+}
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_write_count_two(uniform uint32_t *output)
+{
+    output[0] = 2;
+}
+)";
+
+/**
+ * CmdDrawIndirectCount and CmdDrawIndexedIndirectCount: the commands and their count both written by compute
+ * shaders, both read by the draw when it runs. The same two commands every time, so what differs between the
+ * sections is only the count the device wrote and the maximum the draw was recorded with, and which halves of
+ * the target come back written says which of those decided.
+ */
+TEST_CASE("Forge indirect draws whose count the device wrote", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_features{.draw_indirect_first_instance = true, .draw_indirect_count = true};
+    if (!CanCreateDevice(k_features))
+    {
+        SKIP("This device cannot read an indirect draw count from a buffer.");
+    }
+    HalvesFixture halves(k_features);
+    const Forge::Device& device = halves.forge.device;
+
+    auto make_pipeline = [&](const char* source, const char* entry_point)
+    {
+        const Forge::Shader shader =
+            ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(device, source, {.entry_point = entry_point, .cache = GetShaderCache()}));
+        return MakeAddressPipeline(device, shader);
+    };
+    const Forge::Pipeline write_draws = make_pipeline(k_indirect_command_source, "main_write_draws");
+    const Forge::Pipeline write_indexed_draw = make_pipeline(k_indirect_command_source, "main_write_indexed_draw");
+    const Forge::Pipeline write_count_one = make_pipeline(k_indirect_count_source, "main_write_count_one");
+    const Forge::Pipeline write_count_two = make_pipeline(k_indirect_count_source, "main_write_count_two");
+
+    // Device-only, both of them, so neither the commands nor the count can have come from the host.
+    auto make_device_buffer = [&](u64 size)
+    {
+        return ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = size,
+                                                                .usage = Forge::BufferUsageBits::IndirectBuffer |
+                                                                         Forge::BufferUsageBits::StorageBuffer,
+                                                                .host_access = Forge::HostAccess::None,
+                                                                .use_device_address = true}));
+    };
+    const Forge::Buffer commands = make_device_buffer(2 * sizeof(Forge::DrawIndexedIndirectCommand));
+    const Forge::Buffer count = make_device_buffer(sizeof(u32));
+
+    /** Dispatch the two writers, then order both writes against the indirect read. */
+    auto record_writes = [&](const Forge::Pipeline& command_writer, const Forge::Pipeline& count_writer)
+    {
+        return [&](Forge::CommandBuffer& command_buffer)
+        {
+            const VkDeviceAddress addresses[] = {commands.GetNativeDeviceAddress(), count.GetNativeDeviceAddress()};
+            const Forge::Pipeline* writers[] = {&command_writer, &count_writer};
+            for (i32 i = 0; i < 2; ++i)
+            {
+                REQUIRE(command_buffer.CmdBindPipeline(*writers[i]) == ErrorCode::Success);
+                REQUIRE(command_buffer.CmdPushConstants(*writers[i], ShaderTypeBits::Compute, Opal::AsBytes(addresses[i])) ==
+                        ErrorCode::Success);
+                REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+            }
+            const Forge::BufferBarrier barriers[] = {
+                Forge::BufferBarrier::WriteThenRead(commands, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::IndirectDraw),
+                Forge::BufferBarrier::WriteThenRead(count, Forge::PipelineStageBits::ComputeShader, Forge::PipelineStageBits::IndirectDraw)};
+            REQUIRE(command_buffer.CmdBufferBarriers({barriers, 2}) == ErrorCode::Success);
+        };
+    };
+
+    /** Draw the unindexed commands with the count the device wrote, reading at most `max_draw_count` of them. */
+    auto draw_counted = [&](const Forge::Pipeline& count_writer, u32 max_draw_count)
+    {
+        return halves.Render(record_writes(write_draws, count_writer),
+                             [&](Forge::CommandBuffer& command_buffer)
+                             {
+                                 REQUIRE(command_buffer.CmdBindVertexBuffer(halves.vertices, 0) == ErrorCode::Success);
+                                 REQUIRE(command_buffer.CmdDrawIndirectCount(commands, 0, count, 0, max_draw_count) == ErrorCode::Success);
+                             });
+    };
+
+    SECTION("A count of one draws the first command and stops")
+    {
+        // Room for two, and the device said one: the left half at instance two, and nothing on the right.
+        const Opal::DynamicArray<u8> pixels = draw_counted(write_count_one, 2);
+        REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
+        REQUIRE_HALF_COLOR(pixels, true, k_untouched);
+    }
+    SECTION("A count of two draws both commands")
+    {
+        const Opal::DynamicArray<u8> pixels = draw_counted(write_count_two, 2);
+        REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_three);
+    }
+    SECTION("A count above the maximum draws the maximum")
+    {
+        // The device says two and the draw was recorded with room for one. The maximum wins, which is what
+        // keeps a count gone wrong from reading past what the command buffer was sized for.
+        const Opal::DynamicArray<u8> pixels = draw_counted(write_count_two, 1);
+        REQUIRE_HALF_COLOR(pixels, false, k_instance_two);
+        REQUIRE_HALF_COLOR(pixels, true, k_untouched);
+    }
+    SECTION("An indexed draw reads its count the same way")
+    {
+        const Opal::DynamicArray<u8> index_bytes = ToIndexBytes(k_half_indices + 6, 6, IndexSize::uint32);
+        const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(
+            device, {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
+        const Opal::DynamicArray<u8> pixels =
+            halves.Render(record_writes(write_indexed_draw, write_count_one),
+                          [&](Forge::CommandBuffer& command_buffer)
+                          {
+                              REQUIRE(command_buffer.CmdBindVertexBuffer(halves.corners, 0) == ErrorCode::Success);
+                              REQUIRE(command_buffer.CmdBindIndexBuffer(indices, 0, IndexSize::uint32) == ErrorCode::Success);
+                              REQUIRE(command_buffer.CmdDrawIndexedIndirectCount(commands, 0, count, 0, 1) == ErrorCode::Success);
+                          });
+        // The command the writer put first moves the left corners onto the right half at instance two.
+        REQUIRE_HALF_COLOR(pixels, true, k_instance_three);
+        REQUIRE_HALF_COLOR(pixels, false, k_untouched);
+    }
+    SECTION("A count buffer or stride the draw cannot use is refused")
+    {
+        const Forge::Buffer storage_only =
+            ForgeTest::Unwrap(Forge::Buffer::Create(device, {.size = sizeof(u32), .usage = Forge::BufferUsageBits::StorageBuffer}));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, halves.GetQueue()));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdDrawIndirectCount(commands, 0, storage_only, 0, 1) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawIndirectCount(commands, 0, count, 2, 1) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawIndirectCount(commands, 0, count, 4, 1) == ErrorCode::OutOfBounds);
+        // A stride is read however many commands there turn out to be, so a short one is refused at a
+        // maximum of one, where the plain indirect draw would not look at it.
+        REQUIRE(command_buffer.CmdDrawIndirectCount(commands, 0, count, 0, 1, 8) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawIndexedIndirectCount(commands, 0, count, 0, 1, 12) == ErrorCode::InvalidArgument);
+        // Every command up to the maximum has to fit, since which of them are read is not known here.
+        REQUIRE(command_buffer.CmdDrawIndexedIndirectCount(commands, 0, count, 0, 3) == ErrorCode::OutOfBounds);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(halves.forge);
+}
+
+TEST_CASE("Forge an indirect count draw on a device without the feature is refused", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // The count draws are core Vulkan 1.2 commands with a trampoline behind them either way, so nothing but
+    // this check stands between a device that never enabled drawIndirectCount and a draw it may not record.
+    ForgeFixture fixture;
+    REQUIRE_FALSE(fixture.device.GetFeatures().draw_indirect_count);
+    const Forge::Buffer commands = ForgeTest::Unwrap(Forge::Buffer::Create(
+        fixture.device, {.size = sizeof(Forge::DrawIndexedIndirectCommand), .usage = Forge::BufferUsageBits::IndirectBuffer}));
+    const Forge::Buffer count =
+        ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = sizeof(u32), .usage = Forge::BufferUsageBits::IndirectBuffer}));
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+    REQUIRE(command_buffer.CmdDrawIndirectCount(commands, 0, count, 0, 1) == ErrorCode::InvalidArgument);
+    REQUIRE(command_buffer.CmdDrawIndexedIndirectCount(commands, 0, count, 0, 1) == ErrorCode::InvalidArgument);
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge indirect dispatch", "[forge]")
 {
     if (!IsForgeAvailable())
