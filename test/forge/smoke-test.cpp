@@ -5906,6 +5906,144 @@ u32 FloatBits(f32 value)
  * refused. The value is compared as a bit pattern, so a float stored through the integer path - converted
  * to 0 rather than copied - or read back from the wrong half of the eight bytes, shows as a different word.
  */
+namespace
+{
+
+/** A one byte specialization constant, which needs the Int8 capability and so DeviceFeatures::shader_int8. */
+constexpr const char* k_int8_constant_source = R"(
+[SpecializationConstant]
+const uint8_t TINY = 7;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_int8(uniform uint32_t *output)
+{
+    output[0] = (uint)TINY;
+}
+)";
+
+/**
+ * Arithmetic in half on a value read from the buffer, so nothing can be folded at compile time: the input
+ * is 1 + 2^-12, which a half cannot hold and rounds to one, so the result tells half arithmetic from float.
+ */
+constexpr const char* k_float16_source = R"(
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_half(uniform float *values)
+{
+    const half narrowed = half(values[1]);
+    values[0] = float(narrowed * half(2.0) + half(0.25));
+}
+)";
+
+}  // namespace
+
+/**
+ * DeviceFeatures::shader_int8 and shader_float16. Each is used and read back, and each is shown to reach
+ * its own Vulkan bit by a device with only the other one on, where the layer refuses the shader that needs
+ * the missing one - the way the 64-bit atomics case pins its two fields.
+ */
+TEST_CASE("Forge 8 and 16 bit shader scalars", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_both{.shader_int8 = true, .shader_float16 = true};
+    if (!CanCreateDevice(k_both))
+    {
+        SKIP("This device has no 8-bit integers or no half floats in shaders.");
+    }
+
+    /** Dispatch one of the two shaders over a buffer of two words holding the given second word. */
+    auto dispatch = [](ForgeFixture& fixture, const Forge::Shader& shader, Opal::ArrayView<const Forge::SpecializationConstant> values,
+                       u32 second_word) -> Opal::Expected<Opal::DynamicArray<u32>, ErrorCode>
+    {
+        using Result = Opal::Expected<Opal::DynamicArray<u32>, ErrorCode>;
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        for (i32 i = 0; i < values.GetSize(); ++i)
+        {
+            pipeline_desc.specialization.PushBack(Forge::SpecializationConstant{.name = values[i].name.Clone(), .value = values[i].value});
+        }
+        Opal::Expected<Forge::Pipeline, ErrorCode> pipeline = Forge::Pipeline::Create(fixture.device, pipeline_desc);
+        if (!pipeline.HasValue())
+        {
+            return Result(pipeline.GetError());
+        }
+        const Forge::Buffer buffer = MakeWipedOutput(fixture.device, 2);
+        const u32 initial[] = {0, second_word};
+        REQUIRE(buffer.Update(Opal::AsBytes(initial)) == ErrorCode::Success);
+        const VkDeviceAddress address = buffer.GetNativeDeviceAddress();
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBindPipeline(pipeline.GetValue()) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdPushConstants(pipeline.GetValue(), ShaderTypeBits::Compute,
+                                                                                   Opal::AsBytes(address)) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        Opal::DynamicArray<u32> words(2);
+        REQUIRE(buffer.Read({reinterpret_cast<u8*>(words.GetData()), words.GetSize() * sizeof(u32)}) == ErrorCode::Success);
+        return Result(std::move(words));
+    };
+
+    SECTION("A one byte specialization constant reports its width and takes a value that fits it")
+    {
+        ForgeFixture fixture(k_both);
+        const Forge::Shader shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_int8_constant_source, {.entry_point = "main_int8", .cache = GetShaderCache()}));
+        const Opal::ArrayView<const Forge::SpecializationConstantInfo> constants = shader.GetSpecializationConstants();
+        REQUIRE(constants.GetSize() == 1);
+        REQUIRE(constants[0].type == Forge::SpecializationType::UInt32);
+        REQUIRE(constants[0].byte_size == 1);
+
+        REQUIRE(ForgeTest::Unwrap(dispatch(fixture, shader, {}, 0))[0] == 7u);
+        const Forge::SpecializationConstant fits[] = {{.name = "TINY", .value = 200u}};
+        REQUIRE(ForgeTest::Unwrap(dispatch(fixture, shader, {fits, 1}, 0))[0] == 200u);
+        // One past what a byte holds, which only the declared width refuses.
+        const Forge::SpecializationConstant too_wide[] = {{.name = "TINY", .value = 256u}};
+        REQUIRE(dispatch(fixture, shader, {too_wide, 1}, 0).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Arithmetic in half rounds the way a half does")
+    {
+        ForgeFixture fixture(k_both);
+        const Forge::Shader shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_float16_source, {.entry_point = "main_half", .cache = GetShaderCache()}));
+        const f32 input = 1.0f + 1.0f / 4096.0f;
+        u32 input_bits = 0;
+        memcpy(&input_bits, &input, sizeof(input_bits));
+        const Opal::DynamicArray<u32> words = ForgeTest::Unwrap(dispatch(fixture, shader, {}, input_bits));
+        f32 result = 0.0f;
+        memcpy(&result, &words[0], sizeof(result));
+        // In float the answer is 2.25 and a little; in half the input was one before anything was done to it.
+        INFO("result " << result);
+        REQUIRE(result == 2.25f);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("With only half on, the layer refuses the one byte constant")
+    {
+        // Nothing is built past the shader - a pipeline over a module the layer rejected is undefined.
+        ForgeFixture fixture({.shader_float16 = true});
+        REQUIRE(fixture.status == ErrorCode::Success);
+        const Forge::Shader shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_int8_constant_source, {.entry_point = "main_int8", .cache = GetShaderCache()}));
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+    SECTION("With only 8-bit integers on, the layer refuses the half arithmetic")
+    {
+        ForgeFixture fixture({.shader_int8 = true});
+        REQUIRE(fixture.status == ErrorCode::Success);
+        const Forge::Shader shader = ForgeTest::Unwrap(
+            Forge::Shader::FromSourceInMemory(fixture.device, k_float16_source, {.entry_point = "main_half", .cache = GetShaderCache()}));
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+}
+
 TEST_CASE("Forge a floating point specialization constant", "[forge]")
 {
     if (!IsForgeAvailable())
