@@ -759,6 +759,13 @@ TEST_CASE("Forge swap chain acquire gives up after its timeout", "[forge-window]
     {
         SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
     }
+    // Lavapipe on Windows (Mesa 24.3.2, what CI runs) hands out every texture and then dereferences null
+    // inside its own presentation code on the acquire that finds none free - a finite timeout makes that a
+    // valid call, and the layer agrees. Nothing here can steer around it, so the case stays with hardware.
+    if (fixture.device.GetPhysicalDevice().GetProperties().deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU)
+    {
+        SKIP("This software driver crashes on an acquire that finds no texture free.");
+    }
 
     /**
      * Acquire until the swap chain says NotReady, one fresh semaphore per attempt, and hand back how many
