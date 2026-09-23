@@ -11252,6 +11252,26 @@ TEST_CASE("Forge texture shapes past a flat two dimensional one", "[forge]")
                                                           .usage = Forge::TextureUsageBits::Sampled,
                                                           .view_type = Forge::TextureViewType::Cube}).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
     }
+    SECTION("A cube view over twelve layers is refused, and one over six of them is not")
+    {
+        // Twelve is a multiple of six, which is all a cube compatible image needs - the texture's own view is
+        // what cannot be a cube over all of them.
+        REQUIRE(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                          .width = 1,
+                                                          .height = 1,
+                                                          .array_layer_count = 12,
+                                                          .usage = Forge::TextureUsageBits::Sampled,
+                                                          .view_type = Forge::TextureViewType::Cube}).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        const Forge::Texture cube = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                                              .width = 1,
+                                                                                              .height = 1,
+                                                                                              .array_layer_count = 12,
+                                                                                              .usage = Forge::TextureUsageBits::Sampled,
+                                                                                              .view_type = Forge::TextureViewType::Cube,
+                                                                                              .subresource_range = {.first_array_layer = 6,
+                                                                                                                    .array_layer_count = 6}}));
+        REQUIRE(cube.IsValid());
+    }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
