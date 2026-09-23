@@ -718,7 +718,8 @@ Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const Descrip
             const DescriptorSetUpdateBinding::TextureInfo& texture_info =
                 updates[i].resource_info.Get<DescriptorSetUpdateBinding::TextureInfo>();
             image_infos[i] = {.sampler = texture_info.sampler->GetNativeSampler(),
-                              .imageView = texture_info.texture->GetNativeImageView(),
+                              .imageView = texture_info.view.IsValid() ? texture_info.view->GetNativeImageView()
+                                                                       : texture_info.texture->GetNativeImageView(),
                               .imageLayout = static_cast<VkImageLayout>(texture_info.texture_layout)};
             descriptor_write.pImageInfo = &image_infos[i];
         }
@@ -791,6 +792,33 @@ Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name,
         return binding.GetError();
     }
     return Update(binding.GetValue(), texture, sampler, texture_layout, array_element);
+}
+
+Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const TextureView& view, const Sampler& sampler,
+                                                   ImageLayout texture_layout, u32 array_element)
+{
+    const Opal::Expected<u32, ErrorCode> binding = GetBindingIndex(name);
+    if (!binding.HasValue())
+    {
+        return binding.GetError();
+    }
+    return Update(binding.GetValue(), view, sampler, texture_layout, array_element);
+}
+
+Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(u32 binding, const TextureView& view, const Sampler& sampler, ImageLayout texture_layout,
+                                                   u32 array_element)
+{
+    const Opal::Expected<DescriptorType, ErrorCode> descriptor_type = GetBindingDescriptorType(binding);
+    if (!descriptor_type.HasValue())
+    {
+        return descriptor_type.GetError();
+    }
+    const DescriptorSetUpdateBinding update{
+        .descriptor_type = descriptor_type.GetValue(),
+        .binding = binding,
+        .array_element = array_element,
+        .resource_info = DescriptorSetUpdateBinding::TextureInfo{.sampler = sampler, .texture_layout = texture_layout, .view = view}};
+    return Update({&update, 1});
 }
 
 Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset, u64 size,

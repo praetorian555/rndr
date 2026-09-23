@@ -25,6 +25,7 @@ namespace Rndr::Forge
 
 void SetDebugName(const Device& device, const Buffer& buffer, const Opal::StringUtf8& name);
 void SetDebugName(const Device& device, const Texture& texture, const Opal::StringUtf8& name);
+void SetDebugName(const Device& device, const TextureView& view, const Opal::StringUtf8& name);
 void SetDebugName(const Device& device, const Sampler& sampler, const Opal::StringUtf8& name);
 void SetDebugName(const Device& device, const Shader& shader, const Opal::StringUtf8& name);
 void SetDebugName(const Device& device, const Pipeline& pipeline, const Opal::StringUtf8& name);

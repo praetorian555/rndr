@@ -52,6 +52,13 @@ struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
      * Empty for an attachment nobody filled in, which is refused rather than rendering into nothing.
      */
     Opal::Ref<const Texture> texture;
+    /**
+     * A view to render into instead of the texture's own - one mip level or one layer of it. When set it
+     * replaces `texture`, which may be left empty, and the layout checked is the one the view's texture
+     * tracks over the view's range. A view over more than one mip level is refused, since an attachment is
+     * one level.
+     */
+    Opal::Ref<const TextureView> view;
     AttachmentLoadOperation load_operation = AttachmentLoadOperation::Clear;
     AttachmentStoreOperation store_operation = AttachmentStoreOperation::Store;
     /**
@@ -66,7 +73,7 @@ struct RenderingAttachmentDesc : Opal::ClonableBase<RenderingAttachmentDesc>
      */
     Opal::Variant<Vector4f, DepthStencilClearValue> clear_value = Vector4f{0.0f, 0.0f, 0.0f, 1.0f};
 
-    OPAL_CLONE_FIELDS(texture, load_operation, store_operation, clear_value);
+    OPAL_CLONE_FIELDS(texture, view, load_operation, store_operation, clear_value);
 };
 
 struct RenderingDesc

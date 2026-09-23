@@ -56,6 +56,11 @@ void Rndr::Forge::SetDebugName(const Device& device, const Texture& texture, con
     SetName(device, VK_OBJECT_TYPE_IMAGE_VIEW, ToHandle(texture.GetNativeImageView()), name);
 }
 
+void Rndr::Forge::SetDebugName(const Device& device, const TextureView& view, const Opal::StringUtf8& name)
+{
+    SetName(device, VK_OBJECT_TYPE_IMAGE_VIEW, ToHandle(view.GetNativeImageView()), name);
+}
+
 void Rndr::Forge::SetDebugName(const Device& device, const Sampler& sampler, const Opal::StringUtf8& name)
 {
     SetName(device, VK_OBJECT_TYPE_SAMPLER, ToHandle(sampler.GetNativeSampler()), name);

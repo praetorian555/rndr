@@ -117,9 +117,13 @@ public:
     [[nodiscard]] Opal::Expected<ImageLayout, ErrorCode> GetCurrentLayout(const ImageSubresourceRange& range) const;
 
 private:
-    /** Only CommandBuffer records the barriers that move a layout, and only SwapChain re-acquires an image. */
+    /**
+     * Only CommandBuffer records the barriers that move a layout, and only SwapChain re-acquires an image. A
+     * TextureView checks its range the way a barrier does.
+     */
     friend class CommandBuffer;
     friend class SwapChain;
+    friend class TextureView;
 
     /** Write a layout over every subresource a range covers, resolving the k_all_* counts against the desc. */
     [[nodiscard]] ErrorCode SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout);
@@ -140,6 +144,66 @@ private:
     VkImage m_image = VK_NULL_HANDLE;
     VkImageView m_view = VK_NULL_HANDLE;
     VmaAllocation m_image_allocation = VK_NULL_HANDLE;
+};
+
+/** What a TextureView sees of its texture: how the image is interpreted, and which part of it. */
+struct TextureViewDesc
+{
+    TextureViewType view_type = TextureViewType::Texture2D;
+    /**
+     * The mip levels, array layers and aspect the view covers - every one of them by default. A view of a
+     * combined depth-stencil format that a shader samples has to name one of the two aspects.
+     */
+    ImageSubresourceRange subresource_range;
+};
+
+/**
+ * A second view of a texture's image, apart from the one the texture carries. What a texture needs more than
+ * one of: a mip chain written a level at a time as storage images and sampled whole, one layer of an array
+ * rendered into while the rest is sampled, one level of a texture rendered into.
+ *
+ * It does not own the image and keeps no layout of its own. The layout it is used in is the one the texture
+ * tracks for the range the view covers, so barriers are still recorded on the texture - with its
+ * subresource_range narrowed to this view's - and a view never disagrees with its texture about where the
+ * image is. The texture has to outlive every view of it.
+ */
+class TextureView
+{
+public:
+    TextureView() = default;
+    ~TextureView();
+
+    /**
+     * @param device Device the texture was created on. Has to outlive the view.
+     * @param texture Texture whose image the view is of. Has to outlive the view as well.
+     * @param desc The view type and the range.
+     * @return The view, ErrorCode::OutOfBounds when the range names mips or layers the texture does not have,
+     *         ErrorCode::InvalidArgument for an empty texture, one whose usage allows no view, or a view type
+     *         the image cannot take - a cube over a texture not created cube compatible or over a layer count
+     *         that is not a multiple of six, a flat view over several layers, a view of another dimension,
+     *         a cube array without DeviceFeatures::image_cube_array - or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<TextureView, ErrorCode> Create(const Device& device, const Texture& texture,
+                                                                       const TextureViewDesc& desc = {});
+
+    TextureView(const TextureView&) = delete;
+    TextureView& operator=(const TextureView&) = delete;
+    TextureView(TextureView&& other) noexcept;
+    TextureView& operator=(TextureView&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] bool IsValid() const { return m_view != VK_NULL_HANDLE; }
+    [[nodiscard]] VkImageView GetNativeImageView() const { return m_view; }
+    [[nodiscard]] const TextureViewDesc& GetDesc() const { return m_desc; }
+    /** The texture this is a view of, which is where its layout is tracked. */
+    [[nodiscard]] const Texture& GetTexture() const { return *m_texture; }
+
+private:
+    Opal::Ref<const Device> m_device;
+    Opal::Ref<const Texture> m_texture;
+    VkImageView m_view = VK_NULL_HANDLE;
+    TextureViewDesc m_desc;
 };
 
 class Sampler

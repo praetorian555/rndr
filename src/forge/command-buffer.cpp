@@ -947,7 +947,8 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
     using namespace Rndr;
     using Result = Opal::Expected<VkRenderingAttachmentInfo, ErrorCode>;
 
-    if (!attachment.texture.IsValid())
+    const bool has_view = attachment.view.IsValid() && attachment.view->IsValid();
+    if (!has_view && !attachment.texture.IsValid())
     {
         // Most often an attachment that was filled in and never finished. A pass that wants no depth or no
         // stencil leaves the whole attachment absent instead, which is what the default already is.
@@ -957,16 +958,32 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
             role);
         return Result(ErrorCode::InvalidArgument);
     }
-    const Forge::Texture& texture = attachment.texture.Get();
-    if (texture.GetNativeImageView() == VK_NULL_HANDLE)
+    const Forge::Texture& texture = has_view ? attachment.view->GetTexture() : attachment.texture.Get();
+    const VkImageView image_view = has_view ? attachment.view->GetNativeImageView() : texture.GetNativeImageView();
+    const Forge::ImageSubresourceRange& view_range =
+        has_view ? attachment.view->GetDesc().subresource_range : texture.GetDesc().subresource_range;
+    if (image_view == VK_NULL_HANDLE)
     {
         // A texture whose usage is transfer only, which Vulkan allows no view on and so cannot be rendered into.
         RNDR_LOG_ERROR("Forge: the {} attachment names a texture that has no image view", role);
         return Result(ErrorCode::InvalidArgument);
     }
+    // An attachment is one mip level. The texture's own view is whatever its desc made it, which the layer
+    // answers for; a view made for the purpose is checked here, where the level count is known.
+    if (has_view)
+    {
+        const u32 level_count = view_range.mip_level_count == Forge::k_all_mip_levels
+                                    ? texture.GetDesc().mip_level_count - view_range.first_mip_level
+                                    : view_range.mip_level_count;
+        if (level_count != 1)
+        {
+            RNDR_LOG_ERROR("Forge: the {} attachment names a view over {} mip levels, and an attachment is one", role, level_count);
+            return Result(ErrorCode::InvalidArgument);
+        }
+    }
 
     // Over the range the view covers rather than over the whole texture, since that is what is rendered into.
-    const Opal::Expected<Forge::ImageLayout, ErrorCode> layout_result = texture.GetCurrentLayout(texture.GetDesc().subresource_range);
+    const Opal::Expected<Forge::ImageLayout, ErrorCode> layout_result = texture.GetCurrentLayout(view_range);
     if (!layout_result.HasValue())
     {
         return Result(layout_result.GetError());
@@ -990,7 +1007,7 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
     RNDR_FORGE_TRANSLATE_EXPECTED(store_op, ToVkStoreOp(attachment.store_operation), "RenderingAttachmentDesc::store_operation", Result);
     VkRenderingAttachmentInfo info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = texture.GetNativeImageView(),
+        .imageView = image_view,
         .imageLayout = static_cast<VkImageLayout>(layout),
         .loadOp = load_op,
         .storeOp = store_op,
@@ -1074,9 +1091,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     // stencil attachment of its own only in a pass that has no depth attachment at all. A desc naming two
     // textures is a pass that would be rejected, and the pair of them is easier to see here than in the
     // layer's message about two image views.
-    if (has_depth && has_stencil &&
-        desc.depth_attachment.GetValue().texture.Get().GetNativeImageView() !=
-            desc.stencil_attachment.GetValue().texture.Get().GetNativeImageView())
+    if (has_depth && has_stencil && depth_attachment.imageView != stencil_attachment.imageView)
     {
         RNDR_LOG_ERROR(
             "Forge: a pass with both a depth and a stencil attachment needs them on one texture. A stencil texture of its own "

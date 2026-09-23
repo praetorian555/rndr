@@ -16,6 +16,7 @@ class DeviceQueue;
 class Surface;
 class SwapChain;
 class Texture;
+class TextureView;
 class Sampler;
 class Buffer;
 class Shader;

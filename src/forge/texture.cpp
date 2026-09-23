@@ -553,6 +553,137 @@ Rndr::ErrorCode Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRan
     return ErrorCode::Success;
 }
 
+// TextureView
+
+/** How many of `total` a first index and a count that may be the k_all_* sentinel name. */
+static Rndr::u32 ResolveCount(Rndr::u32 first, Rndr::u32 count, Rndr::u32 total)
+{
+    return count == 0xFFFFFFFF ? total - first : count;
+}
+
+Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureView::Create(const Device& device, const Texture& texture,
+                                                                                           const TextureViewDesc& desc)
+{
+    using Result = Opal::Expected<TextureView, ErrorCode>;
+
+    if (!texture.IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: TextureView::Create was given an empty texture");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    const TextureDesc& texture_desc = texture.GetDesc();
+    if (!SupportsImageView(texture_desc.usage))
+    {
+        RNDR_LOG_ERROR("Forge: a view needs a texture whose usage a shader or an attachment can use - this one is transfer only");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    RNDR_FORGE_CHECK_EXPECTED(texture.CheckRange(desc.subresource_range), Result);
+
+    // What the image can be seen as is decided when it was created, so each view type is checked against that
+    // rather than left for the layer to name.
+    const ImageSubresourceRange& range = desc.subresource_range;
+    const u32 layer_count = ResolveCount(range.first_array_layer, range.array_layer_count, texture_desc.array_layer_count);
+    const bool cube_compatible = texture_desc.view_type == TextureViewType::Cube || texture_desc.view_type == TextureViewType::CubeArray;
+    const char* mismatch = nullptr;
+    switch (desc.view_type)
+    {
+        case TextureViewType::Texture1D:
+        case TextureViewType::Texture1DArray:
+            mismatch = texture_desc.dimension != TextureDimension::Texture1D ? "a one dimensional view needs a one dimensional texture" : nullptr;
+            break;
+        case TextureViewType::Texture2D:
+        case TextureViewType::Texture2DArray:
+            mismatch = texture_desc.dimension != TextureDimension::Texture2D ? "a two dimensional view needs a two dimensional texture" : nullptr;
+            break;
+        case TextureViewType::Texture3D:
+            mismatch = texture_desc.dimension != TextureDimension::Texture3D ? "a three dimensional view needs a three dimensional texture" : nullptr;
+            break;
+        case TextureViewType::Cube:
+        case TextureViewType::CubeArray:
+            if (!cube_compatible)
+            {
+                mismatch = "a cube view needs a texture created with a cube view type, which is what makes its image cube compatible";
+            }
+            else if (desc.view_type == TextureViewType::Cube ? layer_count != 6 : layer_count % 6 != 0)
+            {
+                mismatch = "a cube view covers six layers, and a cube array view a multiple of six";
+            }
+            else if (desc.view_type == TextureViewType::CubeArray && !device.GetFeatures().image_cube_array)
+            {
+                mismatch = "a cube array view needs the device created with DeviceFeatures::image_cube_array";
+            }
+            break;
+        default:
+            mismatch = "TextureViewDesc::view_type names nothing Forge maps to Vulkan";
+            break;
+    }
+    const bool is_flat = desc.view_type == TextureViewType::Texture1D || desc.view_type == TextureViewType::Texture2D ||
+                         desc.view_type == TextureViewType::Texture3D;
+    if (mismatch == nullptr && is_flat && layer_count != 1)
+    {
+        mismatch = "a view that is not an array covers one layer";
+    }
+    if (mismatch != nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: {}", mismatch);
+        return Result(ErrorCode::InvalidArgument);
+    }
+
+    TextureView view;
+    view.m_device = device;
+    view.m_texture = texture;
+    view.m_desc = desc;
+    RNDR_FORGE_TRANSLATE_EXPECTED(view_type, ToVkImageViewType(desc.view_type), "TextureViewDesc::view_type", Result);
+    const VkImageViewCreateInfo image_view_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = texture.GetNativeImage(),
+        .viewType = view_type,
+        .format = ToVkFormat(texture_desc.format),
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(range.ResolveAspectMask(texture_desc.format)),
+                             .baseMipLevel = range.first_mip_level,
+                             .levelCount = range.mip_level_count,
+                             .baseArrayLayer = range.first_array_layer,
+                             .layerCount = range.array_layer_count},
+    };
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &view.m_view),
+                                 "vkCreateImageView", Result);
+    return Result(std::move(view));
+}
+
+Rndr::Forge::TextureView::~TextureView()
+{
+    Destroy();
+}
+
+Rndr::Forge::TextureView::TextureView(TextureView&& other) noexcept
+    : m_device(std::move(other.m_device)), m_texture(std::move(other.m_texture)), m_view(other.m_view), m_desc(other.m_desc)
+{
+    other.m_view = VK_NULL_HANDLE;
+}
+
+Rndr::Forge::TextureView& Rndr::Forge::TextureView::operator=(TextureView&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_device = std::move(other.m_device);
+        m_texture = std::move(other.m_texture);
+        m_view = other.m_view;
+        m_desc = other.m_desc;
+        other.m_view = VK_NULL_HANDLE;
+    }
+    return *this;
+}
+
+void Rndr::Forge::TextureView::Destroy()
+{
+    if (m_view != VK_NULL_HANDLE)
+    {
+        vkDestroyImageView(m_device->GetNativeDevice(), m_view, nullptr);
+        m_view = VK_NULL_HANDLE;
+    }
+}
+
 // Sampler
 
 Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Create(const Device& device, const SamplerDesc& desc)

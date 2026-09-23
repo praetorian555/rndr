@@ -128,9 +128,12 @@ struct DescriptorSetUpdateBinding
     struct TextureInfo : Opal::ClonableBase<TextureInfo>
     {
         Opal::Ref<const Sampler> sampler;
+        /** The texture whose own view is written. Ignored when `view` is set. */
         Opal::Ref<const Texture> texture;
         ImageLayout texture_layout = ImageLayout::ShaderReadOnly;
-        OPAL_CLONE_FIELDS(sampler, texture, texture_layout);
+        /** A view of a texture to write in place of the texture's own view - one level, one layer, a cube. */
+        Opal::Ref<const TextureView> view;
+        OPAL_CLONE_FIELDS(sampler, texture, texture_layout, view);
     };
 
     DescriptorType descriptor_type = DescriptorType::CombinedImageSampler;
@@ -264,6 +267,13 @@ public:
                                    ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /**
+     * Write a view of a texture into a binding, the way the overload above writes the texture's own view.
+     * @param texture_layout Layout the range the view covers will be in when the shader reads it.
+     */
+    [[nodiscard]] ErrorCode Update(u32 binding, const TextureView& view, const Sampler& sampler,
+                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+
+    /**
      * Write one buffer into a binding. The descriptor type - constant or storage - comes from the layout, as
      * above.
      * @param binding Index the layout declares. A binding the layout does not have is refused.
@@ -282,6 +292,10 @@ public:
      *             when the layout was built without `shaders` and so carries none.
      */
     [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
+                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+
+    /** Write a view of a texture into the binding the shader calls `name`, as above. */
+    [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const TextureView& view, const Sampler& sampler,
                                    ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /** Write one buffer into the binding the shader calls `name`, as above. */
