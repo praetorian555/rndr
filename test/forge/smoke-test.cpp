@@ -7059,6 +7059,143 @@ TEST_CASE("Forge copies one texture into another", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * Every guard between a copy, blit or resolve region and the driver, each asked on its own and answered with
+ * the code the guard returns. The readback cases above only ever pass them; a guard deleted or loosened would
+ * leave every one of those green and hand the driver a region past the end of an image.
+ *
+ * Nothing here is submitted, and nothing refused is recorded - which is what the validation assertion at the
+ * end checks, since a refusal that recorded anyway would reach the layer.
+ */
+TEST_CASE("Forge transfer regions the guards refuse", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 4;
+    constexpr PixelFormat k_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr u64 k_level_size = k_side * k_side * 4;
+    constexpr Forge::TextureUsageBits k_both_ways = Forge::TextureUsageBits::TransferSource | Forge::TextureUsageBits::TransferDestination;
+
+    auto make_texture = [&](Forge::TextureUsageBits usage, Forge::SampleCount sample_count = Forge::SampleCount::Count1, u32 mips = 1)
+    {
+        return ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_format,
+                                                                         .width = k_side,
+                                                                         .height = k_side,
+                                                                         .mip_level_count = mips,
+                                                                         .sample_count = sample_count,
+                                                                         .usage = usage}));
+    };
+    auto make_buffer = [&](u64 size, Forge::BufferUsageBits usage)
+    { return ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = size, .usage = usage})); };
+
+    Forge::Texture texture = make_texture(k_both_ways);
+    Forge::Texture other = make_texture(k_both_ways);
+    const Forge::Buffer source = make_buffer(k_level_size, Forge::BufferUsageBits::TransferSource);
+    const Forge::Buffer destination = make_buffer(k_level_size, Forge::BufferUsageBits::TransferDestination);
+
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+
+    /** One buffer to texture region, refused with the code given. */
+    auto upload_refuses = [&](const Forge::BufferTextureCopyRegion& region, const Forge::Buffer& buffer = Forge::Buffer{})
+    { return command_buffer.CmdCopyBufferToTexture(buffer.IsValid() ? buffer : source, texture, {&region, 1}); };
+
+    SECTION("A region naming a mip level or array layers the texture does not have")
+    {
+        REQUIRE(upload_refuses({.texture_subresource = {.mip_level = 1}}) == ErrorCode::OutOfBounds);
+        REQUIRE(upload_refuses({.texture_subresource = {.first_array_layer = 1}}) == ErrorCode::OutOfBounds);
+        REQUIRE(upload_refuses({.texture_subresource = {.array_layer_count = 0}}) == ErrorCode::OutOfBounds);
+        REQUIRE(upload_refuses({.texture_subresource = {.array_layer_count = 2}}) == ErrorCode::OutOfBounds);
+    }
+    SECTION("A negative offset or extent")
+    {
+        REQUIRE(upload_refuses({.texture_offset = {-1, 0, 0}}) == ErrorCode::InvalidArgument);
+        REQUIRE(upload_refuses({.texture_extent = {0, -1, 0}}) == ErrorCode::InvalidArgument);
+        const Forge::TextureCopyRegion negative{.destination_offset = {0, 0, -1}, .extent = {1, 1, 1}};
+        REQUIRE(command_buffer.CmdCopyTexture(texture, other, {&negative, 1}) == ErrorCode::InvalidArgument);
+    }
+    SECTION("A box that starts outside the level or reaches past it")
+    {
+        REQUIRE(upload_refuses({.texture_offset = {k_side + 1, 0, 0}}) == ErrorCode::OutOfBounds);
+        REQUIRE(upload_refuses({.texture_offset = {2, 0, 0}, .texture_extent = {k_side, 1, 1}}) == ErrorCode::OutOfBounds);
+        REQUIRE(upload_refuses({.texture_offset = {0, 0, 1}, .texture_extent = {1, 1, 1}}) == ErrorCode::OutOfBounds);
+        // A copy's extent is resolved against the source and then has to fit the destination as well.
+        const Forge::TextureCopyRegion past_the_destination{.destination_offset = {2, 0, 0}};
+        REQUIRE(command_buffer.CmdCopyTexture(texture, other, {&past_the_destination, 1}) == ErrorCode::OutOfBounds);
+        const Forge::BufferTextureCopyRegion past_on_readback{.texture_offset = {0, 3, 0}, .texture_extent = {1, 2, 1}};
+        REQUIRE(command_buffer.CmdCopyTextureToBuffer(texture, destination, {&past_on_readback, 1}) == ErrorCode::OutOfBounds);
+    }
+    SECTION("A blit box with nothing in it")
+    {
+        if (!fixture.device.GetPhysicalDevice().SupportsBlit(k_format, true) ||
+            !fixture.device.GetPhysicalDevice().SupportsBlit(k_format, false))
+        {
+            SKIP("This device cannot blit R8G8B8A8_UNORM, and that refusal comes first.");
+        }
+        // An offset at the far edge with a zero extent is the rest of the level past it, which is nothing.
+        const Forge::TextureBlitRegion empty_source{.source_offset = {k_side, 0, 0}};
+        REQUIRE(command_buffer.CmdBlitTexture(texture, other, {&empty_source, 1}, ImageFilter::Nearest) == ErrorCode::InvalidArgument);
+        const Forge::TextureBlitRegion empty_destination{.destination_offset = {0, k_side, 0}};
+        REQUIRE(command_buffer.CmdBlitTexture(texture, other, {&empty_destination, 1}, ImageFilter::Nearest) ==
+                ErrorCode::InvalidArgument);
+        // The destination box past its level is the half the blit case above never reaches.
+        const Forge::TextureBlitRegion past_the_destination{.destination_offset = {2, 0, 0}, .destination_extent = {k_side, k_side, 1}};
+        REQUIRE(command_buffer.CmdBlitTexture(texture, other, {&past_the_destination, 1}, ImageFilter::Nearest) ==
+                ErrorCode::OutOfBounds);
+    }
+    SECTION("A buffer offset that is not a multiple of four")
+    {
+        REQUIRE(upload_refuses({.buffer_offset = 2, .texture_extent = {1, 1, 1}}) == ErrorCode::InvalidArgument);
+        const Forge::BufferTextureCopyRegion unaligned{.buffer_offset = 6, .texture_extent = {1, 1, 1}};
+        REQUIRE(command_buffer.CmdCopyTextureToBuffer(texture, destination, {&unaligned, 1}) == ErrorCode::InvalidArgument);
+    }
+    SECTION("A buffer too small for the rows and layers the region describes")
+    {
+        const Forge::Buffer small_source = make_buffer(k_level_size / 2, Forge::BufferUsageBits::TransferSource);
+        REQUIRE(upload_refuses({}, small_source) == ErrorCode::OutOfBounds);
+        // A region that fits, pushed past the end by its offset.
+        REQUIRE(upload_refuses({.buffer_offset = 4}) == ErrorCode::OutOfBounds);
+        // And one pushed past it by a row length that spaces its two rows out further than the buffer runs.
+        REQUIRE(upload_refuses({.buffer_row_length = 64, .texture_extent = {1, 2, 1}}) == ErrorCode::OutOfBounds);
+        const Forge::Buffer small_destination = make_buffer(k_level_size / 2, Forge::BufferUsageBits::TransferDestination);
+        const Forge::BufferTextureCopyRegion whole{};
+        REQUIRE(command_buffer.CmdCopyTextureToBuffer(texture, small_destination, {&whole, 1}) == ErrorCode::OutOfBounds);
+    }
+    SECTION("Every transfer command refuses a resource created without the usage it needs")
+    {
+        Forge::Texture sampled_only = make_texture(Forge::TextureUsageBits::Sampled);
+        const Forge::Buffer storage_only = make_buffer(k_level_size, Forge::BufferUsageBits::StorageBuffer);
+        const Forge::BufferTextureCopyRegion buffer_region{};
+        const Forge::TextureCopyRegion texture_region{};
+
+        REQUIRE(command_buffer.CmdCopyBufferToTexture(storage_only, texture, {&buffer_region, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdCopyBufferToTexture(source, sampled_only, {&buffer_region, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdCopyTextureToBuffer(sampled_only, destination, {&buffer_region, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdCopyTextureToBuffer(texture, storage_only, {&buffer_region, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdCopyTexture(sampled_only, other, {&texture_region, 1}) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdCopyTexture(texture, sampled_only, {&texture_region, 1}) == ErrorCode::InvalidArgument);
+
+        const Forge::TextureBlitRegion blit_region{};
+        REQUIRE(command_buffer.CmdBlitTexture(sampled_only, other, {&blit_region, 1}, ImageFilter::Nearest) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdBlitTexture(texture, sampled_only, {&blit_region, 1}, ImageFilter::Nearest) == ErrorCode::InvalidArgument);
+
+        // Four samples on a colour attachment is a count every device supports, so the only thing wrong with
+        // the source of this resolve is the usage it lacks.
+        Forge::Texture multisampled = make_texture(Forge::TextureUsageBits::ColorAttachment, Forge::SampleCount::Count4);
+        REQUIRE(command_buffer.CmdResolveTexture(multisampled, other, {&texture_region, 1}) == ErrorCode::InvalidArgument);
+
+        Forge::Texture mipped_without_source = make_texture(Forge::TextureUsageBits::TransferDestination, Forge::SampleCount::Count1, 2);
+        REQUIRE(command_buffer.CmdGenerateMips(mipped_without_source) == ErrorCode::InvalidArgument);
+        // And a texture with one level, which has no chain to generate.
+        REQUIRE(command_buffer.CmdGenerateMips(texture) == ErrorCode::InvalidArgument);
+    }
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge mip level sizes", "[forge]")
 {
     // No device: GetMipLevelSize reads a desc and nothing else, so this is the one case here that needs
