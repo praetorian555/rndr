@@ -2737,6 +2737,93 @@ TEST_CASE("Forge texture layout tracking", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * A barrier whose range reaches past its resource, refused before anything is recorded. The texture half used
+ * to be caught by the layout bookkeeping after the barrier was already in the command buffer, and the buffer
+ * half was not caught at all - both reached the driver, which is what the validation assertion at the end
+ * would have named.
+ */
+TEST_CASE("Forge barriers over a range their resource does not have", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr u32 k_mip_count = 2;
+    constexpr u64 k_buffer_size = 256;
+
+    auto make_texture = [&]
+    {
+        return ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM,
+                                                                         .width = 4,
+                                                                         .height = 4,
+                                                                         .mip_level_count = k_mip_count,
+                                                                         .usage = Forge::TextureUsageBits::TransferDestination}));
+    };
+    const Forge::Buffer buffer =
+        ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_buffer_size, .usage = Forge::BufferUsageBits::StorageBuffer}));
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+
+    SECTION("A texture barrier over mips or layers the texture lacks is refused, and moves no tracked layout")
+    {
+        Forge::Texture texture = make_texture();
+        Forge::TextureBarrier past_the_mips = Forge::TextureBarrier::ToTransferDestination(texture, Forge::ImageLayout::Undefined);
+        past_the_mips.subresource_range.first_mip_level = k_mip_count;
+        past_the_mips.subresource_range.mip_level_count = 1;
+        REQUIRE(command_buffer.CmdTextureBarrier(past_the_mips) == ErrorCode::OutOfBounds);
+
+        Forge::TextureBarrier past_the_layers = Forge::TextureBarrier::ToTransferDestination(texture, Forge::ImageLayout::Undefined);
+        past_the_layers.subresource_range.first_array_layer = 1;
+        past_the_layers.subresource_range.array_layer_count = 1;
+        REQUIRE(command_buffer.CmdTextureBarrier(past_the_layers) == ErrorCode::OutOfBounds);
+
+        REQUIRE(ForgeTest::Unwrap(texture.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
+        // The same range asked of the tracker directly is refused the same way.
+        REQUIRE(texture.GetCurrentLayout(past_the_mips.subresource_range).GetErrorOr(ErrorCode::Success) == ErrorCode::OutOfBounds);
+    }
+    SECTION("A batch with one bad texture barrier moves none of the textures in it")
+    {
+        // The first barrier is fine and the second is not. Checked after recording, the first texture's tracked
+        // layout had already moved to a layout the refused command never took it to.
+        Forge::Texture good = make_texture();
+        Forge::Texture bad = make_texture();
+        Forge::TextureBarrier bad_barrier = Forge::TextureBarrier::ToTransferDestination(bad, Forge::ImageLayout::Undefined);
+        bad_barrier.subresource_range.first_mip_level = k_mip_count;
+        bad_barrier.subresource_range.mip_level_count = 1;
+        const Forge::TextureBarrier batch[] = {Forge::TextureBarrier::ToTransferDestination(good, Forge::ImageLayout::Undefined),
+                                               bad_barrier.Clone()};
+        REQUIRE(command_buffer.CmdTextureBarriers({batch, 2}) == ErrorCode::OutOfBounds);
+        REQUIRE(ForgeTest::Unwrap(good.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
+        REQUIRE(ForgeTest::Unwrap(bad.GetCurrentLayout()) == Forge::ImageLayout::Undefined);
+    }
+    SECTION("A buffer barrier past the end of the buffer is refused")
+    {
+        auto barrier_over = [&](u64 offset, u64 size)
+        {
+            return Forge::BufferBarrier{.stages_must_finish = Forge::PipelineStageBits::ComputeShader,
+                                        .stages_must_finish_access = Forge::PipelineStageAccessBits::ShaderWrite,
+                                        .before_stages_start = Forge::PipelineStageBits::ComputeShader,
+                                        .before_stages_start_access = Forge::PipelineStageAccessBits::ShaderRead,
+                                        .buffer = buffer,
+                                        .offset = offset,
+                                        .size = size};
+        };
+        // Starting at the end, starting past it, and a size that runs off it from an offset that is fine.
+        REQUIRE(command_buffer.CmdBufferBarrier(barrier_over(k_buffer_size, Forge::k_whole_buffer)) == ErrorCode::OutOfBounds);
+        REQUIRE(command_buffer.CmdBufferBarrier(barrier_over(k_buffer_size + 4, 4)) == ErrorCode::OutOfBounds);
+        REQUIRE(command_buffer.CmdBufferBarrier(barrier_over(128, 132)) == ErrorCode::OutOfBounds);
+        // A barrier over no bytes is not a range at all.
+        REQUIRE(command_buffer.CmdBufferBarrier(barrier_over(0, 0)) == ErrorCode::InvalidArgument);
+        // And the edges that fit are recorded.
+        REQUIRE(command_buffer.CmdBufferBarrier(barrier_over(128, 128)) == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdBufferBarrier(barrier_over(252, Forge::k_whole_buffer)) == ErrorCode::Success);
+    }
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge debug labels", "[forge]")
 {
     if (!IsForgeAvailable())
