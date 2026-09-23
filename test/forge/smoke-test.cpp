@@ -4310,6 +4310,78 @@ TEST_CASE("Forge indirect dispatch", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * The guards every indirect command shares, which the indirect cases above only ever pass: the usage, the
+ * offset alignment, the stride, and commands that run off the end of the buffer. Each is refused before
+ * anything is recorded, so no pipeline and no render pass are needed to ask.
+ */
+TEST_CASE("Forge indirect arguments the guards refuse", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // More than one command is a feature, and refused as InvalidArgument without it - the same code a bad
+    // stride gets - so the stride section needs a device where the count is not the thing being refused.
+    const bool has_multi_draw = CanCreateDevice({.multi_draw_indirect = true});
+    ForgeFixture fixture({.multi_draw_indirect = has_multi_draw});
+    constexpr u64 k_draw_size = sizeof(Forge::DrawIndirectCommand);
+    constexpr u64 k_indexed_size = sizeof(Forge::DrawIndexedIndirectCommand);
+    constexpr u64 k_dispatch_size = sizeof(Forge::DispatchIndirectCommand);
+
+    auto make_buffer = [&](u64 size, Forge::BufferUsageBits usage = Forge::BufferUsageBits::IndirectBuffer)
+    { return ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = size, .usage = usage})); };
+
+    Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
+    REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+
+    SECTION("A buffer created without the indirect usage")
+    {
+        const Forge::Buffer storage_only = make_buffer(64, Forge::BufferUsageBits::StorageBuffer);
+        REQUIRE(command_buffer.CmdDrawIndirect(storage_only) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawIndexedIndirect(storage_only) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDispatchIndirect(storage_only) == ErrorCode::InvalidArgument);
+    }
+    SECTION("An offset that is not a multiple of four")
+    {
+        const Forge::Buffer commands = make_buffer(64);
+        REQUIRE(command_buffer.CmdDrawIndirect(commands, 2) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawIndexedIndirect(commands, 6) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDispatchIndirect(commands, 1) == ErrorCode::InvalidArgument);
+    }
+    SECTION("A command that runs off the end of the buffer")
+    {
+        // Exactly one command of each kind fits, so the same command one word further in does not.
+        const Forge::Buffer one_draw = make_buffer(k_draw_size);
+        REQUIRE(command_buffer.CmdDrawIndirect(one_draw, 4) == ErrorCode::OutOfBounds);
+        const Forge::Buffer one_indexed = make_buffer(k_indexed_size);
+        REQUIRE(command_buffer.CmdDrawIndexedIndirect(one_indexed, 4) == ErrorCode::OutOfBounds);
+        const Forge::Buffer one_dispatch = make_buffer(k_dispatch_size);
+        REQUIRE(command_buffer.CmdDispatchIndirect(one_dispatch, 4) == ErrorCode::OutOfBounds);
+        // And an offset past the buffer altogether.
+        REQUIRE(command_buffer.CmdDispatchIndirect(one_dispatch, k_dispatch_size + 4) == ErrorCode::OutOfBounds);
+    }
+    SECTION("More than one command, with a stride that is too short, misaligned, or reaches past the buffer")
+    {
+        INFO("multi_draw_indirect supported: " << has_multi_draw);
+        if (!has_multi_draw)
+        {
+            SKIP("This device cannot read more than one indirect command per call.");
+        }
+        const Forge::Buffer two_draws = make_buffer(2 * k_draw_size);
+        REQUIRE(command_buffer.CmdDrawIndirect(two_draws, 0, 2, static_cast<u32>(k_draw_size - 4)) == ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawIndirect(two_draws, 0, 2, static_cast<u32>(k_draw_size + 2)) == ErrorCode::InvalidArgument);
+        // A stride twice the command is legal, and two of them no longer fit in a buffer sized for two packed.
+        REQUIRE(command_buffer.CmdDrawIndirect(two_draws, 0, 2, static_cast<u32>(2 * k_draw_size)) == ErrorCode::OutOfBounds);
+        const Forge::Buffer two_indexed = make_buffer(2 * k_indexed_size);
+        REQUIRE(command_buffer.CmdDrawIndexedIndirect(two_indexed, 0, 2, static_cast<u32>(k_indexed_size - 4)) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE(command_buffer.CmdDrawIndexedIndirect(two_indexed, 0, 3) == ErrorCode::OutOfBounds);
+    }
+    REQUIRE(command_buffer.End() == ErrorCode::Success);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
 {
     if (!IsForgeAvailable())
