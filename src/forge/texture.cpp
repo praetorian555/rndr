@@ -297,6 +297,18 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
         RNDR_LOG_ERROR("Forge: a cube array view needs the device created with DeviceFeatures::image_cube_array");
         return ErrorCode::InvalidArgument;
     }
+    // A transient attachment is memory that may never be backed, so there is nothing to sample, store to or
+    // copy out of: Vulkan allows it only beside the attachment usages, and only when one of them is there.
+    if (!!(m_desc.usage & TextureUsageBits::TransientAttachment))
+    {
+        constexpr TextureUsageBits k_attachment_usages =
+            TextureUsageBits::ColorAttachment | TextureUsageBits::DepthStencilAttachment | TextureUsageBits::InputAttachment;
+        if (!!(m_desc.usage & ~(k_attachment_usages | TextureUsageBits::TransientAttachment)) || !(m_desc.usage & k_attachment_usages))
+        {
+            RNDR_LOG_ERROR("Forge: a transient attachment may only be a colour, depth stencil or input attachment, and has to be one of them");
+            return ErrorCode::InvalidArgument;
+        }
+    }
     // Vulkan itself would allow a BC format on a device that reports it without the feature, and the layer
     // says nothing either way. Refused here so the feature means what its name says: a device that did not
     // ask for BC formats does not get them.

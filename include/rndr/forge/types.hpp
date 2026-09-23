@@ -80,7 +80,10 @@ enum class TextureUsageBits : u32
     ColorAttachment = 0x00000010,
     /** Rendered into as a depth or stencil attachment. */
     DepthStencilAttachment = 0x00000020,
-    /** Backed lazily, for an attachment that never leaves tile memory. */
+    /**
+     * Backed lazily, for an attachment that never leaves tile memory. Only beside ColorAttachment,
+     * DepthStencilAttachment or InputAttachment, at least one of them and nothing else.
+     */
     TransientAttachment = 0x00000040,
     /** Read in a fragment shader at the fragment being written, within the same render pass. */
     InputAttachment = 0x00000080
