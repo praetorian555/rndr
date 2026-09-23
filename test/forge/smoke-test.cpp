@@ -8809,6 +8809,158 @@ TEST_CASE("Forge a clamped depth bias", "[forge]")
 namespace
 {
 
+/** The full-target quad tilted in depth along x: `z_left` along the left edge, `z_right` along the right, flat in y. */
+Opal::DynamicArray<f32> MakeTiltedQuad(f32 z_left, f32 z_right)
+{
+    Opal::DynamicArray<f32> vertices = MakeFullTargetQuad(0.0f);
+    for (i32 corner = 0; corner < 6; ++corner)
+    {
+        vertices[corner * 3 + 2] = vertices[corner * 3 + 0] < 0.0f ? z_left : z_right;
+    }
+    return vertices;
+}
+
+}  // namespace
+
+/**
+ * The slope term of the depth bias, which the flat quads above can never move: their slope is zero, so
+ * RasterizerDesc::depth_bias_slope_factor and the third argument of CmdSetDepthBias could be dropped or
+ * exchanged with another factor and nothing would notice.
+ *
+ * The specification gives the bias as o = m * slope_factor + r * constant_factor, where m is the largest
+ * slope of the depth in framebuffer coordinates - either sqrt((dz/dx)^2 + (dz/dy)^2) or the approximation
+ * max(|dz/dx|, |dz/dy|), whichever the implementation picks. A quad tilted along x alone has dz/dy of zero,
+ * where the two agree, so m is exactly the change in depth across the quad divided by its width in texels.
+ * With no constant factor the bias is m times the slope factor, and it is the same at every texel of the
+ * primitive: two texels far apart both moving by that one amount is what separates it from a bias that grew
+ * with depth or with position.
+ */
+TEST_CASE("Forge the slope factor of the depth bias", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    constexpr i32 k_side = 8;
+    constexpr PixelFormat k_color_format = PixelFormat::R8G8B8A8_UNORM;
+    constexpr f32 k_z_left = 0.25f;
+    constexpr f32 k_z_right = 0.75f;
+    // Depth per texel along x. The quad spans the whole target, so the change from edge to edge is spread
+    // over k_side texels.
+    constexpr f32 k_slope = (k_z_right - k_z_left) / static_cast<f32>(k_side);
+    // Picked so the bias, k_slope times this, is an eighth of the way across the quad's range: well clear of
+    // any rounding, and small enough that neither end is pushed out of [0, 1].
+    constexpr f32 k_slope_factor = 0.5f;
+    // Two texels in the same row, one near each edge, so their depths without bias differ by most of the tilt.
+    constexpr i32 k_row = 3;
+    constexpr i32 k_columns[] = {1, 6};
+
+    const Forge::Shader vertex_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_vertex", .cache = GetShaderCache()}));
+    const Forge::Shader fragment_shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_pushed_color_source, {.entry_point = "main_color_fragment", .cache = GetShaderCache()}));
+    const Forge::Buffer tilted_quad = MakeQuadBuffer(fixture.device, MakeTiltedQuad(k_z_left, k_z_right));
+    const Forge::Buffer flat_quad = MakeQuadBuffer(fixture.device, MakeFullTargetQuad(k_bias_quad_depth));
+    const Vector4f draw_color = ByteColor(0, 255, 0, 255);
+
+    /** The depth the tilted quad is interpolated to at a texel's centre, before any bias. */
+    auto unbiased_depth = [&](i32 column) { return k_z_left + k_slope * (static_cast<f32>(column) + 0.5f); };
+
+    /** The same pipeline as the constant bias case above, over a target k_side texels wide. */
+    auto make_pipeline = [&](const Forge::RasterizerDesc& rasterizer, Forge::DynamicStateBits dynamic_state)
+    {
+        Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_color_format);
+        pipeline_desc.rasterizer = rasterizer;
+        pipeline_desc.rasterizer.cull_mode = Face::None;
+        pipeline_desc.dynamic_state = dynamic_state;
+        pipeline_desc.depth_stencil.depth_test_enabled = true;
+        pipeline_desc.depth_stencil.depth_write_enabled = true;
+        pipeline_desc.depth_stencil.depth_comparator = Comparator::Always;
+        pipeline_desc.depth_attachment_format = k_bias_depth_format;
+        return ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+    };
+
+    /** Draw `quad` once and hand back every depth it left, row by row. */
+    auto depths_after_draw = [&](const Forge::Pipeline& pipeline, const Forge::Buffer& quad, auto&& before_draw)
+    {
+        Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
+        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
+                                                                        {.format = k_bias_depth_format,
+                                                                         .width = k_side,
+                                                                         .height = k_side,
+                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                                                                  Forge::TextureUsageBits::TransferSource}));
+        DepthPassResult result =
+            RenderWithDepth(fixture, color, depth, k_side, Vector4f{0.0f, 0.0f, 1.0f, 1.0f}, Forge::DepthStencilClearValue{1.0f, 0},
+                            [&](Forge::CommandBuffer& command_buffer)
+                            {
+                                REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                before_draw(command_buffer);
+                                REQUIRE(command_buffer.CmdBindVertexBuffer(quad, 0) == ErrorCode::Success);
+                                REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(draw_color)) ==
+                                        ErrorCode::Success);
+                                REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
+                            });
+        return std::move(result.depths);
+    };
+
+    auto no_setup = [](Forge::CommandBuffer&) {};
+
+    /** Both texels moved by `bias` from where the tilt alone puts them. */
+    auto require_biased_by = [&](const Opal::DynamicArray<f32>& depths, f32 bias)
+    {
+        for (const i32 column : k_columns)
+        {
+            const f32 depth = depths[k_row * k_side + column];
+            INFO("column " << column << " depth " << depth << " expected " << unbiased_depth(column) + bias);
+            REQUIRE(depth == Catch::Approx(unbiased_depth(column) + bias).margin(0.0005));
+        }
+    };
+
+    SECTION("The tilted quad without bias lands where the interpolation puts it")
+    {
+        // What every expectation below is measured from, and the proof the tilt is the one the slope assumes.
+        const Forge::Pipeline pipeline = make_pipeline({}, Forge::DynamicStateBits::None);
+        require_biased_by(depths_after_draw(pipeline, tilted_quad, no_setup), 0.0f);
+    }
+    SECTION("A slope factor moves a tilted quad by the slope times the factor, in the direction of its sign")
+    {
+        const Forge::Pipeline pushed_back = make_pipeline(
+            {.depth_bias_enabled = true, .depth_bias_slope_factor = k_slope_factor}, Forge::DynamicStateBits::None);
+        require_biased_by(depths_after_draw(pushed_back, tilted_quad, no_setup), k_slope * k_slope_factor);
+
+        const Forge::Pipeline pulled_forward = make_pipeline(
+            {.depth_bias_enabled = true, .depth_bias_slope_factor = -k_slope_factor}, Forge::DynamicStateBits::None);
+        require_biased_by(depths_after_draw(pulled_forward, tilted_quad, no_setup), -k_slope * k_slope_factor);
+    }
+    SECTION("A slope factor leaves a flat quad where it was")
+    {
+        // The other half of what makes it a slope term: the same factor that moved the tilted quad has
+        // nothing to multiply here. A factor applied as a constant would move this one as well.
+        const Forge::Pipeline pipeline = make_pipeline(
+            {.depth_bias_enabled = true, .depth_bias_slope_factor = k_slope_factor}, Forge::DynamicStateBits::None);
+        const Opal::DynamicArray<f32> depths = depths_after_draw(pipeline, flat_quad, no_setup);
+        INFO("depth " << depths[0]);
+        REQUIRE(depths[0] == Catch::Approx(k_bias_quad_depth).margin(0.0001));
+    }
+    SECTION("A pipeline that leaves the bias dynamic takes the slope factor from the command")
+    {
+        // The desc carries no factor at all, and the command's constant factor and clamp are both zero, so a
+        // depth that moved did so through the third argument and nothing else.
+        const Forge::Pipeline pipeline = make_pipeline({.depth_bias_enabled = true}, Forge::DynamicStateBits::DepthBias);
+        require_biased_by(depths_after_draw(pipeline, tilted_quad,
+                                            [&](Forge::CommandBuffer& command_buffer) {
+                                                REQUIRE(command_buffer.CmdSetDepthBias(0.0f, 0.0f, k_slope_factor) == ErrorCode::Success);
+                                            }),
+                          k_slope * k_slope_factor);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
+namespace
+{
+
 /**
  * What the enum table cases below render into: four texels wide, since none of them draws a shape and what
  * is read back is one value repeated. The stencil format is one every device offers with a stencil aspect in
