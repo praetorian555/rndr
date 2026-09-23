@@ -399,6 +399,16 @@ Forge::Texture MakeColorTarget(const Forge::Device& device, i32 side, PixelForma
                                             Forge::TextureUsageBits::TransferSource}));
 }
 
+/** A depth target of that format that can be read back, for the cases that look at what the depth test left. */
+Forge::Texture MakeDepthTarget(const Forge::Device& device, i32 side, PixelFormat format = PixelFormat::D32_SFLOAT)
+{
+    return ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = format,
+                                                             .width = static_cast<u32>(side),
+                                                             .height = static_cast<u32>(side),
+                                                             .usage = Forge::TextureUsageBits::DepthStencilAttachment |
+                                                                      Forge::TextureUsageBits::TransferSource}));
+}
+
 /**
  * Clear the target, run one recorded draw over it and hand back the pixels, left in TransferSource. The
  * viewport and the scissor are set to the whole target first, so a case that wants something else says so by
@@ -8193,11 +8203,7 @@ TEST_CASE("Forge viewport depth range", "[forge]")
     auto depth_through_range = [&](f32 min_depth, f32 max_depth)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_format,
-                                              .width = k_side,
-                                              .height = k_side,
-                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                       Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture depth = MakeDepthTarget(fixture.device, k_side, k_depth_format);
 
         return RenderWithDepth(fixture, color, depth, k_side, Vector4f{1.0f, 0.0f, 0.0f, 1.0f}, Forge::DepthStencilClearValue{1.0f, 0},
                                [&](Forge::CommandBuffer& command_buffer)
@@ -8494,14 +8500,6 @@ TEST_CASE("Forge push constants read by two stages", "[forge]")
             Vector4f{0.0f, 0.0f, 0.0f, 1.0f});
     };
 
-    /** The four channels of one texel of that readback. */
-    auto texel_at = [&](const Opal::DynamicArray<u8>& pixels, i32 x, i32 y)
-    {
-        const i32 base = (y * k_side + x) * 4;
-        return Texel{static_cast<i32>(pixels[base]), static_cast<i32>(pixels[base + 1]), static_cast<i32>(pixels[base + 2]),
-                     static_cast<i32>(pixels[base + 3])};
-    };
-
     SECTION("One push feeds the stage that reads each half of the block")
     {
         const StagePush block{.shift = {0.0f, 0.0f}, .color = ByteColor(0, 255, 0, 255)};
@@ -8509,10 +8507,10 @@ TEST_CASE("Forge push constants read by two stages", "[forge]")
             [&](Forge::CommandBuffer& command_buffer)
             { REQUIRE(command_buffer.CmdPushConstants(pipeline, k_both_stages, Opal::AsBytes(block)) == ErrorCode::Success); });
         // The quad stayed where it was, in the colour the fragment stage read out of the same block.
-        REQUIRE(texel_at(pixels, 0, 0) == Texel{0, 255, 0, 255});
-        REQUIRE(texel_at(pixels, 1, 3) == Texel{0, 255, 0, 255});
-        REQUIRE(texel_at(pixels, 2, 0) == Texel{0, 0, 0, 255});
-        REQUIRE(texel_at(pixels, 3, 3) == Texel{0, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 0, 0) == Texel{0, 255, 0, 255});
+        REQUIRE(GetTexel(pixels, 1, 3) == Texel{0, 255, 0, 255});
+        REQUIRE(GetTexel(pixels, 2, 0) == Texel{0, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 3, 3) == Texel{0, 0, 0, 255});
     }
     SECTION("Each half of the block is written at the offset it sits at")
     {
@@ -8528,10 +8526,10 @@ TEST_CASE("Forge push constants read by two stages", "[forge]")
                 REQUIRE(command_buffer.CmdPushConstants(pipeline, k_both_stages, Opal::AsBytes(color),
                                                         static_cast<u32>(offsetof(StagePush, color))) == ErrorCode::Success);
             });
-        REQUIRE(texel_at(pixels, 0, 0) == Texel{0, 0, 0, 255});
-        REQUIRE(texel_at(pixels, 1, 3) == Texel{0, 0, 0, 255});
-        REQUIRE(texel_at(pixels, 2, 0) == Texel{255, 0, 0, 255});
-        REQUIRE(texel_at(pixels, 3, 3) == Texel{255, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 0, 0) == Texel{0, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 1, 3) == Texel{0, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 2, 0) == Texel{255, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 3, 3) == Texel{255, 0, 0, 255});
     }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
@@ -8618,14 +8616,6 @@ TEST_CASE("Forge attachment load and store operations", "[forge]")
         return ReadColorPixels(fixture, color, k_side);
     };
 
-    /** The four channels of one texel of that readback. */
-    auto texel_at = [&](const Opal::DynamicArray<u8>& pixels, i32 x, i32 y)
-    {
-        const i32 base = (y * k_side + x) * 4;
-        return Texel{static_cast<i32>(pixels[base]), static_cast<i32>(pixels[base + 1]), static_cast<i32>(pixels[base + 2]),
-                     static_cast<i32>(pixels[base + 3])};
-    };
-
     SECTION("A pass that loads keeps what the one before it stored")
     {
         // The first pass clears the whole target to red and stores it; the second loads that and draws green
@@ -8633,10 +8623,10 @@ TEST_CASE("Forge attachment load and store operations", "[forge]")
         const Opal::DynamicArray<u8> pixels =
             render_two_passes({.load_operation = Forge::AttachmentLoadOperation::Clear, .clear_value = red},
                               {.load_operation = Forge::AttachmentLoadOperation::Load, .quad = &left_quad, .draw_color = green});
-        REQUIRE(texel_at(pixels, 0, 0) == Texel{0, 255, 0, 255});
-        REQUIRE(texel_at(pixels, 1, 2) == Texel{0, 255, 0, 255});
-        REQUIRE(texel_at(pixels, 2, 0) == Texel{255, 0, 0, 255});
-        REQUIRE(texel_at(pixels, 3, 3) == Texel{255, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 0, 0) == Texel{0, 255, 0, 255});
+        REQUIRE(GetTexel(pixels, 1, 2) == Texel{0, 255, 0, 255});
+        REQUIRE(GetTexel(pixels, 2, 0) == Texel{255, 0, 0, 255});
+        REQUIRE(GetTexel(pixels, 3, 3) == Texel{255, 0, 0, 255});
     }
     SECTION("A pass that loads nothing shows only what it drew")
     {
@@ -8650,7 +8640,7 @@ TEST_CASE("Forge attachment load and store operations", "[forge]")
             for (i32 x = 0; x < k_side; ++x)
             {
                 INFO("texel " << x << "," << y);
-                REQUIRE(texel_at(pixels, x, y) == Texel{0, 255, 0, 255});
+                REQUIRE(GetTexel(pixels, x, y) == Texel{0, 255, 0, 255});
             }
         }
     }
@@ -8672,7 +8662,7 @@ TEST_CASE("Forge attachment load and store operations", "[forge]")
             for (i32 x = 0; x < k_side; ++x)
             {
                 INFO("texel " << x << "," << y);
-                REQUIRE(texel_at(pixels, x, y) == Texel{0, 255, 0, 255});
+                REQUIRE(GetTexel(pixels, x, y) == Texel{0, 255, 0, 255});
             }
         }
     }
@@ -8717,11 +8707,7 @@ TEST_CASE("Forge depth testing", "[forge]")
     {
         const Forge::Pipeline pipeline = make_pipeline(comparator, depth_write);
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_format,
-                                              .width = k_side,
-                                              .height = k_side,
-                                              .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                       Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture depth = MakeDepthTarget(fixture.device, k_side, k_depth_format);
 
         // Cleared to whichever end of the range the comparator counts as furthest, so the first draw passes
         // either way. Clearing to one under Greater would reject both.
@@ -8838,12 +8824,7 @@ TEST_CASE("Forge depth bias", "[forge]")
     auto depth_after_draw = [&](const Forge::Pipeline& pipeline, auto&& before_draw)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                                                                        {.format = k_bias_depth_format,
-                                                                         .width = k_side,
-                                                                         .height = k_side,
-                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                                                  Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture depth = MakeDepthTarget(fixture.device, k_side, k_bias_depth_format);
         const DepthPassResult result =
             RenderWithDepth(fixture, color, depth, k_side, Vector4f{0.0f, 0.0f, 1.0f, 1.0f}, Forge::DepthStencilClearValue{1.0f, 0},
                             [&](Forge::CommandBuffer& command_buffer)
@@ -8951,12 +8932,7 @@ TEST_CASE("Forge a clamped depth bias", "[forge]")
         const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
 
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                                                                        {.format = k_bias_depth_format,
-                                                                         .width = k_side,
-                                                                         .height = k_side,
-                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                                                  Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture depth = MakeDepthTarget(fixture.device, k_side, k_bias_depth_format);
         const DepthPassResult result =
             RenderWithDepth(fixture, color, depth, k_side, Vector4f{0.0f, 0.0f, 1.0f, 1.0f}, Forge::DepthStencilClearValue{1.0f, 0},
                             [&](Forge::CommandBuffer& command_buffer)
@@ -9061,12 +9037,7 @@ TEST_CASE("Forge the slope factor of the depth bias", "[forge]")
     auto depths_after_draw = [&](const Forge::Pipeline& pipeline, const Forge::Buffer& quad, auto&& before_draw)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                                                                        {.format = k_bias_depth_format,
-                                                                         .width = k_side,
-                                                                         .height = k_side,
-                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                                                  Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture depth = MakeDepthTarget(fixture.device, k_side, k_bias_depth_format);
         DepthPassResult result =
             RenderWithDepth(fixture, color, depth, k_side, Vector4f{0.0f, 0.0f, 1.0f, 1.0f}, Forge::DepthStencilClearValue{1.0f, 0},
                             [&](Forge::CommandBuffer& command_buffer)
@@ -9301,11 +9272,7 @@ const char* StencilOperationName(StencilOperation operation)
 /** The depth-stencil these cases render into and then read the raw stencil values out of. */
 Forge::Texture MakeStencilTarget(const Forge::Device& device)
 {
-    return ForgeTest::Unwrap(Forge::Texture::Create(device, {.format = k_table_depth_stencil_format,
-                                   .width = k_table_side,
-                                   .height = k_table_side,
-                                   .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                            Forge::TextureUsageBits::TransferSource}));
+    return MakeDepthTarget(device, k_table_side, k_table_depth_stencil_format);
 }
 
 /**
@@ -9418,40 +9385,17 @@ TEST_CASE("Forge stencil testing", "[forge]")
     auto run_pass = [&](const Forge::Pipeline& paint_pipeline)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth_stencil = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_stencil_format,
-                                                      .width = k_side,
-                                                      .height = k_side,
-                                                      .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
 
         REQUIRE(Forge::ImmediateSubmit(
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil)) ==
-                        ErrorCode::Success);
                 // One texture carries both, so the same view is named twice - Vulkan takes the two sides
                 // apart even then, and each gets its own load and store.
-                const Forge::RenderingAttachmentDesc depth_stencil_attachment{
-                    .texture = depth_stencil,
-                    .load_operation = Forge::AttachmentLoadOperation::Clear,
-                    .store_operation = Forge::AttachmentStoreOperation::Store,
-                    .clear_value = Forge::DepthStencilClearValue{1.0f, 0}};
-                const Forge::RenderingDesc rendering_desc{
-                    .render_area_extent = {k_side, k_side},
-                    .color_attachments = {Forge::RenderingAttachmentDesc{
-                        .texture = color,
-                        .load_operation = Forge::AttachmentLoadOperation::Clear,
-                        .store_operation = Forge::AttachmentStoreOperation::Store,
-                        .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
-                    .depth_attachment = depth_stencil_attachment.Clone(),
-                    .stencil_attachment = depth_stencil_attachment.Clone()};
-                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                BeginTableRendering(command_buffer, color, depth_stencil, left_quad, 0);
 
                 REQUIRE(command_buffer.CmdBindPipeline(mask_pipeline) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdBindVertexBuffer(left_quad, 0) == ErrorCode::Success);
                 REQUIRE(command_buffer.CmdPushConstants(mask_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(mask_color)) ==
                         ErrorCode::Success);
                 REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
@@ -9557,10 +9501,7 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
     auto run = [&](u32 mask_write_mask, u32 mask_reference, u32 paint_compare_mask, u32 paint_reference)
     {
         Forge::Texture color = MakeColorTarget(fixture.device, k_side, k_color_format);
-        Forge::Texture depth_stencil = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_depth_stencil_format,
-                                                      .width = k_side,
-                                                      .height = k_side,
-                                                      .usage = Forge::TextureUsageBits::DepthStencilAttachment}));
+        Forge::Texture depth_stencil = MakeStencilTarget(fixture.device);
 
         auto set_stencil = [](Forge::CommandBuffer& command_buffer, u32 compare_mask, u32 write_mask, u32 reference)
         {
@@ -9576,32 +9517,12 @@ TEST_CASE("Forge stencil masks set per draw", "[forge]")
             fixture.device, fixture.GetQueue(),
             [&](Forge::CommandBuffer& command_buffer)
             {
-                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToColorAttachment(color)) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToDepthStencilAttachment(depth_stencil)) ==
-                        ErrorCode::Success);
-                const Forge::RenderingAttachmentDesc depth_stencil_attachment{
-                    .texture = depth_stencil,
-                    .load_operation = Forge::AttachmentLoadOperation::Clear,
-                    .store_operation = Forge::AttachmentStoreOperation::Store,
-                    .clear_value = Forge::DepthStencilClearValue{1.0f, 0}};
-                const Forge::RenderingDesc rendering_desc{
-                    .render_area_extent = {k_side, k_side},
-                    .color_attachments = {Forge::RenderingAttachmentDesc{
-                        .texture = color,
-                        .load_operation = Forge::AttachmentLoadOperation::Clear,
-                        .store_operation = Forge::AttachmentStoreOperation::Store,
-                        .clear_value = Vector4f{1.0f, 0.0f, 0.0f, 1.0f}}},
-                    .depth_attachment = depth_stencil_attachment.Clone(),
-                    .stencil_attachment = depth_stencil_attachment.Clone()};
-                REQUIRE(command_buffer.CmdBeginRendering(rendering_desc) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdSetViewport(Vector2f::Zero(), {k_side, k_side}) == ErrorCode::Success);
-                REQUIRE(command_buffer.CmdSetScissor(Vector2i::Zero(), {k_side, k_side}) == ErrorCode::Success);
+                BeginTableRendering(command_buffer, color, depth_stencil, left_quad, 0);
 
                 // Comparator Always, so the compare mask decides nothing here and the write mask is what
                 // picks which bits of the reference land in the buffer.
                 REQUIRE(command_buffer.CmdBindPipeline(mask_pipeline) == ErrorCode::Success);
                 set_stencil(command_buffer, 0xFF, mask_write_mask, mask_reference);
-                REQUIRE(command_buffer.CmdBindVertexBuffer(left_quad, 0) == ErrorCode::Success);
                 REQUIRE(command_buffer.CmdPushConstants(mask_pipeline, ShaderTypeBits::Fragment, Opal::AsBytes(mask_color)) ==
                         ErrorCode::Success);
                 REQUIRE(command_buffer.CmdDraw(6) == ErrorCode::Success);
@@ -11266,12 +11187,7 @@ TEST_CASE("Forge a depth attachment that is read and not written", "[forge]")
     {
         constexpr PixelFormat k_depth_format = PixelFormat::D32_SFLOAT;
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
-        Forge::Texture depth = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                                                                        {.format = k_depth_format,
-                                                                         .width = k_table_side,
-                                                                         .height = k_table_side,
-                                                                         .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                                                  Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture depth = MakeDepthTarget(fixture.device, k_table_side, k_depth_format);
 
         Forge::GraphicsPipelineDesc writing_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
         writing_desc.depth_stencil.depth_test_enabled = true;
@@ -11384,12 +11300,7 @@ TEST_CASE("Forge a depth attachment that is read and not written", "[forge]")
         // sides are present, so a pass that writes stencil and no depth is what a separate texture is for.
         constexpr u32 k_reference = 0x2A;
         Forge::Texture color = MakeColorTarget(fixture.device, k_table_side, k_table_color_format);
-        Forge::Texture stencil = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device,
-                                                                          {.format = k_table_depth_stencil_format,
-                                                                           .width = k_table_side,
-                                                                           .height = k_table_side,
-                                                                           .usage = Forge::TextureUsageBits::DepthStencilAttachment |
-                                                                                    Forge::TextureUsageBits::TransferSource}));
+        Forge::Texture stencil = MakeStencilTarget(fixture.device);
 
         Forge::GraphicsPipelineDesc pipeline_desc = MakePushedColorPipelineDesc(vertex_shader, fragment_shader, k_table_color_format);
         pipeline_desc.depth_stencil.stencil_test_enabled = true;
