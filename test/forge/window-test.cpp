@@ -743,6 +743,91 @@ TEST_CASE("Forge frame context error paths", "[forge-window]")
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
 }
 
+/**
+ * SwapChainDesc::acquire_timeout and SwapChainStatus::NotReady. Every texture of the swap chain is acquired
+ * and none presented, so the presentation engine has nothing left to hand out: the acquire after that can only
+ * give up, and with a timeout it does so with a status - where the default timeout would have waited forever.
+ */
+TEST_CASE("Forge swap chain acquire gives up after its timeout", "[forge-window]")
+{
+    if (!IsForgeWindowAvailable())
+    {
+        SKIP("No window system with a Vulkan device that can present to it on this machine.");
+    }
+    ForgeWindowFixture fixture;
+    if (!SupportsSwapChainFormat(fixture))
+    {
+        SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
+    }
+
+    /**
+     * Acquire until the swap chain says NotReady, one fresh semaphore per attempt, and hand back how many
+     * attempts succeeded. More attempts than there are textures would mean the timeout never ran out.
+     */
+    auto acquire_all = [&](Forge::SwapChain& swap_chain, Opal::DynamicArray<Forge::Semaphore>& semaphores)
+    {
+        const u32 texture_count = swap_chain.GetColorTextureCount();
+        u32 acquired_count = 0;
+        for (u32 attempt = 0; attempt <= texture_count; ++attempt)
+        {
+            semaphores.PushBack(ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device)));
+            const Forge::AcquiredTexture acquired = ForgeTest::Unwrap(swap_chain.AcquireTexture(semaphores.Back()));
+            if (acquired.status == Forge::SwapChainStatus::NotReady)
+            {
+                REQUIRE(acquired.texture_index == Forge::k_invalid_texture_index);
+                return acquired_count;
+            }
+            REQUIRE(acquired.status == Forge::SwapChainStatus::Success);
+            ++acquired_count;
+        }
+        FAIL("Every texture of the swap chain was acquired and the acquire after them still did not give up.");
+        return acquired_count;
+    };
+
+    SECTION("A zero timeout answers NotReady at once, and leaves the texture acquired before it alone")
+    {
+        Forge::SwapChain swap_chain = ForgeTest::Unwrap(
+            Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format, .acquire_timeout = 0}));
+        Opal::DynamicArray<Forge::Semaphore> semaphores;
+        const u32 acquired_count = acquire_all(swap_chain, semaphores);
+        INFO("acquired " << acquired_count << " of " << swap_chain.GetColorTextureCount());
+        REQUIRE(acquired_count >= 1);
+        REQUIRE(acquired_count <= swap_chain.GetColorTextureCount());
+        // What the last successful acquire handed out is still what the swap chain holds.
+        REQUIRE(swap_chain.HasAcquiredTexture());
+        REQUIRE(swap_chain.IsValid());
+        swap_chain.Destroy();
+    }
+    SECTION("A timeout that runs out answers NotReady as well")
+    {
+        constexpr u64 k_one_millisecond = 1'000'000;
+        Forge::SwapChain swap_chain = ForgeTest::Unwrap(Forge::SwapChain::Create(
+            fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format, .acquire_timeout = k_one_millisecond}));
+        Opal::DynamicArray<Forge::Semaphore> semaphores;
+        const u32 acquired_count = acquire_all(swap_chain, semaphores);
+        REQUIRE(acquired_count >= 1);
+        swap_chain.Destroy();
+    }
+    SECTION("BeginFrame skips a frame no texture came free for")
+    {
+        Forge::SwapChain swap_chain = ForgeTest::Unwrap(
+            Forge::SwapChain::Create(fixture.device, fixture.surface, {.pixel_format = k_swap_chain_format, .acquire_timeout = 0}));
+        Forge::FrameContext frame_context = ForgeTest::Unwrap(Forge::FrameContext::Create(
+            fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = 2}));
+        Opal::DynamicArray<Forge::Semaphore> semaphores;
+        REQUIRE(acquire_all(swap_chain, semaphores) >= 1);
+
+        REQUIRE(ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::NotReady);
+        // Nothing began recording, so there is no frame to end.
+        REQUIRE(frame_context.GetCommandBuffer().GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE(frame_context.EndFrame().GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        frame_context.Destroy();
+        swap_chain.Destroy();
+    }
+    REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
 TEST_CASE("Forge swap chain follows the window across a resize", "[forge-window]")
 {
     if (!IsForgeWindowAvailable())
