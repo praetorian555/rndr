@@ -77,7 +77,7 @@ struct DeviceFeatures
      * device created without this is refused.
      */
     bool sampler_mirror_clamp_to_edge = false;
-    /** BC compressed texture formats. */
+    /** BC compressed texture formats, which a texture naming one is refused without. */
     bool texture_compression_bc = false;
     /** Views of TextureViewType::CubeArray, which a texture naming one is refused without. */
     bool image_cube_array = false;

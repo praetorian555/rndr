@@ -297,6 +297,15 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
         RNDR_LOG_ERROR("Forge: a cube array view needs the device created with DeviceFeatures::image_cube_array");
         return ErrorCode::InvalidArgument;
     }
+    // Vulkan itself would allow a BC format on a device that reports it without the feature, and the layer
+    // says nothing either way. Refused here so the feature means what its name says: a device that did not
+    // ask for BC formats does not get them.
+    const bool is_bc_format = m_desc.format >= PixelFormat::BC1_RGB_UNORM_BLOCK && m_desc.format <= PixelFormat::BC7_SRGB_BLOCK;
+    if (is_bc_format && !device.GetFeatures().texture_compression_bc)
+    {
+        RNDR_LOG_ERROR("Forge: a BC compressed texture needs the device created with DeviceFeatures::texture_compression_bc");
+        return ErrorCode::InvalidArgument;
+    }
 
     RNDR_FORGE_TRANSLATE(image_type, ToVkImageType(m_desc.dimension), "TextureDesc::dimension");
     RNDR_FORGE_TRANSLATE(sample_count, ToVkSampleCount(m_desc.sample_count), "TextureDesc::sample_count");
