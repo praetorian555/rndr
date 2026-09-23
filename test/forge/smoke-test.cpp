@@ -6062,6 +6062,77 @@ TEST_CASE("Forge blits", "[forge]")
         }
         REQUIRE(found_blend);
     }
+
+    /**
+     * Blit one region of a fresh grid into a fresh target of the same size with a nearest filter, and hand
+     * back what the target holds. Every section above reads the whole source; these read part of it.
+     */
+    auto blit_part = [&](const Forge::TextureBlitRegion& region)
+    {
+        Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
+        Forge::Texture destination = MakeTransferTarget(fixture.device, k_side, k_side);
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination)) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBlitTexture(source, destination, {&region, 1}, ImageFilter::Nearest) ==
+                                ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        return ReadColorPixels(fixture, destination, k_side);
+    };
+
+    /** Every texel of the target is the source texel two to one above it, counted from `corner` of the source. */
+    auto require_quarter_scaled_up = [&](const Opal::DynamicArray<u8>& pixels, i32 corner_x, i32 corner_y)
+    {
+        const Opal::DynamicArray<u8> expected = MakeTexelGrid(k_side, k_side, k_seed);
+        for (i32 y = 0; y < k_side; ++y)
+        {
+            for (i32 x = 0; x < k_side; ++x)
+            {
+                INFO("texel " << x << "," << y);
+                REQUIRE_TEXEL_EQUALS(GridTexel(pixels, k_side, x, y), GridTexel(expected, k_side, corner_x + x / 2, corner_y + y / 2));
+            }
+        }
+    };
+
+    SECTION("A blit reads only the box its source offset and extent name")
+    {
+        // The top right quarter into the whole destination. The offset is on x alone, so an offset read with
+        // its axes exchanged lands on the bottom left quarter, and the grid tells every texel apart - red
+        // counts columns and green counts rows.
+        constexpr i32 k_half = k_side / 2;
+        const Forge::TextureBlitRegion region{.source_offset = {k_half, 0, 0}, .source_extent = {k_half, k_half, 1}};
+        require_quarter_scaled_up(blit_part(region), k_half, 0);
+    }
+    SECTION("A zero source extent past an offset reads the rest of the source")
+    {
+        // What the header promises for a zero on an axis: the rest of the mip level past the offset, not the
+        // whole level and not nothing. From the middle, the rest is the bottom right quarter.
+        constexpr i32 k_half = k_side / 2;
+        const Forge::TextureBlitRegion region{.source_offset = {k_half, k_half, 0}};
+        require_quarter_scaled_up(blit_part(region), k_half, k_half);
+    }
+    SECTION("A source box that reaches past the source is refused")
+    {
+        // The source half of the bounds check, which a blit of the whole source can never trip.
+        Forge::Texture source = MakeGridTexture(fixture.device, fixture.GetQueue(), k_side, k_side, k_seed);
+        Forge::Texture destination = MakeTransferTarget(fixture.device, k_side, k_side);
+        const Forge::TextureBlitRegion past_the_edge{.source_offset = {k_side / 2, 0, 0}, .source_extent = {k_side, k_side, 1}};
+        ErrorCode blit_status = ErrorCode::Success;
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferSource(source)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(destination)) ==
+                                ErrorCode::Success);
+                        blit_status = command_buffer.CmdBlitTexture(source, destination, {&past_the_edge, 1}, ImageFilter::Nearest);
+                    }) == ErrorCode::Success);
+        REQUIRE(blit_status == ErrorCode::OutOfBounds);
+    }
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
