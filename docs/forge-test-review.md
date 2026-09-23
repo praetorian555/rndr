@@ -240,6 +240,9 @@ bullet, the full `[forge]` and `[forge-window]` set run after each.
 - Note in the header that `SamplerDesc::base_mip_level` and `max_mip_level` are Canvas fields, or map
   them.
 
+**Done** in `7fbba3a`, `15c884c` and `78dd203`. The read-only depth case stayed off `RenderWithDepth`: it is
+two passes, not one.
+
 ### Bucket B: pattern-following tests
 
 **Sonnet 5, medium effort.** Each copies the shape of an existing case and asserts a readback or a code.
@@ -249,6 +252,8 @@ Items 2, 7, 8, 9, 11, 12, 14, 15, 16, 17, 18 and 19: the undersized layout refus
 the draw arguments, the four windowed claims, the layer sub-range view, the other sample counts, the LOD
 bias, the pure function tables, the instance extension queries, the depth aspect readback, the two header
 refusals, and the two desc defaults.
+
+**Done**, `4aa7897` to `fb6f64c`, except 14 and 16, which are struck above with the reason.
 
 ### Bucket C: new shaders, Vulkan semantics, likely Forge changes
 
@@ -260,13 +265,41 @@ the stencil fail and depth-fail operations; the slope factor with a tilted quad;
 source; the floating point and 64-bit specialization constants; the five device features nothing asks for;
 the transient attachment.
 
+**Done** on 2026-09-23, one `test` commit per item, each checked against hand-made mutants of the code it
+covers. What each found:
+
+- 1: one shader declares all six kinds; each is read back through reflection, a layout that agrees builds
+  a pipeline the layer accepts, and every binding declared as each of the other five kinds is refused. No
+  Forge change.
+- 3: all six stencil operation slots are distinct and reached one at a time, under both windings. The face
+  probe moved into `IsQuadFrontFacing`. No Forge change.
+- 4: a quad tilted in x alone, so both slope formulas the specification allows agree; the readback matches
+  `m * slope_factor` exactly. No Forge change.
+- 5: a quarter of the source, the rest of the level past an offset, and a source box past the edge. No
+  Forge change.
+- 6: `Float32` compared bit for bit; `UInt64` and `Float64` with information in both words. No Forge change.
+- 10: `scalar_block_layout` and `runtime_descriptor_array` are shown to reach their bit by the layer
+  refusing the same shader with the field off; `runtime_descriptor_array` works without the rest of
+  descriptor indexing. `variable_descriptor_count` is guarded by Forge. The layer does not tie BC formats
+  to `textureCompressionBC`, so `b8444de` makes Forge refuse a BC texture without the feature, and a
+  hand-encoded BC1 block is uploaded and sampled. `shader_float64` rides on item 6.
+- 13: a transient depth buffer, cleared in and discarded out, decides what is on top. `796ecad` refuses a
+  transient texture with a usage other than an attachment, or with none. `e638f4c` allocates a transient
+  texture from lazily allocated memory where the device has a type for it, since `VMA_MEMORY_USAGE_AUTO`
+  left that to memory type order, and adds `Texture::GetMemoryProperties` to tell. No machine this runs on
+  has lazy memory, so only the fallback branch has run.
+
+The suite now stands at 127 cases and 20131 assertions. Item 14, struck from bucket B, is still untested:
+it wants a fragment-shader draw over a real mip chain, which none of these needed.
+
 ### API gaps found on the way
 
 Not test gaps, since nothing in the API reaches them, but worth a line each so the next feature has a list:
 
 - A resolve at the end of a dynamic rendering pass (`VkRenderingAttachmentInfo::resolveImageView`), which is
   the resolve a tiled device wants and the only way to resolve depth. `CmdResolveTexture` is the standalone
-  command.
+  command. It is also what a transient multisampled colour attachment needs: `CmdResolveTexture` reads its
+  source as a transfer source, which Vulkan does not allow beside the transient usage.
 - Input attachments: no `DescriptorType::InputAttachment`, and reading one inside a dynamic rendering pass
   needs `VK_KHR_dynamic_rendering_local_read`.
 - Comparison samplers: `SamplerDesc` carries no compare operation, so a shadow map cannot be sampled with
