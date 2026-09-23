@@ -272,6 +272,12 @@ Opal::Expected<Rndr::Forge::Texture, Rndr::ErrorCode> Rndr::Forge::Texture::Crea
     return Result(std::move(texture));
 }
 
+/** How many of `total` a first index and a count that may be the k_all_* sentinel name. */
+static Rndr::u32 ResolveCount(Rndr::u32 first, Rndr::u32 count, Rndr::u32 total)
+{
+    return count == 0xFFFFFFFF ? total - first : count;
+}
+
 Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 {
     m_desc = desc;
@@ -288,6 +294,17 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
     if (wants_cube_view && m_desc.array_layer_count % 6 != 0)
     {
         RNDR_LOG_ERROR("Forge: a cube view needs an array layer count that is a multiple of six, got {}", m_desc.array_layer_count);
+        return ErrorCode::InvalidArgument;
+    }
+    // The flag goes on the image, but the texture's own view is taken over its subresource range, and a cube
+    // view is exactly six layers - a twelve layer image with a Cube view type would be made compatible and
+    // then handed a view the driver has no defined answer for.
+    const u32 view_layer_count =
+        ResolveCount(m_desc.subresource_range.first_array_layer, m_desc.subresource_range.array_layer_count, m_desc.array_layer_count);
+    if (wants_cube_view && (m_desc.view_type == TextureViewType::Cube ? view_layer_count != 6 : view_layer_count % 6 != 0))
+    {
+        RNDR_LOG_ERROR("Forge: a cube view covers six layers and a cube array view a multiple of six, the view would cover {}",
+                       view_layer_count);
         return ErrorCode::InvalidArgument;
     }
     // More than one cube under one view is a feature of its own, and a device that does not have it rejects
@@ -554,12 +571,6 @@ Rndr::ErrorCode Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRan
 }
 
 // TextureView
-
-/** How many of `total` a first index and a count that may be the k_all_* sentinel name. */
-static Rndr::u32 ResolveCount(Rndr::u32 first, Rndr::u32 count, Rndr::u32 total)
-{
-    return count == 0xFFFFFFFF ? total - first : count;
-}
 
 Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureView::Create(const Device& device, const Texture& texture,
                                                                                            const TextureViewDesc& desc)
