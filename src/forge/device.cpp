@@ -485,7 +485,7 @@ Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::Select
     }
     // On a machine with several devices the last reason is not the whole story, but a reason beats none.
     const Opal::StringUtf8 reason = FindUnmetRequirement(devices[devices.GetSize() - 1], desc);
-    RNDR_LOG_ERROR("Forge: no suitable device. The last one {}", reinterpret_cast<const char*>(reason.GetData()));
+    RNDR_LOG_ERROR("Forge: no suitable device. The last one {}", reason.GetData());
     return Result(ErrorCode::FeatureNotSupported);
 }
 

@@ -370,7 +370,7 @@ Rndr::ErrorCode CheckAgainstShaders(Rndr::Forge::DescriptorSetLayoutDesc& desc)
             if (!present)
             {
                 RNDR_LOG_ERROR("Forge: a shader reads {} at binding {} of set {} and this layout does not declare it",
-                               reinterpret_cast<const char*>(declared.name.GetData()), declared.binding, desc.set_index);
+                               declared.name.GetData(), declared.binding, desc.set_index);
                 return Rndr::ErrorCode::InvalidArgument;
             }
         }
@@ -816,7 +816,7 @@ Opal::Expected<Rndr::u32, Rndr::ErrorCode> Rndr::Forge::DescriptorSet::GetBindin
             "DescriptorSetLayoutDesc::shaders, which is where the names come from");
         return Result(ErrorCode::InvalidArgument);
     }
-    RNDR_LOG_ERROR("Forge: no shader of this descriptor set declares a binding called {}", reinterpret_cast<const char*>(name.GetData()));
+    RNDR_LOG_ERROR("Forge: no shader of this descriptor set declares a binding called {}", name.GetData());
     return Result(ErrorCode::InvalidArgument);
 }
 

@@ -30,7 +30,7 @@ void SetName(const Rndr::Forge::Device& device, VkObjectType object_type, Rndr::
     const VkDebugUtilsObjectNameInfoEXT name_info{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
                                                   .objectType = object_type,
                                                   .objectHandle = handle,
-                                                  .pObjectName = reinterpret_cast<const char*>(name.GetData())};
+                                                  .pObjectName = name.GetData()};
     const VkResult result = vkSetDebugUtilsObjectNameEXT(device.GetNativeDevice(), &name_info);
     if (result != VK_SUCCESS)
     {
@@ -140,7 +140,7 @@ Rndr::Forge::ScopedDebugLabel::~ScopedDebugLabel()
 static Opal::StringUtf8 Indexed(const Opal::StringUtf8& name, const char* what, Rndr::u32 index)
 {
     char buffer[128] = {};
-    snprintf(buffer, sizeof(buffer), "%s %s %u", reinterpret_cast<const char*>(name.GetData()), what, index);
+    snprintf(buffer, sizeof(buffer), "%s %s %u", name.GetData(), what, index);
     return Opal::StringUtf8(buffer);
 }
 

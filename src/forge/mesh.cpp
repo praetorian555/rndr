@@ -28,7 +28,7 @@ Rndr::ErrorCode Rndr::Forge::LoadMesh(const Opal::StringUtf8& file_path, Mesh& o
     const aiScene* scene = aiImportFile(*file_path, k_ai_process_flags);
     if (scene == nullptr || !scene->HasMeshes())
     {
-        RNDR_LOG_ERROR("Forge: the mesh file could not be loaded or holds no mesh: {}", reinterpret_cast<const char*>(file_path.GetData()));
+        RNDR_LOG_ERROR("Forge: the mesh file could not be loaded or holds no mesh: {}", file_path.GetData());
         return ErrorCode::FileNotFound;
     }
 

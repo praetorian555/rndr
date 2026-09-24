@@ -31,7 +31,7 @@ void Append(Opal::DynamicArray<Rndr::u8>& out, const T& value)
 
 void AppendString(Opal::DynamicArray<Rndr::u8>& out, const Opal::StringUtf8& value)
 {
-    const auto size = static_cast<Rndr::u64>(value.GetSize());
+    const auto size = value.GetSize();
     Append(out, size);
     if (size == 0)
     {
@@ -46,7 +46,7 @@ void AppendString(Opal::DynamicArray<Rndr::u8>& out, const Opal::StringUtf8& val
 template <typename T>
 bool Read(Opal::ArrayView<const Rndr::u8> blob, Rndr::u64& cursor, T& out_value)
 {
-    if (cursor + sizeof(T) > static_cast<Rndr::u64>(blob.GetSize()))
+    if (cursor + sizeof(T) > blob.GetSize())
     {
         return false;
     }
@@ -62,7 +62,7 @@ bool ReadString(Opal::ArrayView<const Rndr::u8> blob, Rndr::u64& cursor, Opal::S
     {
         return false;
     }
-    if (cursor + size > static_cast<Rndr::u64>(blob.GetSize()))
+    if (cursor + size > blob.GetSize())
     {
         return false;
     }
@@ -86,9 +86,9 @@ Rndr::ShaderCacheKey Rndr::ShaderCacheKey::Make(const Opal::StringUtf8& source, 
 
 Rndr::u64 Rndr::ShaderCacheKey::GetHash() const
 {
-    u64 hash = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(source.GetData()), static_cast<u64>(source.GetSize()));
-    hash = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(entry_point.GetData()), static_cast<u64>(entry_point.GetSize()), hash);
-    hash = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(build_tag.GetData()), static_cast<u64>(build_tag.GetSize()), hash);
+    u64 hash = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(source.GetData()), source.GetSize());
+    hash = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(entry_point.GetData()), entry_point.GetSize(), hash);
+    hash = Opal::Hash::CalcRawArray(reinterpret_cast<const u8*>(build_tag.GetData()), build_tag.GetSize(), hash);
     const auto format_value = static_cast<u8>(format);
     return Opal::Hash::CalcRawArray(&format_value, sizeof(format_value), hash);
 }
@@ -124,7 +124,7 @@ Opal::StringUtf8 Rndr::ShaderCache::GetFilePath(const ShaderCacheKey& key) const
         return {};
     }
     char name[32] = {};
-    snprintf(name, sizeof(name), "%016llx.rsc", static_cast<unsigned long long>(key.GetHash()));
+    snprintf(name, sizeof(name), "%016llx.rsc", key.GetHash());
     Opal::Expected<Opal::StringUtf8, Opal::ErrorCode> path = Opal::Paths::Combine(m_directory, Opal::StringUtf8(name));
     return path.HasValue() ? path.GetValue().Clone() : Opal::StringUtf8();
 }
@@ -175,7 +175,7 @@ Opal::DynamicArray<Rndr::u8> Rndr::ShaderCache::Find(const ShaderCacheKey& key) 
     }
     stored.format = static_cast<ShaderOutputFormat>(format_value);
     u64 code_size = 0;
-    if (!Read(bytes, cursor, code_size) || cursor + code_size != static_cast<u64>(bytes.GetSize()))
+    if (!Read(bytes, cursor, code_size) || cursor + code_size != bytes.GetSize())
     {
         ++m_misses;
         return {};
@@ -204,7 +204,7 @@ void Rndr::ShaderCache::Store(const ShaderCacheKey& key, Opal::ArrayView<const u
     Opal::DynamicArray<u8> owned(static_cast<i32>(code.GetSize()));
     if (code.GetSize() > 0)
     {
-        memcpy(owned.GetData(), code.GetData(), static_cast<u64>(code.GetSize()));
+        memcpy(owned.GetData(), code.GetData(), code.GetSize());
     }
     for (i32 i = 0; i < m_entries.GetSize(); ++i)
     {
@@ -228,12 +228,12 @@ void Rndr::ShaderCache::Store(const ShaderCacheKey& key, Opal::ArrayView<const u
     AppendString(blob, key.entry_point);
     AppendString(blob, key.build_tag);
     Append(blob, static_cast<u8>(key.format));
-    Append(blob, static_cast<u64>(owned.GetSize()));
+    Append(blob, owned.GetSize());
     const auto offset = blob.GetSize();
     blob.Resize(offset + owned.GetSize());
     if (owned.GetSize() > 0)
     {
-        memcpy(blob.GetData() + offset, owned.GetData(), static_cast<u64>(owned.GetSize()));
+        memcpy(blob.GetData() + offset, owned.GetData(), owned.GetSize());
     }
     if (Opal::WriteBytesToFile(path, {blob.GetData(), blob.GetSize()}) != Opal::ErrorCode::Success)
     {

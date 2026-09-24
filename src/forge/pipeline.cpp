@@ -318,7 +318,7 @@ Opal::Expected<Rndr::Forge::VertexInputDesc, Rndr::ErrorCode> Rndr::Forge::Verte
             RNDR_LOG_ERROR(
                 "Forge: vertex attribute {} has a format with no size, so where the next one starts is not something this "
                 "can work out",
-                reinterpret_cast<const char*>(input.name.GetData()));
+                input.name.GetData());
             return Result(ErrorCode::InvalidArgument);
         }
         target.attributes.PushBack(Attribute{.location = input.location, .format = input.format, .offset = offset});
@@ -395,7 +395,7 @@ Rndr::ErrorCode RequireVertexInputMatchesShader(const Rndr::Forge::VertexInputDe
         if (attribute == nullptr)
         {
             RNDR_LOG_ERROR("Forge: the vertex shader reads {} at location {} and no vertex attribute feeds it",
-                           reinterpret_cast<const char*>(input.name.GetData()), input.location);
+                           input.name.GetData(), input.location);
             return Rndr::ErrorCode::InvalidArgument;
         }
         const Rndr::FormatNumericClass wanted = Rndr::GetFormatNumericClass(input.format);
@@ -403,7 +403,7 @@ Rndr::ErrorCode RequireVertexInputMatchesShader(const Rndr::Forge::VertexInputDe
         if (wanted != given)
         {
             RNDR_LOG_ERROR("Forge: the vertex attribute at location {} does not have the numeric class the shader reads {} as",
-                           input.location, reinterpret_cast<const char*>(input.name.GetData()));
+                           input.location, input.name.GetData());
             return Rndr::ErrorCode::InvalidArgument;
         }
     }
@@ -551,7 +551,7 @@ Rndr::ErrorCode RequireValueFits(const Rndr::Forge::SpecializationConstant& valu
     if (!fits)
     {
         RNDR_LOG_ERROR("Forge: specialization constant {} is declared {} bits wide and the value given does not fit in it",
-                       reinterpret_cast<const char*>(value.name.GetData()), width);
+                       value.name.GetData(), width);
         return Rndr::ErrorCode::InvalidArgument;
     }
     return Rndr::ErrorCode::Success;
@@ -571,7 +571,7 @@ Rndr::ErrorCode RequireNoDuplicateNames(Opal::ArrayView<const Rndr::Forge::Speci
             if (values[i].name == values[j].name)
             {
                 RNDR_LOG_ERROR("Forge: specialization constant {} was given a value twice",
-                               reinterpret_cast<const char*>(values[i].name.GetData()));
+                               values[i].name.GetData());
                 return Rndr::ErrorCode::InvalidArgument;
             }
         }
@@ -609,7 +609,7 @@ Opal::Expected<StageSpecialization, Rndr::ErrorCode> BuildStageSpecialization(
             if (info.type != value.value.type)
             {
                 RNDR_LOG_ERROR("Forge: specialization constant {} is declared as {} but was given a {}",
-                               reinterpret_cast<const char*>(value.name.GetData()), SpecializationTypeName(info.type),
+                               value.name.GetData(), SpecializationTypeName(info.type),
                                SpecializationTypeName(value.value.type));
                 return Result(Rndr::ErrorCode::InvalidArgument);
             }
@@ -643,7 +643,7 @@ Rndr::ErrorCode RequireEveryValueMatched(Opal::ArrayView<const Rndr::Forge::Spec
         if (!matched[i])
         {
             RNDR_LOG_ERROR("Forge: no shader of this pipeline declares a specialization constant called {}",
-                           reinterpret_cast<const char*>(values[i].name.GetData()));
+                           values[i].name.GetData());
             return Rndr::ErrorCode::InvalidArgument;
         }
     }

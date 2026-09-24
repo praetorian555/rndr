@@ -536,8 +536,14 @@ TEST_CASE("Forge maps a VkResult to the error code it reports as", "[forge]")
  * Checked at compile time, one line per enumerator, so an enumerator added with the wrong value, or a value
  * Vulkan renumbered, stops the build where it is rather than handing the driver something else.
  */
+/** A function rather than a cast in the macro: some of the Vulkan values already are u64, and GCC flags a cast to
+ * the type a value has. */
+constexpr u64 MirrorValue(auto value)
+{
+    return static_cast<u64>(value);
+}
 #define RNDR_FORGE_MIRRORS(forge_value, vulkan_value) \
-    static_assert(static_cast<u64>(forge_value) == static_cast<u64>(vulkan_value), #forge_value " is not " #vulkan_value)
+    static_assert(MirrorValue(forge_value) == MirrorValue(vulkan_value), #forge_value " is not " #vulkan_value)
 
 RNDR_FORGE_MIRRORS(Forge::BufferUsageBits::TransferSource, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 RNDR_FORGE_MIRRORS(Forge::BufferUsageBits::TransferDestination, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
@@ -1665,8 +1671,8 @@ TEST_CASE("Forge debug names reach the validation layer", "[forge]")
     const Opal::StringUtf8 errors = fixture.GetValidationErrors();
     INFO(*errors);
     REQUIRE(fixture.GetValidationErrorCount() > 0);
-    REQUIRE(strstr(reinterpret_cast<const char*>(*errors), "probe-source-texture") != nullptr);
-    REQUIRE(strstr(reinterpret_cast<const char*>(*errors), "probe-destination-texture") != nullptr);
+    REQUIRE(strstr(*errors, "probe-source-texture") != nullptr);
+    REQUIRE(strstr(*errors, "probe-destination-texture") != nullptr);
 
     // The error above was the point of the test, so it must not be left for the next assertion to trip over.
     fixture.context.ClearDebugMessages();
@@ -6164,7 +6170,7 @@ TEST_CASE("Forge shader reflection", "[forge]")
         const Opal::ArrayView<const Forge::ShaderInputInfo> inputs = vertex_shader.GetInputs();
         for (i32 i = 0; i < inputs.GetSize(); ++i)
         {
-            INFO("input " << reinterpret_cast<const char*>(inputs[i].name.GetData()));
+            INFO("input " << inputs[i].name.GetData());
             if (inputs[i].location == 0)
             {
                 REQUIRE(inputs[i].format == PixelFormat::R32G32_SFLOAT);
@@ -6549,7 +6555,7 @@ TEST_CASE("Forge descriptor bindings of every kind checked against the shader", 
         for (i32 i = 0; i < bindings.GetSize(); ++i)
         {
             const Forge::ShaderBindingInfo& binding = bindings[i];
-            INFO("binding " << binding.binding << " named " << reinterpret_cast<const char*>(binding.name.GetData()));
+            INFO("binding " << binding.binding << " named " << binding.name.GetData());
             REQUIRE(binding.set == 0);
             REQUIRE(binding.binding < static_cast<u32>(k_kind_count));
             REQUIRE_FALSE(seen[binding.binding]);

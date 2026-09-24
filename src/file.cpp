@@ -85,8 +85,14 @@ Opal::DynamicArray<Rndr::u8> Rndr::File::ReadEntireFile(const Opal::StringUtf8& 
     }
 
     fseek(file, 0, SEEK_END);
-    const int contents_size = ftell(file);
+    const i64 contents_size = ftell(file);
     fseek(file, 0, SEEK_SET);
+    if (contents_size < 0)
+    {
+        RNDR_LOG_ERROR("Failed to find the size of file {}", file_path.GetData());
+        fclose(file);
+        return {};
+    }
 
     Opal::DynamicArray<u8> contents(contents_size);
     const u64 read_bytes = fread(contents.GetData(), 1, contents.GetSize(), file);
@@ -308,7 +314,7 @@ Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode> Rndr::File::LoadImage(const Opal::
     }
     else if (stbi_is_16_bit(*file_path) > 0)
     {
-        u16* data = reinterpret_cast<u16*>(stbi_load_16(*file_path, &width, &height, &channels_in_file, k_desired_channels));
+        u16* data = stbi_load_16(*file_path, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
             RNDR_LOG_ERROR("Failed to load 16-bit image {}: {}", *file_path, stbi_failure_reason());

@@ -360,7 +360,7 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSp
     if (entry_point == nullptr)
     {
         RNDR_LOG_ERROR("Forge: the SPIR-V module has no entry point named {}",
-                       reinterpret_cast<const char*>(shader.m_entry_point.GetData()));
+                       shader.m_entry_point.GetData());
         return Result(ErrorCode::InvalidArgument);
     }
     const Opal::Optional<VkShaderStageFlagBits> native_stage = ToNativeShaderStage(entry_point->shader_stage);
@@ -454,7 +454,7 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSp
     Opal::DynamicArray<u8> spirv_data = File::ReadEntireFile(path);
     if (spirv_data.IsEmpty())
     {
-        RNDR_LOG_ERROR("Forge: the SPIR-V file could not be read or is empty: {}", reinterpret_cast<const char*>(path.GetData()));
+        RNDR_LOG_ERROR("Forge: the SPIR-V file could not be read or is empty: {}", path.GetData());
         return Result(ErrorCode::FileNotFound);
     }
     return FromSpirvInMemory(device, Opal::ArrayView<const u8>(spirv_data.GetData(), spirv_data.GetSize()), desc);
@@ -519,7 +519,7 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSo
     const Opal::StringUtf8 source = File::ReadEntireTextFile(path);
     if (source.IsEmpty())
     {
-        RNDR_LOG_ERROR("Forge: the shader file could not be read or is empty: {}", reinterpret_cast<const char*>(path.GetData()));
+        RNDR_LOG_ERROR("Forge: the shader file could not be read or is empty: {}", path.GetData());
         return Result(ErrorCode::FileNotFound);
     }
     return FromSourceInMemory(device, source, desc);

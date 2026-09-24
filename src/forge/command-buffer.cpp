@@ -1766,7 +1766,7 @@ VkDebugUtilsLabelEXT ToVkLabel(const char* name, const Rndr::Vector4f& color)
 /** An empty string rather than a null pointer, which pLabelName is not allowed to be. */
 const char* ToLabelText(const Opal::StringUtf8& name)
 {
-    return name.IsEmpty() ? "" : reinterpret_cast<const char*>(name.GetData());
+    return name.IsEmpty() ? "" : name.GetData();
 }
 }  // namespace
 
