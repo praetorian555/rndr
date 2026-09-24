@@ -147,18 +147,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The XCB and xkbcommon headers the Linux platform layer is written against, lavapipe and the validation
-      # layer from the distribution rather than a download - the loader finds both where apt puts them, so
-      # there is nothing to register - and Xvfb, since the window, input and [forge-window] cases need an X
-      # server and a runner has none.
+      # The XCB and xkbcommon headers the Linux platform layer is written against, lavapipe from the distribution
+      # - the loader finds it where apt puts it, so there is nothing to register - and Xvfb, since the window,
+      # input and [forge-window] cases need an X server and a runner has none.
       - name: Install packages
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             ninja-build pkg-config \
             libxcb1-dev libxcb-randr0-dev libxcb-xfixes0-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libvulkan1 mesa-vulkan-drivers vulkan-validationlayers vulkan-tools \
+            libvulkan1 mesa-vulkan-drivers vulkan-tools \
             xvfb
+
+      # The validation layer from the SDK rather than apt: 24.04 packages 1.3.275, which predates extensions
+      # Forge enables and reports errors against correct code that uses them. This is the SDK the Windows job
+      # takes its layer from; the action points VK_LAYER_PATH and LD_LIBRARY_PATH at it.
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: 1.4.335.0
+          cache: true
 
       # Same check as on Windows: without a device the Forge cases skip, and without the layer every
       # REQUIRE_NO_VALIDATION_ERROR passes on nothing.
@@ -172,7 +180,7 @@ jobs:
       - name: Report the compiler
         run: |
           gcc --version | head -1
-          dpkg-query -W mesa-vulkan-drivers vulkan-validationlayers
+          dpkg-query -W mesa-vulkan-drivers
 
       # Canvas and audio are not listed: CMakeLists.txt forces both off on Linux.
       - name: Configure CMake
