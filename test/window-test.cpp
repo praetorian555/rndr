@@ -132,7 +132,8 @@ public:
     X11ClipboardPeer()
     {
         m_connection = xcb_connect(nullptr, nullptr);
-        if (xcb_connection_has_error(m_connection) != 0)
+        m_connection_error = xcb_connection_has_error(m_connection);
+        if (m_connection_error != 0)
         {
             xcb_disconnect(m_connection);
             m_connection = nullptr;
@@ -162,6 +163,8 @@ public:
     X11ClipboardPeer& operator=(const X11ClipboardPeer&) = delete;
 
     [[nodiscard]] bool IsConnected() const { return m_connection != nullptr; }
+    /** What xcb_connection_has_error said about the connection, one of the XCB_CONN_ERROR codes. */
+    [[nodiscard]] i32 GetConnectionError() const { return m_connection_error; }
     [[nodiscard]] xcb_connection_t* GetConnection() const { return m_connection; }
     [[nodiscard]] xcb_window_t GetWindow() const { return m_window; }
 
@@ -337,6 +340,7 @@ private:
     }
 
     xcb_connection_t* m_connection = nullptr;
+    i32 m_connection_error = 0;
     xcb_window_t m_window = XCB_NONE;
 };
 
@@ -365,12 +369,12 @@ xcb_atom_t RequestFromApplication(Application& app, X11ClipboardPeer& peer, xcb_
 
 TEST_CASE("Another X client pastes what the application copied", "[window]")
 {
-    X11ClipboardPeer peer;
-    if (!peer.IsConnected())
-    {
-        SKIP("No X server to connect a second client to.");
-    }
+    // The application connects first. An X server with no clients left - the previous case just closed its
+    // application - resets itself, and a connection made in the middle of that fails.
     Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    X11ClipboardPeer peer;
+    INFO("xcb connection error " << peer.GetConnectionError());
+    REQUIRE(peer.IsConnected());
     const Opal::StringUtf8 text(k_clipboard_text);
     REQUIRE(app->SetClipboardText(text) == ErrorCode::Success);
 
@@ -400,12 +404,11 @@ TEST_CASE("Another X client pastes what the application copied", "[window]")
 
 TEST_CASE("The application pastes what another X client copied", "[window]")
 {
-    X11ClipboardPeer peer;
-    if (!peer.IsConnected())
-    {
-        SKIP("No X server to connect a second client to.");
-    }
+    // The application connects first, for the reason the case above gives.
     Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    X11ClipboardPeer peer;
+    INFO("xcb connection error " << peer.GetConnectionError());
+    REQUIRE(peer.IsConnected());
     xcb_set_selection_owner(peer.GetConnection(), peer.GetWindow(), peer.clipboard, XCB_CURRENT_TIME);
     xcb_flush(peer.GetConnection());
 
