@@ -1179,9 +1179,10 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
         const FormatNumericClass numeric_class = GetFormatNumericClass(texture.GetDesc().format);
         const VkResolveModeFlags supported_modes =
             !is_color ? depth_stencil_resolve_modes
-                      : (numeric_class == FormatNumericClass::SignedInt || numeric_class == FormatNumericClass::UnsignedInt
-                             ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT
-                             : VK_RESOLVE_MODE_AVERAGE_BIT);
+                      : static_cast<VkResolveModeFlags>(
+                            numeric_class == FormatNumericClass::SignedInt || numeric_class == FormatNumericClass::UnsignedInt
+                                ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT
+                                : VK_RESOLVE_MODE_AVERAGE_BIT);
         if ((supported_modes & resolve_mode) == 0)
         {
             RNDR_LOG_ERROR("Forge: the {} attachment cannot be resolved with ResolveMode {} here", role,
