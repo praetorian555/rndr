@@ -124,3 +124,70 @@ jobs:
       # comes back.
       - name: Run tests
         run: ${{ matrix.build-dir }}/${{ matrix.config }}/rndr-test "~[canvas]"
+
+  linux:
+    # Pinned for the same reason as the Windows image: GCC and Mesa come from this image's archive, and a label
+    # that moves would change both under a green build. 24.04 is also what the WSL development build runs.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both, because GCC only warns about some things with the optimizer on, and warnings are errors.
+        include:
+          - config: Debug
+            build-dir: build/ci-linux-debug
+          - config: Release
+            build-dir: build/ci-linux-release
+
+    env:
+      RNDR_TEST_REQUIRE_VULKAN: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The XCB and xkbcommon headers the Linux platform layer is written against, lavapipe and the validation
+      # layer from the distribution rather than a download - the loader finds both where apt puts them, so
+      # there is nothing to register - and Xvfb, since the window, input and [forge-window] cases need an X
+      # server and a runner has none.
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build pkg-config \
+            libxcb1-dev libxcb-randr0-dev libxcb-xfixes0-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libvulkan1 mesa-vulkan-drivers vulkan-validationlayers vulkan-tools \
+            xvfb
+
+      # Same check as on Windows: without a device the Forge cases skip, and without the layer every
+      # REQUIRE_NO_VALIDATION_ERROR passes on nothing.
+      - name: Check the driver and the layer are visible
+        run: |
+          summary=$(vulkaninfo --summary 2>&1)
+          echo "$summary"
+          grep -q llvmpipe <<< "$summary" || { echo "The loader found no lavapipe device: the Vulkan tests would skip themselves."; exit 1; }
+          grep -q VK_LAYER_KHRONOS_validation <<< "$summary" || { echo "The loader found no validation layer: the validation assertions would pass on nothing."; exit 1; }
+
+      - name: Report the compiler
+        run: |
+          gcc --version | head -1
+          dpkg-query -W mesa-vulkan-drivers vulkan-validationlayers
+
+      # Canvas and audio are not listed: CMakeLists.txt forces both off on Linux.
+      - name: Configure CMake
+        run: >
+          cmake -S . -B ${{ matrix.build-dir }}
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+          -DRNDR_BUILD_TESTS=ON
+          -DRNDR_BUILD_SAMPLES=OFF
+          -DRNDR_HARDENING=OFF
+          -DRNDR_FORGE=ON
+          -DRNDR_FORGE_VALIDATION=ON
+
+      - name: Build
+        run: cmake --build ${{ matrix.build-dir }} --target rndr-test
+
+      - name: Run tests
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" ${{ matrix.build-dir }}/rndr-test
