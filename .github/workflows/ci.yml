@@ -197,5 +197,7 @@ jobs:
       - name: Build
         run: cmake --build ${{ matrix.build-dir }} --target rndr-test
 
+      # -noreset: Xvfb otherwise resets whenever its last client disconnects, which every case closing its
+      # application does, and a client connecting during the reset is refused.
       - name: Run tests
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" ${{ matrix.build-dir }}/rndr-test
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -noreset" ${{ matrix.build-dir }}/rndr-test
