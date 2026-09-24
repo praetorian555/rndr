@@ -29,28 +29,57 @@ function(rndr_setup_compiler_warnings target)
     # Warnings as errors
     list(APPEND MSVC_WARNINGS /WX)
 
-    set(GCC_CLANG_WARNINGS
+    # The GCC and Clang lists are Opal's (cmake/compiler-warnings.cmake in praetorian555/opal), so that
+    # Opal's headers, which compile as part of rndr's sources, meet the same flags they were written
+    # against. Three exceptions follow the lists, and unlike Opal, warnings are errors here on all three
+    # compilers.
+    set(CLANG_WARNINGS
         -Wall
-        -Wextra
-        -Wpedantic
+        -Wextra # reasonable and standard
         -Wshadow # variable declaration shadows one from a parent scope
         -Wnon-virtual-dtor # class with virtual functions has a non-virtual destructor
+        -Wold-style-cast # C-style casts
+        -Wcast-align # casts that may be a performance problem
+        -Wunused # anything unused
         -Woverloaded-virtual # overload (not override) of a virtual function
+        -Wpedantic # non-standard C++
+        -Wconversion # type conversions that may lose data
+        -Wsign-conversion # sign conversions
         -Wnull-dereference # a null dereference is detected
         -Wdouble-promotion # implicit float to double promotion
+        -Wformat=2 # security issues around functions that format output (ie printf)
         -Wimplicit-fallthrough # switch case falls through without an annotation
-        # Both are part of -Wextra and both fire on idioms this codebase uses everywhere, while MSVC
-        # at /W4 /WX accepts them: partially initialized Vulkan structs (the remaining members are
-        # value-initialized on purpose) and i32 loop indices compared against a u64 GetSize().
-        -Wno-missing-field-initializers
-        -Wno-sign-compare
+        -Wno-gnu-anonymous-struct # anonymous structs are a GNU extension; Opal's vectors use them
+        -Wno-nested-anon-types # nested anonymous structs, same
+        -Wno-dtor-name # template class destructors named without their template arguments, as Opal's are
     )
 
-    # Warnings as errors
-    list(APPEND GCC_CLANG_WARNINGS -Werror)
+    set(GCC_WARNINGS
+        ${CLANG_WARNINGS}
+        -Wmisleading-indentation # indentation implies blocks where blocks do not exist
+        -Wduplicated-cond # if / else chain has duplicated conditions
+        -Wduplicated-branches # if / else branches have duplicated code
+        -Wlogical-op # logical operations used where bitwise were probably wanted
+        -Wuseless-cast # a cast to the same type
+        -Wsuggest-override # an overriding member function is not marked 'override' or 'final'
+    )
 
+    # Where rndr departs from Opal. All three fire on idioms this codebase uses everywhere and MSVC at
+    # /W4 /WX accepts: designated initializers that leave members at their defaults on purpose - how
+    # the Forge descriptors are meant to be filled - and i32 indices and counts against Opal's u64
+    # size_type.
+    set(RNDR_EXCEPTIONS
+        -Wno-missing-field-initializers
+        -Wno-sign-compare
+        -Wno-sign-conversion
+    )
+    list(APPEND CLANG_WARNINGS ${RNDR_EXCEPTIONS} -Werror)
+    list(APPEND GCC_WARNINGS ${RNDR_EXCEPTIONS} -Werror)
+
+    # C++ only: the one C file compiled into rndr (SPIRV-Reflect) is third-party, and several of these
+    # flags mean nothing to a C compiler.
     target_compile_options(${target} INTERFACE "$<$<CXX_COMPILER_ID:MSVC>:${MSVC_WARNINGS}>")
-    target_compile_options(${target} INTERFACE
-        "$<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:${GCC_CLANG_WARNINGS}>")
+    target_compile_options(${target} INTERFACE "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:Clang>>:${CLANG_WARNINGS}>")
+    target_compile_options(${target} INTERFACE "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:GNU>>:${GCC_WARNINGS}>")
 
 endfunction()

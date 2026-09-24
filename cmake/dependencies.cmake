@@ -93,6 +93,8 @@ if (RNDR_KTX)
             NAME ktx
             GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
             GIT_TAG "v4.4.2"
+            # Its headers are third-party and not held to rndr's warnings: khr_df.h uses C-style casts.
+            SYSTEM YES
             OPTIONS
             "KTX_FEATURE_TOOLS OFF"
     )
