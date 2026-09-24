@@ -40,6 +40,9 @@ public:
 
     [[nodiscard]] bool IsGamepadConnected(u8 gamepad_index) const override;
 
+    ErrorCode SetClipboardText(const Opal::StringUtf8& text) override;
+    [[nodiscard]] Opal::Expected<Opal::StringUtf8, ErrorCode> GetClipboardText() override;
+
     [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
     [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
     [[nodiscard]] MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const override;

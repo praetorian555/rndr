@@ -249,6 +249,28 @@ Three environment traps, all of which cost time once already:
 - **Do not write logs to `/tmp`.** The distro shuts itself down once the last process exits and `/tmp`
   is tmpfs, so logs vanish between runs. Write them into the build directory instead.
 
+## Clipboard (done)
+
+`PlatformApplication::SetClipboardText` / `GetClipboardText`, UTF-8 text on the CLIPBOARD selection only
+(no PRIMARY, which has no Windows counterpart). The Windows side is `CF_UNICODETEXT`.
+
+- `LinuxApplication` owns the selection through an unmapped input-only window created at startup, so the
+  clipboard does not depend on any application window staying open. A copy stores the text and takes
+  the selection; the text goes out when `ProcessEvent` answers a `SelectionRequest` for `TARGETS`,
+  `UTF8_STRING` or `text/plain;charset=utf-8`, in a single request. Text larger than the server's maximum
+  request (16 MiB with BIG-REQUESTS) is refused - sending INCR is not implemented.
+- A paste from another owner is synchronous: `ConvertSelection` into the `RNDR_CLIPBOARD` property, then
+  wait up to a second for the `SelectionNotify`, and for each piece when the answer is INCR. Selection
+  requests arriving meanwhile are answered on the spot. Every other event is kept in `m_deferred_events`
+  and delivered first by the next `ProcessSystemEvents`, so a paste in an input handler loses nothing.
+- Whether this application owns the clipboard is always asked of the server rather than tracked: a
+  `SelectionClear` can still be queued when the application has already taken the clipboard back.
+- No handoff to a clipboard manager on exit: text copied from an application is gone once it closes,
+  as with GLFW.
+- `[window]` covers both directions against a second X client in the test, INCR included. Under WSLg the
+  X clipboard is mirrored to Windows, so the WSLg window manager asks every new owner for its text - the
+  test peer answers those too, and so should any code that owns the clipboard.
+
 ## Out of scope (explicit, so nothing half-lands)
 
 Wayland-native backend; Canvas GL on Linux (GLX/EGL); gamepad via evdev; Linux audio device;

@@ -4,6 +4,7 @@
 #include "opal/container/expected.h"
 #include "opal/container/ref.h"
 #include "opal/container/scope-ptr.h"
+#include "opal/container/string.h"
 #include "opal/delegate.h"
 
 #include "rndr/error-codes.hpp"
@@ -78,6 +79,11 @@ public:
     void SetCursorPosition(const Vector2i& pos);
     [[nodiscard]] Vector2i GetCursorPosition() const;
     /** End of cursor manipulation API. */
+
+    /** Clipboard API. See PlatformApplication for what each returns. */
+    ErrorCode SetClipboardText(const Opal::StringUtf8& text);
+    [[nodiscard]] Opal::Expected<Opal::StringUtf8, ErrorCode> GetClipboardText();
+    /** End of clipboard API. */
 
     /**
      * Checks whether a gamepad is currently connected on the given slot. Connection state is

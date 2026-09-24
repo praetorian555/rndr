@@ -75,6 +75,23 @@ public:
         return false;
     }
 
+    /**
+     * Put text on the system clipboard, replacing whatever was there.
+     * @param text UTF-8 text.
+     * @return ErrorCode::Success, ErrorCode::InvalidArgument if the text is not valid UTF-8, or
+     *         ErrorCode::PlatformError if the window system would not take it.
+     */
+    virtual ErrorCode SetClipboardText(const Opal::StringUtf8& text) = 0;
+
+    /**
+     * Get the text on the system clipboard. An empty clipboard, or one holding something that is not
+     * text, gives an empty string. On Linux, when another application owns the clipboard, this waits
+     * for it to send the text over, for up to a second.
+     * @return The text, ErrorCode::CorruptData if what the clipboard holds is not valid text in its
+     *         claimed encoding, or ErrorCode::PlatformError if the window system could not deliver it.
+     */
+    [[nodiscard]] virtual Opal::Expected<Opal::StringUtf8, ErrorCode> GetClipboardText() = 0;
+
     [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
     [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;
     [[nodiscard]] virtual MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const = 0;

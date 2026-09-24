@@ -377,6 +377,103 @@ Rndr::Vector2i Rndr::WindowsApplication::GetCursorPosition() const
     return {cursor_pos.x, cursor_pos.y};
 }
 
+namespace
+{
+/**
+ * Only one process has the clipboard open at a time, and others open it on their own after every change -
+ * clipboard history, remote desktop, WSLg mirroring it into Linux - so a first attempt that fails is worth
+ * a few more before giving up.
+ */
+bool OpenClipboardRetrying()
+{
+    constexpr int k_attempts = 10;
+    constexpr DWORD k_wait_between_ms = 10;
+    for (int attempt = 0; attempt < k_attempts; ++attempt)
+    {
+        if (::OpenClipboard(nullptr) != 0)
+        {
+            return true;
+        }
+        ::Sleep(k_wait_between_ms);
+    }
+    RNDR_LOG_ERROR("OpenClipboard failed for {} ms, another application is holding the clipboard open",
+                   k_attempts * k_wait_between_ms);
+    return false;
+}
+}  // namespace
+
+Rndr::ErrorCode Rndr::WindowsApplication::SetClipboardText(const Opal::StringUtf8& text)
+{
+    Opal::StringWide wide_text;
+    if (Opal::Transcode(text, wide_text) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Clipboard text is not valid UTF-8");
+        return ErrorCode::InvalidArgument;
+    }
+
+    // Opened without an owner window, the way Dear ImGui's default Win32 clipboard does it: nothing here
+    // renders the text late, and that is all an owner window is for.
+    if (!OpenClipboardRetrying())
+    {
+        return ErrorCode::PlatformError;
+    }
+    ::EmptyClipboard();
+
+    // The clipboard takes ownership of the memory on success, and wants the null terminator in it.
+    const size_t byte_count = (wide_text.GetSize() + 1) * sizeof(wchar_t);
+    HGLOBAL memory = ::GlobalAlloc(GMEM_MOVEABLE, byte_count);
+    if (memory == nullptr)
+    {
+        ::CloseClipboard();
+        RNDR_LOG_ERROR("GlobalAlloc failed for {} bytes of clipboard text", byte_count);
+        return ErrorCode::OutOfMemory;
+    }
+    void* destination = ::GlobalLock(memory);
+    memcpy(destination, wide_text.GetData(), byte_count);
+    ::GlobalUnlock(memory);
+    if (::SetClipboardData(CF_UNICODETEXT, memory) == nullptr)
+    {
+        ::GlobalFree(memory);
+        ::CloseClipboard();
+        RNDR_LOG_ERROR("SetClipboardData failed");
+        return ErrorCode::PlatformError;
+    }
+    ::CloseClipboard();
+    return ErrorCode::Success;
+}
+
+Opal::Expected<Opal::StringUtf8, Rndr::ErrorCode> Rndr::WindowsApplication::GetClipboardText()
+{
+    using Result = Opal::Expected<Opal::StringUtf8, ErrorCode>;
+    if (::IsClipboardFormatAvailable(CF_UNICODETEXT) == 0)
+    {
+        return Result(Opal::StringUtf8());
+    }
+    if (!OpenClipboardRetrying())
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    HANDLE memory = ::GetClipboardData(CF_UNICODETEXT);
+    const auto* source = memory != nullptr ? static_cast<const wchar_t*>(::GlobalLock(memory)) : nullptr;
+    if (source == nullptr)
+    {
+        // Emptied between the format check and the open.
+        ::CloseClipboard();
+        return Result(Opal::StringUtf8());
+    }
+    const Opal::StringWide wide_text(source);
+    ::GlobalUnlock(memory);
+    ::CloseClipboard();
+
+    Opal::StringUtf8 text;
+    if (Opal::Transcode(wide_text, text) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("The clipboard holds text that is not valid UTF-16");
+        return Result(ErrorCode::CorruptData);
+    }
+    return Result(std::move(text));
+}
+
 Rndr::i32 Rndr::WindowsApplication::TranslateKey(i32 win_key, i32 desc)
 {
     switch (win_key)

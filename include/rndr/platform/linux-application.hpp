@@ -41,6 +41,12 @@ struct LinuxAtoms
     xcb_atom_t net_wm_window_opacity = XCB_ATOM_NONE;
     xcb_atom_t net_active_window = XCB_ATOM_NONE;
     xcb_atom_t motif_wm_hints = XCB_ATOM_NONE;
+    xcb_atom_t clipboard = XCB_ATOM_NONE;
+    xcb_atom_t targets = XCB_ATOM_NONE;
+    xcb_atom_t incr = XCB_ATOM_NONE;
+    xcb_atom_t text_plain_utf8 = XCB_ATOM_NONE;
+    /** The property on the clipboard window that another owner writes the text into when asked for it. */
+    xcb_atom_t rndr_clipboard = XCB_ATOM_NONE;
 };
 
 class LinuxApplication : public PlatformApplication
@@ -55,6 +61,9 @@ public:
     [[nodiscard]] bool IsCursorVisible() const override;
     void SetCursorPosition(const Vector2i& pos) override;
     [[nodiscard]] Vector2i GetCursorPosition() const override;
+
+    ErrorCode SetClipboardText(const Opal::StringUtf8& text) override;
+    [[nodiscard]] Opal::Expected<Opal::StringUtf8, ErrorCode> GetClipboardText() override;
 
     [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
     [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
@@ -77,6 +86,20 @@ private:
     void InitializeXkb();
     void InitializeRandr();
     void InitializeXfixes();
+    void InitializeClipboardWindow();
+
+    /** Answers another client asking for the clipboard this application owns. */
+    void AnswerSelectionRequest(const xcb_selection_request_event_t& request);
+
+    /**
+     * Waits for the next event on the clipboard window that `is_wanted` accepts, handing everything else to
+     * ProcessEvent or setting it aside for the next ProcessSystemEvents. Null after the timeout.
+     */
+    template <typename Predicate>
+    xcb_generic_event_t* WaitForClipboardEvent(Predicate is_wanted, u32 timeout_ms);
+
+    /** Reads the property another owner wrote the clipboard into, following INCR if it came in pieces. */
+    Opal::Expected<Opal::StringUtf8, ErrorCode> ReadClipboardProperty();
 
     void ProcessEvent(xcb_generic_event_t* event);
     void ProcessKeyEvent(xcb_keycode_t keycode, class LinuxWindow& window, bool is_press);
@@ -103,6 +126,21 @@ private:
     bool m_has_xfixes = false;
     bool m_is_cursor_visible = true;
     f32 m_dpi_scale = 1.0f;
+
+    /**
+     * An unmapped window that owns the CLIPBOARD selection while this application has something on it,
+     * and receives the text when another application does. Separate from the application's windows so the
+     * clipboard outlives any one of them.
+     */
+    xcb_window_t m_clipboard_window = XCB_NONE;
+    /**
+     * What this application last put on the clipboard, handed out while the X server still names the clipboard
+     * window as the owner. The server is asked rather than a flag kept, since a SelectionClear from a copy
+     * elsewhere can still be queued when this application takes the clipboard back.
+     */
+    Opal::StringUtf8 m_clipboard_text;
+    /** Events that arrived while GetClipboardText waited, delivered by the next ProcessSystemEvents. */
+    Opal::DynamicArray<xcb_generic_event_t*> m_deferred_events;
 
     /** Keycode-indexed down state, used to flag auto-repeated key presses. */
     bool m_is_key_down[256] = {};

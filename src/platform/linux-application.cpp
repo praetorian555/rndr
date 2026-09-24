@@ -2,6 +2,7 @@
 
 #if RNDR_LINUX
 
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -42,6 +43,9 @@ xcb_window_t ToXcbWindow(Rndr::NativeWindowHandle handle)
     return static_cast<xcb_window_t>(reinterpret_cast<uintptr_t>(handle));
 }
 
+/** How long GetClipboardText waits on another application's answer, and on each piece of an INCR transfer. */
+constexpr Rndr::u32 k_clipboard_timeout_ms = 1000;
+
 }  // namespace
 
 Rndr::LinuxApplication* Rndr::LinuxApplication::Get()
@@ -75,6 +79,7 @@ Rndr::LinuxApplication::LinuxApplication(SystemMessageHandler* message_handler) 
     InitializeXkb();
     InitializeRandr();
     InitializeXfixes();
+    InitializeClipboardWindow();
     m_dpi_scale = ReadDpiScale();
 }
 
@@ -88,6 +93,16 @@ Rndr::LinuxApplication::~LinuxApplication()
         auto it = m_generic_windows.begin();
         Opal::ScopePtr<GenericWindow> window = std::move(*it);
         m_generic_windows.Erase(it);
+    }
+
+    for (xcb_generic_event_t* event : m_deferred_events)
+    {
+        free(event);
+    }
+    m_deferred_events.Clear();
+    if (m_clipboard_window != XCB_NONE)
+    {
+        xcb_destroy_window(m_connection, m_clipboard_window);
     }
 
     if (m_xkb_state != nullptr)
@@ -141,6 +156,11 @@ void Rndr::LinuxApplication::InternAtoms()
     m_atoms.net_wm_window_opacity = intern("_NET_WM_WINDOW_OPACITY");
     m_atoms.net_active_window = intern("_NET_ACTIVE_WINDOW");
     m_atoms.motif_wm_hints = intern("_MOTIF_WM_HINTS");
+    m_atoms.clipboard = intern("CLIPBOARD");
+    m_atoms.targets = intern("TARGETS");
+    m_atoms.incr = intern("INCR");
+    m_atoms.text_plain_utf8 = intern("text/plain;charset=utf-8");
+    m_atoms.rndr_clipboard = intern("RNDR_CLIPBOARD");
 }
 
 void Rndr::LinuxApplication::InitializeXkb()
@@ -235,12 +255,31 @@ void Rndr::LinuxApplication::InitializeXfixes()
     }
 }
 
+void Rndr::LinuxApplication::InitializeClipboardWindow()
+{
+    // Input only and never mapped. Property changes are selected so the pieces of an INCR transfer are seen
+    // arriving.
+    m_clipboard_window = xcb_generate_id(m_connection);
+    const u32 event_mask = XCB_EVENT_MASK_PROPERTY_CHANGE;
+    xcb_create_window(m_connection, XCB_COPY_FROM_PARENT, m_clipboard_window, m_screen->root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY,
+                      XCB_COPY_FROM_PARENT, XCB_CW_EVENT_MASK, &event_mask);
+}
+
 void Rndr::LinuxApplication::ProcessSystemEvents(u32 timeout_ms)
 {
     if (m_connection == nullptr)
     {
         return;
     }
+
+    // What arrived while GetClipboardText waited goes first, in the order it arrived. Indexed rather than
+    // iterated: a handler that pastes adds to the list while it is being walked.
+    for (u64 i = 0; i < m_deferred_events.GetSize(); ++i)
+    {
+        ProcessEvent(m_deferred_events[i]);
+        free(m_deferred_events[i]);
+    }
+    m_deferred_events.Clear();
 
     // Events read from the socket during a reply wait sit in xcb's internal queue where poll(2)
     // cannot see them, so only block on the file descriptor when the queue is confirmed empty.
@@ -417,6 +456,29 @@ void Rndr::LinuxApplication::ProcessEvent(xcb_generic_event_t* event)
                 window_checked.m_height = configure->height;
                 m_message_handler->OnWindowSizeChanged(window_checked, configure->width, configure->height);
             }
+            break;
+        }
+        case XCB_SELECTION_REQUEST:
+        {
+            AnswerSelectionRequest(*reinterpret_cast<xcb_selection_request_event_t*>(event));
+            break;
+        }
+        case XCB_SELECTION_CLEAR:
+        {
+            // Another application took the clipboard. Let the text go only if it still has it: this
+            // application may have taken the clipboard back since the event was sent.
+            const auto* clear = reinterpret_cast<xcb_selection_clear_event_t*>(event);
+            if (clear->selection != m_atoms.clipboard)
+            {
+                break;
+            }
+            xcb_get_selection_owner_reply_t* owner =
+                xcb_get_selection_owner_reply(m_connection, xcb_get_selection_owner(m_connection, m_atoms.clipboard), nullptr);
+            if (owner != nullptr && owner->owner != m_clipboard_window)
+            {
+                m_clipboard_text = Opal::StringUtf8();
+            }
+            free(owner);
             break;
         }
         case XCB_CLIENT_MESSAGE:
@@ -682,6 +744,267 @@ Rndr::Vector2i Rndr::LinuxApplication::GetCursorPosition() const
     const Vector2i pos(reply->root_x, reply->root_y);
     free(reply);
     return pos;
+}
+
+Rndr::ErrorCode Rndr::LinuxApplication::SetClipboardText(const Opal::StringUtf8& text)
+{
+    if (m_connection == nullptr)
+    {
+        RNDR_LOG_ERROR("No X server connection to put the clipboard text on");
+        return ErrorCode::PlatformError;
+    }
+    // Transcoded rather than copied, which checks the text is UTF-8 on the way.
+    Opal::StringUtf8 text_copy;
+    if (Opal::Transcode(text, text_copy) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Clipboard text is not valid UTF-8");
+        return ErrorCode::InvalidArgument;
+    }
+    m_clipboard_text = std::move(text_copy);
+
+    // Taking the selection is all a copy is on X11: the text stays here and goes out when someone asks.
+    xcb_set_selection_owner(m_connection, m_clipboard_window, m_atoms.clipboard, XCB_CURRENT_TIME);
+    xcb_get_selection_owner_reply_t* owner =
+        xcb_get_selection_owner_reply(m_connection, xcb_get_selection_owner(m_connection, m_atoms.clipboard), nullptr);
+    const bool is_owner = owner != nullptr && owner->owner == m_clipboard_window;
+    free(owner);
+    if (!is_owner)
+    {
+        RNDR_LOG_ERROR("The X server did not hand the clipboard over");
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Opal::Expected<Opal::StringUtf8, Rndr::ErrorCode> Rndr::LinuxApplication::GetClipboardText()
+{
+    using Result = Opal::Expected<Opal::StringUtf8, ErrorCode>;
+    if (m_connection == nullptr)
+    {
+        RNDR_LOG_ERROR("No X server connection to read the clipboard from");
+        return Result(ErrorCode::PlatformError);
+    }
+
+    xcb_get_selection_owner_reply_t* owner_reply =
+        xcb_get_selection_owner_reply(m_connection, xcb_get_selection_owner(m_connection, m_atoms.clipboard), nullptr);
+    if (owner_reply == nullptr)
+    {
+        RNDR_LOG_ERROR("Failed to ask the X server who owns the clipboard");
+        return Result(ErrorCode::PlatformError);
+    }
+    const xcb_window_t owner = owner_reply->owner;
+    free(owner_reply);
+    if (owner == XCB_NONE)
+    {
+        return Result(Opal::StringUtf8());
+    }
+    if (owner == m_clipboard_window)
+    {
+        return Result(Opal::StringUtf8(m_clipboard_text.GetData(), m_clipboard_text.GetSize()));
+    }
+
+    // Ask the owner to write the text as UTF-8 into a property of the clipboard window, and wait for it to
+    // say it has.
+    xcb_delete_property(m_connection, m_clipboard_window, m_atoms.rndr_clipboard);
+    xcb_convert_selection(m_connection, m_clipboard_window, m_atoms.clipboard, m_atoms.utf8_string, m_atoms.rndr_clipboard,
+                          XCB_CURRENT_TIME);
+    xcb_flush(m_connection);
+    xcb_generic_event_t* event = WaitForClipboardEvent(
+        [this](const xcb_generic_event_t* candidate)
+        {
+            if ((candidate->response_type & 0x7F) != XCB_SELECTION_NOTIFY)
+            {
+                return false;
+            }
+            const auto* notify = reinterpret_cast<const xcb_selection_notify_event_t*>(candidate);
+            return notify->requestor == m_clipboard_window && notify->selection == m_atoms.clipboard;
+        },
+        k_clipboard_timeout_ms);
+    if (event == nullptr)
+    {
+        RNDR_LOG_ERROR("The application that owns the clipboard did not answer within {} ms", k_clipboard_timeout_ms);
+        return Result(ErrorCode::PlatformError);
+    }
+    const xcb_atom_t property = reinterpret_cast<xcb_selection_notify_event_t*>(event)->property;
+    free(event);
+    if (property == XCB_ATOM_NONE)
+    {
+        // The owner has nothing it can give as UTF-8 text: an image, say.
+        return Result(Opal::StringUtf8());
+    }
+    return ReadClipboardProperty();
+}
+
+void Rndr::LinuxApplication::AnswerSelectionRequest(const xcb_selection_request_event_t& request)
+{
+    xcb_selection_notify_event_t notify = {};
+    notify.response_type = XCB_SELECTION_NOTIFY;
+    notify.time = request.time;
+    notify.requestor = request.requestor;
+    notify.selection = request.selection;
+    notify.target = request.target;
+    // Left at None, the answer is a refusal.
+    notify.property = XCB_ATOM_NONE;
+
+    // A client from before ICCCM 2 names no property, and the target is used in its place.
+    const xcb_atom_t property = request.property != XCB_ATOM_NONE ? request.property : request.target;
+    if (request.selection == m_atoms.clipboard && request.owner == m_clipboard_window)
+    {
+        if (request.target == m_atoms.targets)
+        {
+            const xcb_atom_t targets[] = {m_atoms.targets, m_atoms.utf8_string, m_atoms.text_plain_utf8};
+            xcb_change_property(m_connection, XCB_PROP_MODE_REPLACE, request.requestor, property, XCB_ATOM_ATOM, 32, 3, targets);
+            notify.property = property;
+        }
+        else if (request.target == m_atoms.utf8_string || request.target == m_atoms.text_plain_utf8)
+        {
+            // Sent in one request, which caps the size at what the server takes at once - 16 MiB with the
+            // BIG-REQUESTS extension every current server has. Anything larger would need INCR going out.
+            constexpr u64 k_change_property_header_bytes = 24;
+            const u64 max_bytes = static_cast<u64>(xcb_get_maximum_request_length(m_connection)) * 4 - k_change_property_header_bytes;
+            if (m_clipboard_text.GetSize() <= max_bytes)
+            {
+                xcb_change_property(m_connection, XCB_PROP_MODE_REPLACE, request.requestor, property, request.target, 8,
+                                    static_cast<u32>(m_clipboard_text.GetSize()), m_clipboard_text.GetData());
+                notify.property = property;
+            }
+            else
+            {
+                RNDR_LOG_WARNING("Clipboard text of {} bytes is more than the X server takes in one request, refusing the paste",
+                                 m_clipboard_text.GetSize());
+            }
+        }
+    }
+    xcb_send_event(m_connection, 0, request.requestor, XCB_EVENT_MASK_NO_EVENT, reinterpret_cast<const char*>(&notify));
+    xcb_flush(m_connection);
+}
+
+template <typename Predicate>
+xcb_generic_event_t* Rndr::LinuxApplication::WaitForClipboardEvent(Predicate is_wanted, u32 timeout_ms)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true)
+    {
+        xcb_generic_event_t* event = xcb_poll_for_event(m_connection);
+        if (event == nullptr)
+        {
+            if (xcb_connection_has_error(m_connection) != 0)
+            {
+                return nullptr;
+            }
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+            if (remaining.count() <= 0)
+            {
+                return nullptr;
+            }
+            pollfd poll_desc = {};
+            poll_desc.fd = xcb_get_file_descriptor(m_connection);
+            poll_desc.events = POLLIN;
+            poll(&poll_desc, 1, static_cast<int>(remaining.count()));
+            continue;
+        }
+        if (is_wanted(event))
+        {
+            return event;
+        }
+        const u8 event_type = event->response_type & 0x7F;
+        if (event_type == XCB_SELECTION_REQUEST || event_type == XCB_SELECTION_CLEAR)
+        {
+            // Answered now rather than set aside, so a client asking this application for the clipboard is
+            // not kept waiting behind the paste.
+            ProcessEvent(event);
+            free(event);
+        }
+        else if (event_type == XCB_PROPERTY_NOTIFY && reinterpret_cast<xcb_property_notify_event_t*>(event)->window == m_clipboard_window)
+        {
+            // The clipboard window's own property traffic - the owner writing, this side deleting - only
+            // matters to the wait that asks for it.
+            free(event);
+        }
+        else
+        {
+            m_deferred_events.PushBack(event);
+        }
+    }
+}
+
+Opal::Expected<Opal::StringUtf8, Rndr::ErrorCode> Rndr::LinuxApplication::ReadClipboardProperty()
+{
+    using Result = Opal::Expected<Opal::StringUtf8, ErrorCode>;
+    // Read and deleted in the one request. For an INCR transfer the delete is what tells the owner to go on.
+    auto read_and_delete = [this]()
+    {
+        return xcb_get_property_reply(m_connection,
+                                      xcb_get_property(m_connection, 1, m_clipboard_window, m_atoms.rndr_clipboard,
+                                                       XCB_GET_PROPERTY_TYPE_ANY, 0, UINT32_MAX / 4),
+                                      nullptr);
+    };
+
+    xcb_get_property_reply_t* reply = read_and_delete();
+    if (reply == nullptr)
+    {
+        RNDR_LOG_ERROR("Failed to read the clipboard property");
+        return Result(ErrorCode::PlatformError);
+    }
+    Opal::DynamicArray<char8> bytes;
+    if (reply->type != m_atoms.incr)
+    {
+        const auto* data = static_cast<const char8*>(xcb_get_property_value(reply));
+        bytes.Append(Opal::ArrayView<const char8>(data, static_cast<u64>(xcb_get_property_value_length(reply))));
+        free(reply);
+    }
+    else
+    {
+        // Too large for one property: the owner writes it a piece at a time, each piece a new value of the
+        // property, and an empty piece ends it.
+        free(reply);
+        xcb_flush(m_connection);
+        while (true)
+        {
+            xcb_generic_event_t* event = WaitForClipboardEvent(
+                [this](const xcb_generic_event_t* candidate)
+                {
+                    if ((candidate->response_type & 0x7F) != XCB_PROPERTY_NOTIFY)
+                    {
+                        return false;
+                    }
+                    const auto* property = reinterpret_cast<const xcb_property_notify_event_t*>(candidate);
+                    return property->window == m_clipboard_window && property->atom == m_atoms.rndr_clipboard &&
+                           property->state == XCB_PROPERTY_NEW_VALUE;
+                },
+                k_clipboard_timeout_ms);
+            if (event == nullptr)
+            {
+                RNDR_LOG_ERROR("The application that owns the clipboard stopped sending it after {} bytes", bytes.GetSize());
+                return Result(ErrorCode::PlatformError);
+            }
+            free(event);
+            xcb_get_property_reply_t* piece = read_and_delete();
+            xcb_flush(m_connection);
+            if (piece == nullptr)
+            {
+                RNDR_LOG_ERROR("Failed to read a piece of the clipboard property");
+                return Result(ErrorCode::PlatformError);
+            }
+            const i32 piece_length = xcb_get_property_value_length(piece);
+            const auto* data = static_cast<const char8*>(xcb_get_property_value(piece));
+            bytes.Append(Opal::ArrayView<const char8>(data, static_cast<u64>(piece_length)));
+            free(piece);
+            if (piece_length == 0)
+            {
+                break;
+            }
+        }
+    }
+
+    const Opal::StringUtf8 raw(bytes.GetData(), bytes.GetSize());
+    Opal::StringUtf8 text;
+    if (Opal::Transcode(raw, text) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("The clipboard holds text that is not valid UTF-8");
+        return Result(ErrorCode::CorruptData);
+    }
+    return Result(std::move(text));
 }
 
 namespace

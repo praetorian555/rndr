@@ -121,6 +121,16 @@ Rndr::Vector2i Rndr::Application::GetCursorPosition() const
     return m_platform_application->GetCursorPosition();
 }
 
+Rndr::ErrorCode Rndr::Application::SetClipboardText(const Opal::StringUtf8& text)
+{
+    return m_platform_application->SetClipboardText(text);
+}
+
+Opal::Expected<Opal::StringUtf8, Rndr::ErrorCode> Rndr::Application::GetClipboardText()
+{
+    return m_platform_application->GetClipboardText();
+}
+
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::Application::GetMonitors() const
 {
     return m_platform_application->GetMonitors();
