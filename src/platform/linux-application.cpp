@@ -672,12 +672,12 @@ Rndr::Vector2i Rndr::LinuxApplication::GetCursorPosition() const
 {
     if (m_connection == nullptr)
     {
-        return {};
+        return {0, 0};
     }
     xcb_query_pointer_reply_t* reply = xcb_query_pointer_reply(m_connection, xcb_query_pointer(m_connection, m_screen->root), nullptr);
     if (reply == nullptr)
     {
-        return {};
+        return {0, 0};
     }
     const Vector2i pos(reply->root_x, reply->root_y);
     free(reply);
