@@ -118,6 +118,8 @@ if (${RNDR_BUILD_TESTS})
                 test/audio/audio-system-test.cpp)
     endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})
+    # Catch2's own source, vendored: its warnings are not rndr's to fix.
+    set_source_files_properties(extern/catch2/src/catch_amalgamated.cpp PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/w,-w>")
     rndr_deploy_runtime(rndr-test)
     target_include_directories(rndr-test PRIVATE src)
     # test/ holds the Catch2 macro replacements the no-exceptions build needs, shared by every suite.

@@ -13,10 +13,17 @@
 #include <xcb/xfixes.h>
 
 // xcb/xkb.h is a C header that uses the C++ keyword `explicit` as a struct field name, so the
-// keyword has to be renamed for the duration of the include.
+// keyword has to be renamed for the duration of the include. Clang objects to redefining a keyword.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wkeyword-macro"
+#endif
 #define explicit explicit_field
 #include <xcb/xkb.h>
 #undef explicit
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon-x11.h>

@@ -2027,7 +2027,6 @@ TEST_CASE("Forge submit rejects an empty object", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     ForgeFixture fixture;
-    const Opal::Ref<const Forge::CommandBuffer> empty_command_buffer{};
     const Forge::CommandBuffer valid = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
 
     SECTION("An empty command buffer is refused")
