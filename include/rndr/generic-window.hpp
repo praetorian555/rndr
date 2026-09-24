@@ -34,6 +34,42 @@ enum class CursorPositionMode : u8
     ResetToCenter
 };
 
+/**
+ * The shape the OS draws the cursor in while it is over a window's client area. Over the frame and the
+ * title bar the OS keeps choosing the shape itself, so the sizing arrows still show on a resizable border.
+ */
+enum class CursorShape : u8
+{
+    /** The standard arrow. Default. */
+    Arrow,
+    /** A text caret, over editable text. */
+    IBeam,
+    /** A pointing hand, over a link or another clickable target. */
+    Hand,
+    /** A crosshair, for precise picking. */
+    Crosshair,
+    /** A two-headed horizontal arrow, over something resized left and right (a vertical splitter). */
+    ResizeHorizontal,
+    /** A two-headed vertical arrow, over something resized up and down (a horizontal splitter). */
+    ResizeVertical,
+    /** A two-headed arrow from top-left to bottom-right. */
+    ResizeDiagonalDown,
+    /** A two-headed arrow from bottom-left to top-right. */
+    ResizeDiagonalUp,
+    /** A four-headed arrow, over something moved in any direction. */
+    ResizeAll,
+    /** A slashed circle, over something that refuses the current action (a drop target that rejects a drag). */
+    NotAllowed,
+    /** A busy indicator: the application cannot take input. */
+    Wait,
+    /** An arrow with a busy indicator: the application is working but still takes input. */
+    Progress,
+    /** An arrow with a question mark. */
+    Help,
+
+    Count
+};
+
 struct GenericWindowDesc
 {
     int width = 1024;
@@ -168,6 +204,24 @@ public:
     void SetCursorPositionMode(CursorPositionMode mode) { m_cursor_pos_mode = mode; }
     [[nodiscard]] CursorPositionMode GetCursorPositionMode() const { return m_cursor_pos_mode; }
 
+    /**
+     * Set the shape of the cursor while it is over this window's client area. Takes effect at once when the cursor
+     * is already there, and whenever it comes back. Whether the cursor shows at all is Application::ShowCursor.
+     * @param shape The shape to draw. CursorShape::Count is ignored.
+     * @note Applied on Windows. On Linux the shape is recorded, and GetCursorShape reports it, but the cursor
+     * keeps its shape.
+     */
+    virtual void SetCursorShape(CursorShape shape)
+    {
+        if (shape != CursorShape::Count)
+        {
+            m_cursor_shape = shape;
+        }
+    }
+
+    /** Returns the shape set by SetCursorShape; CursorShape::Arrow until one is set. */
+    [[nodiscard]] CursorShape GetCursorShape() const { return m_cursor_shape; }
+
     [[nodiscard]] virtual Vector2i GetPosition() const = 0;
     [[nodiscard]] virtual Vector2i GetSize() const = 0;
 
@@ -199,6 +253,7 @@ protected:
 
     GenericWindowDesc m_desc;
     CursorPositionMode m_cursor_pos_mode = CursorPositionMode::Normal;
+    CursorShape m_cursor_shape = CursorShape::Arrow;
     bool m_is_closed = false;
     f32 m_dpi_scale = 1.0f;
 

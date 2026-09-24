@@ -13,6 +13,12 @@
 namespace Rndr
 {
 
+/**
+ * Returns the system cursor that draws a shape, for the WM_SETCURSOR handler and WindowsWindow::SetCursorShape.
+ * @param shape The shape; CursorShape::Count yields the arrow.
+ */
+HCURSOR GetSystemCursor(CursorShape shape);
+
 class WindowsWindow : public GenericWindow
 {
 public:
@@ -63,6 +69,7 @@ public:
     [[nodiscard]] bool IsMouseHovering() const override;
 
     void EnableHighPrecisionCursorMode(bool enable) override;
+    void SetCursorShape(CursorShape shape) override;
     [[nodiscard]] bool IsHighPrecisionCursorModeEnabled() const override;
 
     [[nodiscard]] Vector2i GetPosition() const override;

@@ -590,6 +590,77 @@ bool Rndr::WindowsWindow::IsHighPrecisionCursorModeEnabled() const
     return m_high_precision_cursor;
 }
 
+HCURSOR Rndr::GetSystemCursor(CursorShape shape)
+{
+    LPCTSTR id = IDC_ARROW;
+    switch (shape)
+    {
+        case CursorShape::Arrow:
+        case CursorShape::Count:
+            id = IDC_ARROW;
+            break;
+        case CursorShape::IBeam:
+            id = IDC_IBEAM;
+            break;
+        case CursorShape::Hand:
+            id = IDC_HAND;
+            break;
+        case CursorShape::Crosshair:
+            id = IDC_CROSS;
+            break;
+        case CursorShape::ResizeHorizontal:
+            id = IDC_SIZEWE;
+            break;
+        case CursorShape::ResizeVertical:
+            id = IDC_SIZENS;
+            break;
+        case CursorShape::ResizeDiagonalDown:
+            id = IDC_SIZENWSE;
+            break;
+        case CursorShape::ResizeDiagonalUp:
+            id = IDC_SIZENESW;
+            break;
+        case CursorShape::ResizeAll:
+            id = IDC_SIZEALL;
+            break;
+        case CursorShape::NotAllowed:
+            id = IDC_NO;
+            break;
+        case CursorShape::Wait:
+            id = IDC_WAIT;
+            break;
+        case CursorShape::Progress:
+            id = IDC_APPSTARTING;
+            break;
+        case CursorShape::Help:
+            id = IDC_HELP;
+            break;
+    }
+    // System cursors are shared and owned by the OS, so loading one again is cheap and nothing is released.
+    return ::LoadCursor(nullptr, id);
+}
+
+void Rndr::WindowsWindow::SetCursorShape(CursorShape shape)
+{
+    GenericWindow::SetCursorShape(shape);
+
+    // WM_SETCURSOR applies the shape on the next pointer move; apply it now as well, so a change made while the
+    // pointer rests - a widget under it changing - shows without waiting for the mouse.
+    HWND handle = RNDR_TO_HWND(m_native_window_handle);
+    POINT cursor_pos;
+    if (handle == nullptr || GetCursorPos(&cursor_pos) == 0 || WindowFromPoint(cursor_pos) != handle)
+    {
+        return;
+    }
+    RECT client_rect = {};
+    ScreenToClient(handle, &cursor_pos);
+    GetClientRect(handle, &client_rect);
+    if (PtInRect(&client_rect, cursor_pos) != 0)
+    {
+        ::SetCursor(GetSystemCursor(m_cursor_shape));
+    }
+}
+
 bool Rndr::WindowsWindow::IsMouseHovering() const
 {
     HWND hwnd_parent = RNDR_TO_HWND(m_native_window_handle);

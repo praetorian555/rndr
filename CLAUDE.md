@@ -56,7 +56,7 @@ Catch2, single `rndr-test` binary, run a subset by tag:
 
     ./build/msvc-debug/Debug/rndr-test.exe "[input]"
 
-Tags in use: `[input]` `[canvas]` `[mesh]` `[bitmap]` `[fps]` `[init]` `[forge]` `[forge-window]` `[audio]`
+Tags in use: `[input]` `[window]` `[canvas]` `[mesh]` `[bitmap]` `[fps]` `[init]` `[forge]` `[forge-window]` `[audio]`
 `[audio-device]`.
 
 Catch2 aborts a test case by throwing and this binary has no exceptions, so `test/catch-no-exceptions.hpp`

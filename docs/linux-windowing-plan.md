@@ -253,4 +253,6 @@ Three environment traps, all of which cost time once already:
 
 Wayland-native backend; Canvas GL on Linux (GLX/EGL); gamepad via evdev; Linux audio device;
 `imgui-system` on Linux; XInput2 raw mouse (`EnableHighPrecisionCursorMode` tracks the flag, deltas come
-from regular motion events). Each slots behind the same seams later.
+from regular motion events); cursor shapes (`SetCursorShape` records the shape and `GetCursorShape`
+reports it, but the pointer keeps its shape - the core X `cursor` font through `xcb_create_glyph_cursor` and
+`XCB_CW_CURSOR` would need no extra library). Each slots behind the same seams later.

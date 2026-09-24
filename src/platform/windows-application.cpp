@@ -237,14 +237,14 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
         }
         case WM_SETCURSOR:
         {
-            // Only take over cursor management for the client area. The window class is registered
-            // without a class cursor, so without this the cursor would keep whatever shape it last
-            // had (e.g. the sizing arrow after hovering a resize border). For non-client areas
-            // (borders, title bar, etc.) defer to the default handler so the OS still shows the
-            // appropriate sizing/arrow cursors.
+            // Only take over cursor management for the client area, where the window's own shape
+            // applies. The window class is registered without a class cursor, so without this the
+            // cursor would keep whatever shape it last had (e.g. the sizing arrow after hovering a
+            // resize border). For non-client areas (borders, title bar, etc.) defer to the default
+            // handler so the OS still shows the appropriate sizing/arrow cursors.
             if (LOWORD(param_l) == HTCLIENT)
             {
-                ::SetCursor(::LoadCursor(nullptr, IDC_ARROW));
+                ::SetCursor(GetSystemCursor(window_checked.GetCursorShape()));
                 return TRUE;
             }
             return static_cast<i32>(DefWindowProc(window_handle, msg_code, param_w, param_l));
