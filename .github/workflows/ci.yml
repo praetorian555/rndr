@@ -201,3 +201,39 @@ jobs:
       # application does, and a client connecting during the reset is refused.
       - name: Run tests
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -noreset" ${{ matrix.build-dir }}/rndr-test
+
+  linux-clang:
+    # Compile only: the GCC jobs already run the suite on this platform, and what Clang adds is its own set of
+    # warnings, which are errors here as they are on the other two compilers.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build pkg-config clang-18 \
+            libxcb1-dev libxcb-randr0-dev libxcb-xfixes0-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev
+
+      - name: Report the compiler
+        run: clang++-18 --version | head -1
+
+      # Samples too, so everything Clang would compile for a user gets compiled here.
+      - name: Configure CMake
+        run: >
+          cmake -S . -B build/ci-linux-clang
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER=clang-18
+          -DCMAKE_CXX_COMPILER=clang++-18
+          -DRNDR_BUILD_TESTS=ON
+          -DRNDR_BUILD_SAMPLES=ON
+          -DRNDR_HARDENING=OFF
+          -DRNDR_FORGE=ON
+          -DRNDR_FORGE_VALIDATION=ON
+
+      - name: Build
+        run: cmake --build build/ci-linux-clang
