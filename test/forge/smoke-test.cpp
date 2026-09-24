@@ -5684,6 +5684,21 @@ void main_odd_widths(uniform uint32_t *output)
 }
 )";
 
+/** The reported constant of that name, which a case reads the declared type and width off. */
+const Forge::SpecializationConstantInfo& SpecializationConstantNamed(const Forge::Shader& shader, const char* name)
+{
+    const Opal::ArrayView<const Forge::SpecializationConstantInfo> constants = shader.GetSpecializationConstants();
+    for (i32 i = 0; i < constants.GetSize(); ++i)
+    {
+        if (constants[i].name == Opal::StringUtf8(name))
+        {
+            return constants[i];
+        }
+    }
+    FAIL("the shader declares no specialization constant called " << name);
+    return constants[0];
+}
+
 }  // namespace
 
 TEST_CASE("Forge specialization constants that are not a word wide", "[forge]")
@@ -5702,21 +5717,6 @@ TEST_CASE("Forge specialization constants that are not a word wide", "[forge]")
 
     const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
         fixture.device, k_odd_width_specialized_source, {.entry_point = "main_odd_widths", .cache = GetShaderCache()}));
-
-    /** The reported constant of that name, which the sections read the declared width off. */
-    auto constant_named = [&](const char* name) -> const Forge::SpecializationConstantInfo*
-    {
-        const Opal::ArrayView<const Forge::SpecializationConstantInfo> constants = shader.GetSpecializationConstants();
-        for (i32 i = 0; i < constants.GetSize(); ++i)
-        {
-            if (constants[i].name == Opal::StringUtf8(name))
-            {
-                return &constants[i];
-            }
-        }
-        FAIL("the shader declares no specialization constant called " << name);
-        return nullptr;
-    };
 
     /** Dispatch with the given values and hand back the three words the shader wrote, or what refused. */
     auto dispatch_with = [&](Opal::ArrayView<const Forge::SpecializationConstant> values)
@@ -5758,13 +5758,13 @@ TEST_CASE("Forge specialization constants that are not a word wide", "[forge]")
     {
         // Anything narrower than a word is reported as its 32 bit counterpart so a caller can write a plain
         // integer for it, and byte_size is where the width it actually occupies survives.
-        const Forge::SpecializationConstantInfo* narrow = constant_named("NARROW");
-        REQUIRE(narrow->type == Forge::SpecializationType::Int32);
-        REQUIRE(narrow->byte_size == 2);
+        const Forge::SpecializationConstantInfo& narrow = SpecializationConstantNamed(shader, "NARROW");
+        REQUIRE(narrow.type == Forge::SpecializationType::Int32);
+        REQUIRE(narrow.byte_size == 2);
 
-        const Forge::SpecializationConstantInfo* wide = constant_named("WIDE");
-        REQUIRE(wide->type == Forge::SpecializationType::Int64);
-        REQUIRE(wide->byte_size == 8);
+        const Forge::SpecializationConstantInfo& wide = SpecializationConstantNamed(shader, "WIDE");
+        REQUIRE(wide.type == Forge::SpecializationType::Int64);
+        REQUIRE(wide.byte_size == 8);
     }
     SECTION("A constant narrower than a word takes the value it was given")
     {
@@ -5874,21 +5874,6 @@ Opal::Expected<Opal::DynamicArray<u32>, ErrorCode> DispatchSpecialized(ForgeFixt
     Opal::DynamicArray<u32> words(word_count);
     REQUIRE(output.Read({reinterpret_cast<u8*>(words.GetData()), words.GetSize() * sizeof(u32)}) == ErrorCode::Success);
     return Result(std::move(words));
-}
-
-/** The reported constant of that name, which a case reads the declared type and width off. */
-const Forge::SpecializationConstantInfo& SpecializationConstantNamed(const Forge::Shader& shader, const char* name)
-{
-    const Opal::ArrayView<const Forge::SpecializationConstantInfo> constants = shader.GetSpecializationConstants();
-    for (i32 i = 0; i < constants.GetSize(); ++i)
-    {
-        if (constants[i].name == Opal::StringUtf8(name))
-        {
-            return constants[i];
-        }
-    }
-    FAIL("the shader declares no specialization constant called " << name);
-    return constants[0];
 }
 
 /** The bits of a float as a word, the way the shader's asuint hands them back. */
