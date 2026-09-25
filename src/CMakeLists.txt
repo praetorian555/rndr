@@ -255,11 +255,13 @@ if (WIN32)
     # Windows version, so there is no runtime redistributable to worry about.
     target_link_libraries(rndr PRIVATE User32.lib Shcore.lib Xinput.lib)
 elseif (ANDROID)
-    # libandroid for the native window, the looper and the asset manager, liblog for logcat. Both are NDK
-    # system libraries every device has.
-    target_link_libraries(rndr PRIVATE android log)
+    # libandroid for the native window, the looper and the asset manager, libnativewindow for the part of
+    # ANativeWindow libandroid does not export (ANativeWindow_setFrameRate), liblog for logcat. All are NDK system
+    # libraries every device has.
+    target_link_libraries(rndr PRIVATE android nativewindow log)
     # The minimum API is 29 and a few calls are newer, the refresh rate ones 30. Weak, their symbols leave the library
-    # loadable on an older device, where the __builtin_available guard around each call skips it.
+    # loadable on an older device, where the __builtin_available guard around each call skips it. It also hides a
+    # missing library from the linker: a weak symbol nothing defines links as null and crashes when called.
     target_compile_definitions(rndr PRIVATE __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__)
     # Public: the application's android_main is handed an android_app and reads it through this header.
     target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${ANDROID_NDK}/sources/android/native_app_glue>)

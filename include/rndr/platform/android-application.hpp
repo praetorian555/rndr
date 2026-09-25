@@ -48,13 +48,13 @@ public:
     /** Where the last touch or mouse event was, in screen space - which is window space, the window being the screen. */
     [[nodiscard]] Vector2i GetCursorPosition() const override;
 
-    /** The clipboard is a Java service with no NDK API. Both report ErrorCode::FeatureNotSupported. */
+    /** ClipboardManager through JNI, since the clipboard is a Java service with no NDK API. Text crosses as UTF-16. */
     ErrorCode SetClipboardText(const Opal::StringUtf8& text) override;
     [[nodiscard]] Opal::Expected<Opal::StringUtf8, ErrorCode> GetClipboardText() override;
 
     /**
-     * One monitor, the size of the native window and scaled by the display density. The refresh rate is
-     * always 60, since the real one is Display.getRefreshRate and only reachable through JNI.
+     * One monitor, the size of the native window and scaled by the display density. The refresh rate is the one
+     * AChoreographer last reported, 60 until it does and on a device below API 30.
      */
     [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
     [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
@@ -130,7 +130,9 @@ public:
 
     /**
      * Hand the window's preferred refresh rate to its native window, through ANativeWindow_setFrameRate. A native
-     * window forgets it when it is replaced, so this runs again for each one. Nothing to do below API 30.
+     * window forgets it when it is replaced, so this runs again for each one, and again on every resize and
+     * configuration change: on a cold start into landscape the rate asked for at creation was gone by the first
+     * frames. Nothing to do below API 30.
      * @return ErrorCode::Success, also while there is no native window; ErrorCode::PlatformError when it is refused.
      */
     ErrorCode ApplyPreferredRefreshRate();

@@ -817,6 +817,8 @@ void Rndr::AndroidApplication::HandleCommand(i32 command)
             RefreshDpiScale();
             RefreshSafeInsets();
             RefreshWindowSize();
+            // Asked again: a rate asked for before a turn of the screen was seen dropped. See ApplyPreferredRefreshRate.
+            (void)ApplyPreferredRefreshRate();
             break;
         }
         case APP_CMD_GAINED_FOCUS:
