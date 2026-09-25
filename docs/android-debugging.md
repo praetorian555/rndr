@@ -4,7 +4,7 @@ Commands for building, running and debugging the sample on a phone over USB. Wri
 (SM-A566B, Xclipse 540) it was first run on; nothing here is specific to that phone. How the port is built
 and what is and is not checked is in [android-plan.md](android-plan.md).
 
-The package is `dev.rndr.modernvulkan`, the activity `android.app.NativeActivity`, and everything rndr logs
+The package is `dev.rndr.modernvulkan`, the activity `dev.rndr.RndrActivity`, and everything rndr logs
 goes to logcat under the tag `Rndr`.
 
 ## Shell setup
@@ -90,7 +90,7 @@ avdmanager create avd -n rndr-api36 -k "system-images;android-36;google_apis;x86
 ```powershell
 cd samples/android
 .\gradlew.bat installDebug                  # build rndr + the sample for arm64, compile shaders, install
-adb shell am start -n dev.rndr.modernvulkan/android.app.NativeActivity
+adb shell am start -n dev.rndr.modernvulkan/dev.rndr.RndrActivity
 adb shell am force-stop dev.rndr.modernvulkan
 adb shell pidof dev.rndr.modernvulkan       # prints nothing once it is gone
 ```
@@ -129,6 +129,9 @@ What to look for:
 - `Forge - modern-vulkan - CPU ... GPU ...` - every two seconds while frames are presented. None means the loop
   is stuck, or has no window (backgrounded).
 - `threaded_app: APP_CMD_INIT_WINDOW` / `APP_CMD_TERM_WINDOW` - the activity gaining and losing its window.
+- `Safe insets: left L, top T, right R, bottom B` - whenever `GenericWindow::GetSafeInsets` changes: the status and
+  navigation bars and the camera cutout, in window pixels. The system's own figures to compare against are the
+  `statusBars`, `navigationBars` and `displayCutout` frames in `adb shell dumpsys window`.
 - `F libc : Fatal signal 6 (SIGABRT)` - an abort, usually a `Require` in the sample that failed. The `E Rndr`
   line just before it says which call.
 
@@ -197,6 +200,15 @@ What rndr makes of each (`src/platform/android-application.cpp`):
 - **`KEYCODE_BACK`** - closes the window on release, and `android_main` returns. Item 5 of the Phase 4 check.
 - **`KEYCODE_HOME`** - backgrounds the activity, which loses its window; `am start` brings it back and the
   surface is rebuilt. Item 3 of the Phase 4 check.
+
+Typed text has two ways in, and both are worth a check. The sample's F2 starts text input and Enter logs the line
+(`Typed: ...`):
+
+- **Key events** - `adb shell input text hello` types through the virtual keyboard's key events, the way a
+  hardware keyboard does, so it tests `KeyCharacterMap`. ASCII only; `%s` for a space.
+- **The on-screen keyboard** - after F2 it is up (`adb shell dumpsys input_method | grep mInputShown`), and a
+  `input tap` on a key's position from a screenshot commits through `RndrActivity`'s `InputConnection`. A long
+  press on a letter opens its accents, which is how to get something outside ASCII through it.
 
 A scripted input followed by a screenshot is a check that repeats exactly, which a hand on the screen is not:
 

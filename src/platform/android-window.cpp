@@ -49,6 +49,7 @@ Opal::Expected<Opal::ScopePtr<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::Andro
         return ResultType(ErrorCode::OutOfMemory);
     }
     app->SetWindow(static_cast<AndroidWindow*>(window.Get()));
+    app->RefreshSafeInsets();
     return ResultType(std::move(window));
 }
 

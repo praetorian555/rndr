@@ -4,9 +4,11 @@
 
 #include <climits>
 #include <cstring>
+#include <mutex>
 
 #include <sys/stat.h>
 
+#include <android/api-level.h>
 #include <jni.h>
 
 #include <android/asset_manager.h>
@@ -27,6 +29,8 @@
 #include "rndr/monitor-info.hpp"
 #include "rndr/platform/android-window.hpp"
 #include "rndr/system-message-handler.hpp"
+
+#include "android-jni.hpp"
 
 namespace
 {
@@ -97,6 +101,57 @@ Rndr::f32 ReadDpiScale(const android_app* app)
     return static_cast<Rndr::f32>(density) / static_cast<Rndr::f32>(ACONFIGURATION_DENSITY_MEDIUM);
 }
 
+/**
+ * Guards AndroidApplication's committed text queue and the pointer to the application that owns it, which the UI thread
+ * reaches through QueueCommittedText while android_main may be tearing the application down.
+ */
+std::mutex g_text_input_mutex;
+
+/** RndrActivity.nativeCommitText. Runs on the UI thread. */
+void JNICALL NativeCommitText(JNIEnv* env, jclass /*activity_class*/, jstring text)
+{
+    if (text == nullptr)
+    {
+        return;
+    }
+    const jsize length = env->GetStringLength(text);
+    const jchar* characters = env->GetStringChars(text, nullptr);
+    if (characters == nullptr)
+    {
+        return;
+    }
+    const Opal::StringWide wide_text(reinterpret_cast<const Rndr::char16*>(characters), static_cast<Opal::StringWide::size_type>(length));
+    env->ReleaseStringChars(text, characters);
+    Opal::StringUtf32 code_points;
+    if (Opal::Transcode(wide_text, code_points) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("The on-screen keyboard committed text that is not valid UTF-16");
+        return;
+    }
+    Rndr::AndroidApplication::QueueCommittedText(code_points);
+}
+
+/**
+ * The characters OnCharacter reports, as on the desktop: printable ones, and backspace, tab and carriage return for
+ * the keys that type them there. Enter types a line feed on Android and a carriage return on Windows and X11.
+ */
+Rndr::uchar32 ToReportedCharacter(Rndr::uchar32 character)
+{
+    if (character == '\n')
+    {
+        return '\r';
+    }
+    if (character >= 0x20 && character != 0x7F)
+    {
+        return character;
+    }
+    if (character == '\b' || character == '\t' || character == '\r')
+    {
+        return character;
+    }
+    return 0;
+}
+
 Rndr::Vector2i GetPointerPosition(const AInputEvent* event, size_t pointer_index)
 {
     return {static_cast<Rndr::i32>(AMotionEvent_getX(event, pointer_index)), static_cast<Rndr::i32>(AMotionEvent_getY(event, pointer_index))};
@@ -138,6 +193,7 @@ Rndr::AndroidApplication::AndroidApplication(SystemMessageHandler* message_handl
     m_app->onAppCmd = &OnAppCommand;
     m_app->onInputEvent = &OnInputEvent;
     m_dpi_scale = ReadDpiScale(m_app);
+    SetUpJava();
 }
 
 Rndr::AndroidApplication::~AndroidApplication()
@@ -166,10 +222,12 @@ Rndr::AndroidApplication::~AndroidApplication()
         PollOnce(m_app, -1);
     }
 
+    TearDownJava();
     if (m_logcat_sink.IsValid())
     {
         Opal::GetLogger().RemoveSink(m_logcat_sink);
     }
+    const std::lock_guard<std::mutex> lock(g_text_input_mutex);
     g_android_app = nullptr;
 }
 
@@ -180,13 +238,13 @@ void Rndr::AndroidApplication::ProcessSystemEvents(u32 timeout_ms)
     {
         first_timeout = timeout_ms > static_cast<u32>(INT_MAX) ? INT_MAX : static_cast<int>(timeout_ms);
     }
-    if (!PollOnce(m_app, first_timeout))
+    if (PollOnce(m_app, first_timeout))
     {
-        return;
+        while (PollOnce(m_app, 0))
+        {
+        }
     }
-    while (PollOnce(m_app, 0))
-    {
-    }
+    DeliverPendingCharacters();
 }
 
 Rndr::ErrorCode Rndr::AndroidApplication::WaitForNativeWindow()
@@ -244,43 +302,320 @@ Rndr::ErrorCode Rndr::AndroidApplication::RequestOrientation(ScreenOrientation o
             break;
     }
 
-    // android_main runs on a thread of the glue's own, which the VM does not know until it is attached. One that
-    // was attached by someone else stays attached.
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jclass activity_class = jni->GetObjectClass(jni.GetActivity());
+    jmethodID set_requested_orientation = jni->GetMethodID(activity_class, "setRequestedOrientation", "(I)V");
+    if (jni.Threw("looking up Activity.setRequestedOrientation"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), set_requested_orientation, requested);
+    if (jni.Threw("setting the requested screen orientation"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+void Rndr::AndroidApplication::SetUpJava()
+{
+    // This thread calls into Java on every key press and for the insets, so it stays attached for as long as the
+    // application lives, and each JniScope finds it attached.
     JavaVM* vm = m_app->activity->vm;
     JNIEnv* env = nullptr;
-    const jint env_status = vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
-    const bool attach_here = env_status == JNI_EDETACHED;
-    if (attach_here && vm->AttachCurrentThread(&env, nullptr) != JNI_OK)
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_EDETACHED)
     {
-        RNDR_LOG_ERROR("Could not attach the thread to the Java VM to set the screen orientation");
-        return ErrorCode::PlatformError;
-    }
-    if (!attach_here && env_status != JNI_OK)
-    {
-        RNDR_LOG_ERROR("The Java VM refused an environment to set the screen orientation, error {}", env_status);
-        return ErrorCode::PlatformError;
+        m_attached_to_java = vm->AttachCurrentThread(&env, nullptr) == JNI_OK;
     }
 
-    ErrorCode status = ErrorCode::Success;
-    jobject activity = m_app->activity->clazz;
-    jclass activity_class = env->GetObjectClass(activity);
-    jmethodID set_requested_orientation = env->GetMethodID(activity_class, "setRequestedOrientation", "(I)V");
-    if (set_requested_orientation != nullptr)
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
     {
-        env->CallVoidMethod(activity, set_requested_orientation, requested);
+        return;
     }
-    if (env->ExceptionCheck() == JNI_TRUE)
+
+    jclass key_character_map = jni->FindClass("android/view/KeyCharacterMap");
+    if (!jni.Threw("finding KeyCharacterMap"))
     {
-        env->ExceptionClear();
-        RNDR_LOG_ERROR("Activity.setRequestedOrientation({}) threw", requested);
-        status = ErrorCode::PlatformError;
+        m_key_character_map_load = jni->GetStaticMethodID(key_character_map, "load", "(I)Landroid/view/KeyCharacterMap;");
+        m_key_character_map_get = jni->GetMethodID(key_character_map, "get", "(II)I");
+        if (jni.Threw("looking up the KeyCharacterMap methods"))
+        {
+            m_key_character_map_load = nullptr;
+            m_key_character_map_get = nullptr;
+        }
+        else
+        {
+            m_key_character_map_class = static_cast<jclass>(jni->NewGlobalRef(key_character_map));
+        }
     }
-    env->DeleteLocalRef(activity_class);
-    if (attach_here)
+
+    // RndrActivity declares nativeCommitText; a plain NativeActivity does not, and registering it there throws.
+    // That is an app that chose key events only, not an error.
+    jclass activity_class = jni->GetObjectClass(jni.GetActivity());
+    const JNINativeMethod natives[] = {
+        {"nativeCommitText", "(Ljava/lang/String;)V", reinterpret_cast<void*>(&NativeCommitText)},
+    };
+    if (jni->RegisterNatives(activity_class, natives, 1) != JNI_OK)
     {
-        vm->DetachCurrentThread();
+        jni->ExceptionClear();
+        RNDR_LOG_INFO("The activity is not dev.rndr.RndrActivity, so the on-screen keyboard can only send key events");
+        return;
     }
-    return status;
+    m_set_text_input_active = jni->GetMethodID(activity_class, "setTextInputActive", "(Z)V");
+    if (jni.Threw("looking up RndrActivity.setTextInputActive"))
+    {
+        m_set_text_input_active = nullptr;
+    }
+}
+
+void Rndr::AndroidApplication::TearDownJava()
+{
+    {
+        const JniScope jni(m_app->activity);
+        if (jni.IsValid() && m_key_character_map_class != nullptr)
+        {
+            jni->DeleteGlobalRef(m_key_character_map_class);
+        }
+    }
+    m_key_character_map_class = nullptr;
+    if (m_attached_to_java)
+    {
+        m_app->activity->vm->DetachCurrentThread();
+        m_attached_to_java = false;
+    }
+}
+
+Rndr::uchar32 Rndr::AndroidApplication::CharacterForKey(const AInputEvent* event) const
+{
+    // The keys that type a control character on the desktop do so here as well, whatever the keyboard's map says.
+    switch (AKeyEvent_getKeyCode(event))
+    {
+        case AKEYCODE_DEL:
+            return '\b';
+        case AKEYCODE_TAB:
+            return '\t';
+        case AKEYCODE_ENTER:
+        case AKEYCODE_NUMPAD_ENTER:
+            return '\r';
+        default:
+            break;
+    }
+    if (m_key_character_map_class == nullptr)
+    {
+        return 0;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return 0;
+    }
+    jobject map = jni->CallStaticObjectMethod(m_key_character_map_class, m_key_character_map_load, AInputEvent_getDeviceId(event));
+    if (jni.Threw("loading the key character map") || map == nullptr)
+    {
+        return 0;
+    }
+    const jint character = jni->CallIntMethod(map, m_key_character_map_get, AKeyEvent_getKeyCode(event), AKeyEvent_getMetaState(event));
+    if (jni.Threw("reading the key's character"))
+    {
+        return 0;
+    }
+    // KeyCharacterMap.COMBINING_ACCENT marks a dead key, which types nothing by itself; there is no composition here.
+    constexpr jint k_combining_accent = static_cast<jint>(0x80000000u);
+    if ((character & k_combining_accent) != 0)
+    {
+        return 0;
+    }
+    return ToReportedCharacter(static_cast<uchar32>(character));
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::SetTextInputActive(bool active)
+{
+    if (m_set_text_input_active == nullptr)
+    {
+        if (active)
+        {
+            ANativeActivity_showSoftInput(m_app->activity, ANATIVEACTIVITY_SHOW_SOFT_INPUT_IMPLICIT);
+        }
+        else
+        {
+            ANativeActivity_hideSoftInput(m_app->activity, 0);
+        }
+        return PlatformApplication::SetTextInputActive(active);
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_set_text_input_active, static_cast<jboolean>(active ? JNI_TRUE : JNI_FALSE));
+    if (jni.Threw(active ? "showing the on-screen keyboard" : "hiding the on-screen keyboard"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return PlatformApplication::SetTextInputActive(active);
+}
+
+void Rndr::AndroidApplication::QueueCommittedText(const Opal::StringUtf32& text)
+{
+    const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+    if (g_android_app == nullptr)
+    {
+        return;
+    }
+    for (const uchar32 character : text)
+    {
+        const uchar32 reported = ToReportedCharacter(character);
+        if (reported != 0)
+        {
+            g_android_app->m_pending_characters.PushBack(reported);
+        }
+    }
+    ALooper_wake(g_android_app->m_app->looper);
+}
+
+void Rndr::AndroidApplication::DeliverPendingCharacters()
+{
+    Opal::DynamicArray<uchar32> characters;
+    {
+        const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+        if (m_pending_characters.IsEmpty())
+        {
+            return;
+        }
+        characters = std::move(m_pending_characters);
+        m_pending_characters = Opal::DynamicArray<uchar32>();
+    }
+    // Text typed while no window exists has nowhere to go.
+    if (m_window == nullptr)
+    {
+        return;
+    }
+    for (const uchar32 character : characters)
+    {
+        m_message_handler->OnCharacter(*m_window, character, false);
+    }
+}
+
+namespace
+{
+/**
+ * The window's system bar and display cutout insets, from
+ * WindowManager.getCurrentWindowMetrics().getWindowInsets().getInsets(Type.systemBars() | Type.displayCutout()).
+ * A WindowManager query rather than a View's, so it is answered on the calling thread without the UI thread.
+ */
+Opal::Expected<Rndr::SafeInsets, Rndr::ErrorCode> ReadSafeInsets(const Rndr::JniScope& jni)
+{
+    using Result = Opal::Expected<Rndr::SafeInsets, Rndr::ErrorCode>;
+
+    jmethodID get_window_manager = jni->GetMethodID(jni->GetObjectClass(jni.GetActivity()), "getWindowManager", "()Landroid/view/WindowManager;");
+    if (jni.Threw("looking up Activity.getWindowManager"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jobject window_manager = jni->CallObjectMethod(jni.GetActivity(), get_window_manager);
+    if (jni.Threw("getting the window manager") || window_manager == nullptr)
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jmethodID get_current_window_metrics =
+        jni->GetMethodID(jni->GetObjectClass(window_manager), "getCurrentWindowMetrics", "()Landroid/view/WindowMetrics;");
+    if (jni.Threw("looking up WindowManager.getCurrentWindowMetrics"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jobject metrics = jni->CallObjectMethod(window_manager, get_current_window_metrics);
+    if (jni.Threw("getting the window metrics") || metrics == nullptr)
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jmethodID get_window_insets = jni->GetMethodID(jni->GetObjectClass(metrics), "getWindowInsets", "()Landroid/view/WindowInsets;");
+    if (jni.Threw("looking up WindowMetrics.getWindowInsets"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jobject window_insets = jni->CallObjectMethod(metrics, get_window_insets);
+    if (jni.Threw("getting the window insets") || window_insets == nullptr)
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+
+    jclass type_class = jni->FindClass("android/view/WindowInsets$Type");
+    if (jni.Threw("finding WindowInsets.Type"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jmethodID system_bars = jni->GetStaticMethodID(type_class, "systemBars", "()I");
+    if (jni.Threw("looking up WindowInsets.Type.systemBars"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jmethodID display_cutout = jni->GetStaticMethodID(type_class, "displayCutout", "()I");
+    if (jni.Threw("looking up WindowInsets.Type.displayCutout"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    const jint types = jni->CallStaticIntMethod(type_class, system_bars) | jni->CallStaticIntMethod(type_class, display_cutout);
+    if (jni.Threw("asking for the inset types"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+
+    jmethodID get_insets = jni->GetMethodID(jni->GetObjectClass(window_insets), "getInsets", "(I)Landroid/graphics/Insets;");
+    if (jni.Threw("looking up WindowInsets.getInsets"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jobject insets = jni->CallObjectMethod(window_insets, get_insets, types);
+    if (jni.Threw("getting the insets") || insets == nullptr)
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jclass insets_class = jni->GetObjectClass(insets);
+    jfieldID left = jni->GetFieldID(insets_class, "left", "I");
+    jfieldID top = jni->GetFieldID(insets_class, "top", "I");
+    jfieldID right = jni->GetFieldID(insets_class, "right", "I");
+    jfieldID bottom = jni->GetFieldID(insets_class, "bottom", "I");
+    if (jni.Threw("looking up the fields of Insets"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    return Result(Rndr::SafeInsets{.left = jni->GetIntField(insets, left),
+                                   .top = jni->GetIntField(insets, top),
+                                   .right = jni->GetIntField(insets, right),
+                                   .bottom = jni->GetIntField(insets, bottom)});
+}
+}  // namespace
+
+void Rndr::AndroidApplication::RefreshSafeInsets()
+{
+    if (m_window == nullptr)
+    {
+        return;
+    }
+    // WindowMetrics is API 30. Forge needs Vulkan 1.3, which no device older than that ships, so an older one is
+    // not worth a second path through the deprecated View insets; it reports none.
+    if (android_get_device_api_level() < 30)
+    {
+        return;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return;
+    }
+    const Opal::Expected<SafeInsets, ErrorCode> insets = ReadSafeInsets(jni);
+    if (!insets.HasValue() || insets.GetValue() == m_window->m_safe_insets)
+    {
+        return;
+    }
+    m_window->m_safe_insets = insets.GetValue();
+    RNDR_LOG_INFO("Safe insets: left {}, top {}, right {}, bottom {}", m_window->m_safe_insets.left, m_window->m_safe_insets.top,
+                  m_window->m_safe_insets.right, m_window->m_safe_insets.bottom);
 }
 
 Rndr::ErrorCode Rndr::AndroidApplication::ExtractAssets(const char* asset_directory, const Opal::StringUtf8& destination)
@@ -394,6 +729,7 @@ void Rndr::AndroidApplication::HandleCommand(i32 command)
                 break;
             }
             const Vector2i old_size = m_window->GetSize();
+            RefreshSafeInsets();
             m_window->m_native_window = m_app->window;
             m_window->m_width = ANativeWindow_getWidth(m_app->window);
             m_window->m_height = ANativeWindow_getHeight(m_app->window);
@@ -420,6 +756,7 @@ void Rndr::AndroidApplication::HandleCommand(i32 command)
         case APP_CMD_CONFIG_CHANGED:
         {
             RefreshDpiScale();
+            RefreshSafeInsets();
             RefreshWindowSize();
             break;
         }
@@ -531,7 +868,13 @@ Rndr::i32 Rndr::AndroidApplication::HandleKeyEvent(AInputEvent* event)
     }
     if (action == AKEY_EVENT_ACTION_DOWN)
     {
-        m_message_handler->OnButtonDown(*m_window, primitive, AKeyEvent_getRepeatCount(event) > 0);
+        const bool is_repeated = AKeyEvent_getRepeatCount(event) > 0;
+        m_message_handler->OnButtonDown(*m_window, primitive, is_repeated);
+        const uchar32 character = CharacterForKey(event);
+        if (character != 0)
+        {
+            m_message_handler->OnCharacter(*m_window, character, is_repeated);
+        }
     }
     else if (action == AKEY_EVENT_ACTION_UP)
     {
@@ -685,15 +1028,203 @@ Rndr::Vector2i Rndr::AndroidApplication::GetCursorPosition() const
     return m_cursor_pos;
 }
 
+namespace
+{
+/** The ClipboardManager, from Context.getSystemService(Context.CLIPBOARD_SERVICE), or null with the reason logged. */
+jobject GetClipboardManager(const Rndr::JniScope& jni)
+{
+    jclass activity_class = jni->GetObjectClass(jni.GetActivity());
+    jmethodID get_system_service = jni->GetMethodID(activity_class, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+    if (jni.Threw("looking up Context.getSystemService"))
+    {
+        return nullptr;
+    }
+    jstring service_name = jni->NewStringUTF("clipboard");
+    if (jni.Threw("naming the clipboard service"))
+    {
+        return nullptr;
+    }
+    jobject manager = jni->CallObjectMethod(jni.GetActivity(), get_system_service, service_name);
+    if (jni.Threw("getting the clipboard service"))
+    {
+        return nullptr;
+    }
+    if (manager == nullptr)
+    {
+        RNDR_LOG_ERROR("The system has no clipboard service");
+    }
+    return manager;
+}
+}  // namespace
+
 Rndr::ErrorCode Rndr::AndroidApplication::SetClipboardText(const Opal::StringUtf8& text)
 {
-    RNDR_UNUSED(text);
-    return ErrorCode::FeatureNotSupported;
+    // Java strings are UTF-16. NewStringUTF takes only modified UTF-8, which spells characters outside the basic
+    // plane differently from UTF-8, and CheckJNI aborts a debuggable app that hands it the real thing.
+    Opal::StringWide wide_text;
+    if (Opal::Transcode(text, wide_text) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Clipboard text is not valid UTF-8");
+        return ErrorCode::InvalidArgument;
+    }
+
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jobject manager = GetClipboardManager(jni);
+    if (manager == nullptr)
+    {
+        return ErrorCode::PlatformError;
+    }
+    jstring java_text = jni->NewString(reinterpret_cast<const jchar*>(wide_text.GetData()), static_cast<jsize>(wide_text.GetSize()));
+    if (jni.Threw("making the clipboard text"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    jstring label = jni->NewStringUTF("rndr");
+    if (jni.Threw("making the clip's label"))
+    {
+        return ErrorCode::PlatformError;
+    }
+
+    jclass clip_data_class = jni->FindClass("android/content/ClipData");
+    if (jni.Threw("finding ClipData"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    jmethodID new_plain_text = jni->GetStaticMethodID(clip_data_class, "newPlainText",
+                                                      "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Landroid/content/ClipData;");
+    if (jni.Threw("looking up ClipData.newPlainText"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    jobject clip = jni->CallStaticObjectMethod(clip_data_class, new_plain_text, label, java_text);
+    if (jni.Threw("making the clip"))
+    {
+        return ErrorCode::PlatformError;
+    }
+
+    jmethodID set_primary_clip = jni->GetMethodID(jni->GetObjectClass(manager), "setPrimaryClip", "(Landroid/content/ClipData;)V");
+    if (jni.Threw("looking up ClipboardManager.setPrimaryClip"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(manager, set_primary_clip, clip);
+    if (jni.Threw("putting the clip on the clipboard"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
 }
 
 Opal::Expected<Opal::StringUtf8, Rndr::ErrorCode> Rndr::AndroidApplication::GetClipboardText()
 {
-    return Opal::Expected<Opal::StringUtf8, ErrorCode>(ErrorCode::FeatureNotSupported);
+    using Result = Opal::Expected<Opal::StringUtf8, ErrorCode>;
+
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    jobject manager = GetClipboardManager(jni);
+    if (manager == nullptr)
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+
+    // Android 10 and later hand the clip only to the app with the focus; any other gets null, which reads as empty.
+    jmethodID get_primary_clip = jni->GetMethodID(jni->GetObjectClass(manager), "getPrimaryClip", "()Landroid/content/ClipData;");
+    if (jni.Threw("looking up ClipboardManager.getPrimaryClip"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    jobject clip = jni->CallObjectMethod(manager, get_primary_clip);
+    if (jni.Threw("reading the clip off the clipboard"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    if (clip == nullptr)
+    {
+        return Result(Opal::StringUtf8());
+    }
+
+    jclass clip_class = jni->GetObjectClass(clip);
+    jmethodID get_item_count = jni->GetMethodID(clip_class, "getItemCount", "()I");
+    if (jni.Threw("looking up ClipData.getItemCount"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    jmethodID get_item_at = jni->GetMethodID(clip_class, "getItemAt", "(I)Landroid/content/ClipData$Item;");
+    if (jni.Threw("looking up ClipData.getItemAt"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    const jint item_count = jni->CallIntMethod(clip, get_item_count);
+    if (jni.Threw("counting the clip's items"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    if (item_count == 0)
+    {
+        return Result(Opal::StringUtf8());
+    }
+    jobject item = jni->CallObjectMethod(clip, get_item_at, 0);
+    if (jni.Threw("reading the clip's first item"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+
+    // The text the clip would paste as: a plain text item's own text, a URI's contents or the URI itself.
+    jmethodID coerce_to_text =
+        jni->GetMethodID(jni->GetObjectClass(item), "coerceToText", "(Landroid/content/Context;)Ljava/lang/CharSequence;");
+    if (jni.Threw("looking up ClipData.Item.coerceToText"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    jobject char_sequence = jni->CallObjectMethod(item, coerce_to_text, jni.GetActivity());
+    if (jni.Threw("turning the clip into text"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    if (char_sequence == nullptr)
+    {
+        return Result(Opal::StringUtf8());
+    }
+    jmethodID to_string = jni->GetMethodID(jni->GetObjectClass(char_sequence), "toString", "()Ljava/lang/String;");
+    if (jni.Threw("looking up CharSequence.toString"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    auto java_text = static_cast<jstring>(jni->CallObjectMethod(char_sequence, to_string));
+    if (jni.Threw("reading the clip's text"))
+    {
+        return Result(ErrorCode::PlatformError);
+    }
+    if (java_text == nullptr)
+    {
+        return Result(Opal::StringUtf8());
+    }
+
+    const jsize length = jni->GetStringLength(java_text);
+    const jchar* characters = jni->GetStringChars(java_text, nullptr);
+    if (characters == nullptr)
+    {
+        (void)jni.Threw("copying the clip's text out");
+        return Result(ErrorCode::OutOfMemory);
+    }
+    const Opal::StringWide wide_text(reinterpret_cast<const char16*>(characters), static_cast<Opal::StringWide::size_type>(length));
+    jni->ReleaseStringChars(java_text, characters);
+
+    // A lone surrogate is allowed in a Java string, and has no UTF-8 spelling.
+    Opal::StringUtf8 text;
+    if (Opal::Transcode(wide_text, text) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("The clipboard holds text that is not valid UTF-16");
+        return Result(ErrorCode::CorruptData);
+    }
+    return Result(std::move(text));
 }
 
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::AndroidApplication::GetMonitors() const

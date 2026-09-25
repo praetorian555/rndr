@@ -33,6 +33,21 @@ enum class ScreenOrientation : u8
 };
 
 /**
+ * How far in from each edge of a window the system covers or cuts into it: the status and navigation bars, a camera
+ * cutout, rounded corners the cutout accounts for. Pixels, in the window's own coordinates - the space GetSize and the
+ * cursor are in. Content the user has to see or touch goes inside them; a background can run under them.
+ */
+struct SafeInsets
+{
+    i32 left = 0;
+    i32 top = 0;
+    i32 right = 0;
+    i32 bottom = 0;
+
+    bool operator==(const SafeInsets& other) const = default;
+};
+
+/**
  * Represents how the window should modify cursor's position.
  */
 enum class CursorPositionMode : u8
@@ -260,6 +275,14 @@ public:
     /** The orientation last asked for, through SetOrientation or GenericWindowDesc::orientation. */
     [[nodiscard]] ScreenOrientation GetOrientation() const { return m_orientation; }
 
+    /**
+     * The insets the system takes from this window. All zero on the desktop, where the window's client area is the
+     * application's. On Android they are read when the window arrives and again when it is resized or the
+     * configuration changes, before the resize is reported, so reading them is free and a resize handler already
+     * sees the new ones.
+     */
+    [[nodiscard]] SafeInsets GetSafeInsets() const { return m_safe_insets; }
+
     [[nodiscard]] virtual Vector2i GetPosition() const = 0;
     [[nodiscard]] virtual Vector2i GetSize() const = 0;
 
@@ -293,6 +316,7 @@ protected:
     CursorPositionMode m_cursor_pos_mode = CursorPositionMode::Normal;
     CursorShape m_cursor_shape = CursorShape::Arrow;
     ScreenOrientation m_orientation = ScreenOrientation::Any;
+    SafeInsets m_safe_insets;
     bool m_is_closed = false;
     f32 m_dpi_scale = 1.0f;
 

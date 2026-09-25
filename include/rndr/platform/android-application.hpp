@@ -109,6 +109,25 @@ public:
      */
     ErrorCode RequestOrientation(ScreenOrientation orientation);
 
+    /**
+     * Read the window's safe insets again, and log them when they changed. Called by the event pump and when the
+     * window is created; see GenericWindow::GetSafeInsets.
+     */
+    void RefreshSafeInsets();
+
+    /**
+     * Shows or hides the on-screen keyboard through dev.rndr.RndrActivity, whose invisible view takes the text an
+     * on-screen keyboard commits. Under a plain NativeActivity it falls back to ANativeActivity_showSoftInput, whose
+     * keyboard can only send key events.
+     */
+    ErrorCode SetTextInputActive(bool active) override;
+
+    /**
+     * Text an on-screen keyboard committed, handed over by RndrActivity on the UI thread. Queued, and delivered as
+     * OnCharacter on this application's thread at the next ProcessSystemEvents, which the queueing wakes.
+     */
+    static void QueueCommittedText(const Opal::StringUtf32& text);
+
 private:
     static void OnAppCommand(android_app* app, i32 command);
     static i32 OnInputEvent(android_app* app, AInputEvent* event);
@@ -142,6 +161,24 @@ private:
     i32 m_touch_pointer_id = -1;
     /** AMOTION_EVENT_BUTTON_* bits last reported for a mouse, diffed against each event's button state. */
     i32 m_mouse_button_state = 0;
+
+    /** Whether the constructor attached this thread to the Java VM, which the destructor then undoes. */
+    bool m_attached_to_java = false;
+    /** android.view.KeyCharacterMap and its methods, for the character a key event types. Null when unavailable. */
+    _jclass* m_key_character_map_class = nullptr;
+    _jmethodID* m_key_character_map_load = nullptr;
+    _jmethodID* m_key_character_map_get = nullptr;
+    /** RndrActivity.setTextInputActive, or null when the activity is a plain NativeActivity. */
+    _jmethodID* m_set_text_input_active = nullptr;
+
+    /** Committed text waiting for ProcessSystemEvents. Guarded by a mutex in the source, since the UI thread fills it. */
+    Opal::DynamicArray<uchar32> m_pending_characters;
+
+    void SetUpJava();
+    void TearDownJava();
+    /** The character a key event types, from KeyCharacterMap; 0 when it types none this layer reports. */
+    uchar32 CharacterForKey(const AInputEvent* event) const;
+    void DeliverPendingCharacters();
 };
 
 }  // namespace Rndr

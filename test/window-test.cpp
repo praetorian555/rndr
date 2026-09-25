@@ -87,6 +87,17 @@ TEST_CASE("A desktop window records the orientation it is asked for and stays as
     app->DestroyGenericWindow(std::move(window));
 }
 
+TEST_CASE("A desktop window has no safe insets", "[window]")
+{
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    Opal::Ref<GenericWindow> window = CreateHiddenWindow(*app);
+
+    // The client area is the application's; nothing the system draws covers it.
+    REQUIRE(window->GetSafeInsets() == SafeInsets{});
+
+    app->DestroyGenericWindow(std::move(window));
+}
+
 #if RNDR_WINDOWS
 TEST_CASE("Every cursor shape maps to a system cursor", "[window]")
 {

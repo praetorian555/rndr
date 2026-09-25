@@ -8,14 +8,14 @@
         android:version="0x403000" />
 
     <application
-        android:hasCode="false"
+        android:hasCode="true"
         android:label="rndr modern-vulkan">
 
         <!-- The configuration changes make a rotation a resize of the running activity rather than a restart of it.
              Which way up it is shown is the sample's to ask for, through GenericWindowDesc::orientation. -->
         <activity
-            android:name="android.app.NativeActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:name="dev.rndr.RndrActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden"
             android:exported="true">
             <meta-data
                 android:name="android.app.lib_name"

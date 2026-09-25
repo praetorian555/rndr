@@ -98,6 +98,16 @@ public:
     /** End of clipboard API. */
 
     /**
+     * Text input API. Start when the application wants text, as when a text field takes the focus, and stop when it
+     * no longer does: on Android that shows and hides the on-screen keyboard. Typed characters arrive as
+     * OnCharacter, and through InputActionBuilder::BindText. See PlatformApplication::SetTextInputActive.
+     */
+    ErrorCode StartTextInput();
+    ErrorCode StopTextInput();
+    [[nodiscard]] bool IsTextInputActive() const;
+    /** End of text input API. */
+
+    /**
      * Checks whether a gamepad is currently connected on the given slot. Connection state is
      * refreshed by ProcessSystemEvents.
      * @param gamepad_index Slot in [0, k_max_gamepads).

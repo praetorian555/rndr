@@ -147,6 +147,21 @@ Opal::Expected<Opal::StringUtf8, Rndr::ErrorCode> Rndr::Application::GetClipboar
     return m_platform_application->GetClipboardText();
 }
 
+Rndr::ErrorCode Rndr::Application::StartTextInput()
+{
+    return m_platform_application->SetTextInputActive(true);
+}
+
+Rndr::ErrorCode Rndr::Application::StopTextInput()
+{
+    return m_platform_application->SetTextInputActive(false);
+}
+
+bool Rndr::Application::IsTextInputActive() const
+{
+    return m_platform_application->IsTextInputActive();
+}
+
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::Application::GetMonitors() const
 {
     return m_platform_application->GetMonitors();

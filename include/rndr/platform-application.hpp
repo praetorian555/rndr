@@ -86,11 +86,25 @@ public:
     /**
      * Get the text on the system clipboard. An empty clipboard, or one holding something that is not
      * text, gives an empty string. On Linux, when another application owns the clipboard, this waits
-     * for it to send the text over, for up to a second.
+     * for it to send the text over, for up to a second. On Android 10 and later only the app with the
+     * focus is given the clipboard, so one in the background reads it as empty.
      * @return The text, ErrorCode::CorruptData if what the clipboard holds is not valid text in its
      *         claimed encoding, or ErrorCode::PlatformError if the window system could not deliver it.
      */
     [[nodiscard]] virtual Opal::Expected<Opal::StringUtf8, ErrorCode> GetClipboardText() = 0;
+
+    /**
+     * Ask for text from the user, or stop asking. Characters arrive through SystemMessageHandler::OnCharacter
+     * either way. A desktop keyboard always types, so there this only records the request; on Android it shows
+     * or hides the on-screen keyboard.
+     * @return ErrorCode::Success, or ErrorCode::PlatformError when the keyboard could not be asked for.
+     */
+    virtual ErrorCode SetTextInputActive(bool active)
+    {
+        m_is_text_input_active = active;
+        return ErrorCode::Success;
+    }
+    [[nodiscard]] bool IsTextInputActive() const { return m_is_text_input_active; }
 
     [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
     [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;
@@ -105,6 +119,7 @@ protected:
     Opal::DynamicArray<Opal::ScopePtr<GenericWindow>> m_generic_windows;
     Opal::Ref<GenericWindow> m_focused_window;
     ModifierKeysState m_modifier_keys;
+    bool m_is_text_input_active = false;
 };
 
 }  // namespace Rndr

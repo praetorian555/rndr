@@ -352,6 +352,43 @@ void Run(android_app* android_application)
         .AddAction("Exit").GetValue()
         .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
         .OnButton([&window](Rndr::Trigger, bool) { window->RequestClose(); });
+    // F2 asks for text - on a phone that shows the on-screen keyboard - and what is typed builds a line, which Enter
+    // writes to the log and ends the text input with. Not a letter key, since that would type itself into the line.
+    Opal::StringUtf32 typed_line;
+    base_input_context
+        .AddAction("Start Text Input").GetValue()
+        .Bind(Rndr::Key::F2, Rndr::Trigger::Pressed)
+        .OnButton([&rndr_app](Rndr::Trigger, bool) { RequireOk(rndr_app->StartTextInput()); });
+    base_input_context
+        .AddAction("Type").GetValue()
+        .BindText()
+        .OnText(
+            [&rndr_app, &typed_line](Rndr::uchar32 character)
+            {
+                if (!rndr_app->IsTextInputActive())
+                {
+                    return;
+                }
+                if (character == '\r')
+                {
+                    Opal::StringUtf8 line;
+                    (void)Opal::Transcode(typed_line, line);
+                    RNDR_LOG_INFO("Typed: {}", line.GetData());
+                    typed_line.Clear();
+                    RequireOk(rndr_app->StopTextInput());
+                }
+                else if (character == '\b')
+                {
+                    if (!typed_line.IsEmpty())
+                    {
+                        typed_line.PopBack();
+                    }
+                }
+                else if (character >= 0x20)
+                {
+                    typed_line += character;
+                }
+            });
     // Turns a phone between landscape and portrait. A desktop window records it and stays as it is.
     base_input_context
         .AddAction("Toggle Orientation").GetValue()

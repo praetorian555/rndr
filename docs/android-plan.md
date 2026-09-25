@@ -40,6 +40,10 @@ The other decisions:
   Java, no AndroidX and no Kotlin. GameActivity buys text input and a newer input path, neither of which
   the milestone needs, and costs a Gradle dependency and a Java class. House style is to wrap the platform
   directly (Win32, XCB, WASAPI, Vulkan), and the glue is the thinnest layer there is.
+  Revisited for text input, which needs Java either way: an on-screen keyboard hands text to a view's
+  `InputConnection`, and NativeActivity has none. Rather than GameActivity, `dev.rndr.RndrActivity`
+  (`src/platform/java`) is NativeActivity plus one invisible view that has one - about a hundred lines, no
+  library, and the glue stays. An app that keeps plain NativeActivity still runs and gets key events only.
 - **Vulkan 1.3 devices only.** Forge asks for `VK_API_VERSION_1_3` (`src/forge/graphics-context.cpp:273`)
   and requires timeline semaphores, synchronization2 and dynamic rendering (`src/forge/device.cpp:328`).
   Devices launching with Android 15 are required to ship 1.3, and the Adreno 7xx and Mali Valhall
@@ -228,11 +232,26 @@ Input, all from `onInputEvent`:
 - `AINPUT_EVENT_TYPE_KEY`: `AKEYCODE_*` through a `TranslateKey` table to `InputPrimitive`, modifiers
   from `AKeyEvent_getMetaState`, repeats from `AKeyEvent_getRepeatCount`. `AKEYCODE_BACK` is not a key:
   it goes through `OnWindowClose` like the desktop close button, vetoable through `on_window_close`,
-  because leaving is what back means. `OnCharacter` is not reported - the NDK has no
-  `getUnicodeChar` without JNI - so a hardware keyboard gives key events only.
+  because leaving is what back means. `OnCharacter` is reported for a key down, with the character from
+  `KeyCharacterMap` through JNI, filtered as on the desktop: printable characters, and `\b`, `\t` and `\r`
+  for Delete, Tab and Enter. A dead key types nothing; there is no composition.
+- Text input: `Application::StartTextInput` / `StopTextInput` show and hide the on-screen keyboard through
+  `RndrActivity`. Its view's `InputConnection` passes committed text to native code on the UI thread, which
+  queues it and wakes the looper; `ProcessSystemEvents` delivers it as `OnCharacter`. The view asks for a
+  visible password, so keyboards commit as they go rather than holding a word back to suggest; one that
+  composes anyway has the word delivered when it finishes. The connection keeps no text, so Backspace and
+  Enter come back as key events. On the desktop both calls only record the request.
 - Cursor: `ShowCursor`, `IsCursorVisible`, `SetCursorPosition` are no-ops; `GetCursorPosition` is the last
   touch, which is in screen space already since the window is the screen.
-- Clipboard: `FeatureNotSupported` - it is a `ClipboardManager` call through JNI, out of scope.
+- Safe insets: `GenericWindow::GetSafeInsets` is the system bars and the display cutout, from
+  `WindowManager.getCurrentWindowMetrics()` through JNI - a WindowManager query, so it needs no UI thread. The
+  target SDK makes the activity edge to edge, so the NDK's content rect is the whole window and says nothing.
+  Read when the window arrives and on every resize and configuration change, before the resize is reported;
+  bars that come and go without a resize are not followed, which nothing does until immersive mode exists.
+  API 30 and later; below it they are zero, and no device that old has the Vulkan 1.3 Forge needs.
+- Clipboard: `ClipboardManager` through JNI (`src/platform/android-jni.hpp`), with the text crossing as
+  UTF-16, since CheckJNI aborts a debuggable app that gives `NewStringUTF` real UTF-8. Android 10 and later
+  hand the clip only to the app with the focus, so a read from the background is empty.
 - Monitors: one, sized from the native window, `dpi_scale` from the density, `refresh_rate` 60 because
   the real figure is `Display.getRefreshRate` through JNI.
 - Gamepads arrive in the same event stream (`AINPUT_SOURCE_GAMEPAD` / `JOYSTICK`, `AKEYCODE_BUTTON_*`,
@@ -371,12 +390,13 @@ As built (2026-09-25):
 ## Phase 4 — sample APK
 
 `samples/android/` is a Gradle project - `settings.gradle.kts`, `build.gradle.kts`, `app/build.gradle.kts`,
-`app/src/main/AndroidManifest.xml` - and nothing else: no Java, no Kotlin, `android:hasCode="false"`.
+`app/src/main/AndroidManifest.xml`. Its one Java class is rndr's `RndrActivity`, compiled from
+`src/platform/java` rather than copied into the project, so `android:hasCode="true"`.
 
 - `externalNativeBuild.cmake.path` is the repository's root `CMakeLists.txt`, with the Phase 0 arguments
   plus `RNDR_BUILD_SAMPLES=ON`, and `abiFilters` is `arm64-v8a` alone. `minSdk` 29: nothing lower has a
   Vulkan 1.3 driver, and 29 is where the NDK's Vulkan headers stop needing care.
-- The manifest declares `android.app.NativeActivity` with `android.app.lib_name` = `modern-vulkan`,
+- The manifest declares `android.app.NativeActivity` (since text input its subclass `dev.rndr.RndrActivity`) with `android.app.lib_name` = `modern-vulkan`,
   `configChanges="orientation|screenSize|keyboardHidden"` so a rotation is a resize rather than a restart,
   and `<uses-feature android:name="android.hardware.vulkan.version" android:version="0x403000"
   android:required="true"/>` so the store and the installer refuse a device Forge would refuse.
@@ -476,7 +496,9 @@ As built so far (2026-09-25):
 
 Canvas on Android (GLES against a GL 4.5 API); an AAudio device behind `AudioDevice::Create`
 (`src/audio/audio-device.cpp:7` is where it slots); gamepad (same event stream, two tables); touch as its
-own input primitive (multi-touch, gestures, pressure); text input and `OnCharacter` (JNI); clipboard (JNI);
-`imgui-system` on Android (`imgui_impl_android.cpp` exists upstream); pre-rotation; immersive mode behind
-`SetMode(BorderlessFullscreen)`; HWASan; GameActivity; the `x86_64` ABI for the emulator; Slang on the
-device. Each slots behind the seams above later.
+own input primitive (multi-touch, gestures, pressure); an on-screen keyboard's composing text shown while it
+is composed, and a text field's own contents given to the keyboard; `imgui-system` on Android (`imgui_impl_android.cpp` exists upstream); immersive mode behind
+`SetMode(BorderlessFullscreen)` (JNI); the real refresh rate (JNI, or `AChoreographer` from API 30); HWASan;
+GameActivity; Slang on the device. Each slots behind the seams above later, and a JNI one goes through
+`JniScope` (`src/platform/android-jni.hpp`), which the orientation, the clipboard, the safe insets and text input
+already use.

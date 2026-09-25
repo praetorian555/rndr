@@ -58,6 +58,8 @@ android {
 
     sourceSets {
         getByName("main") {
+            // RndrActivity, rndr's NativeActivity with text input from the on-screen keyboard.
+            this.java.directories += repositoryRoot.resolve("src/platform/java").path
             assets.directories += listOf(
                 repositoryRoot.resolve("assets/sample-models/Suzanne/glTF").path,
                 spirvDirectory.resolve("modern-vulkan").path,

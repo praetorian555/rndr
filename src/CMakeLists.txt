@@ -144,6 +144,8 @@ elseif (ANDROID)
             "${PROJECT_SOURCE_DIR}/include/rndr/platform/android-window.hpp"
             "${PROJECT_SOURCE_DIR}/src/platform/android-application.cpp"
             "${PROJECT_SOURCE_DIR}/src/platform/android-window.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/android-jni.hpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/android-jni.cpp"
             # The NDK's own glue between NativeActivity and a native thread. Plain C shipped as source, and
             # not ours to fix, so it builds with warnings off the way spirv_reflect.c does.
             "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c"
