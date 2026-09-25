@@ -27,7 +27,10 @@ struct VSOutput {
 [shader("vertex")]
 VSOutput main_vertex(VSInput input, uniform ShaderData *shaderData, uint instanceIndex : SV_VulkanInstanceID) {
     VSOutput output;
-    float4x4 modelMat = shaderData->model[instanceIndex];
+    // Picked with constant indices rather than as model[instanceIndex]. Samsung's Xclipse driver (24.0.560, on a
+    // Galaxy A56) reads the wrong matrix when the instance index selects it out of the array behind the pointer, and
+    // Slang folds a local copy straight back into that indexed load.
+    float4x4 modelMat = instanceIndex == 0 ? shaderData->model[0] : (instanceIndex == 1 ? shaderData->model[1] : shaderData->model[2]);
     output.Normal = mul((float3x3)mul(shaderData->view, modelMat), input.Normal);
     output.UV = input.UV;
     output.Pos = mul(shaderData->projection, mul(shaderData->view, mul(modelMat, float4(input.Pos.xyz, 1.0))));
