@@ -53,7 +53,8 @@ OFF, and hardened builds refuse to install.
 Android is a cross build with the NDK's toolchain file (`build/android-debug`) and, for the sample APK, a
 Gradle project in `samples/android`. There is no Slang on the device, so `RNDR_SHADER_COMPILER` is off there
 and shaders are compiled on the host at build time. The configure line, the Gradle invocation and what is and
-is not checked yet are in [docs/android-plan.md](docs/android-plan.md).
+is not checked yet are in [docs/android-plan.md](docs/android-plan.md); adb, logcat, stack traces and the rest of
+running it on a phone are in [docs/android-debugging.md](docs/android-debugging.md).
 
 ## Tests
 
