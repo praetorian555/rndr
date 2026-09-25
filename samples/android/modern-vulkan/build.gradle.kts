@@ -13,6 +13,9 @@ val spirvDirectory: File = layout.buildDirectory.dir("generated/rndr-spirv").get
 // release that matches the Vulkan headers rndr pins, rather than committed.
 val validationLayerVersion = "1.4.335.0"
 val validationLayerDirectory: File = layout.buildDirectory.dir("generated/validation-layer").get().asFile
+// Which ABIs to build, comma separated. A phone is arm64-v8a; the x86_64 emulator needs x86_64, since the ARM
+// translation it offers for arm64 apps crashes in vkCreateInstance. `-Prndr.abis=x86_64`, or both.
+val abis: List<String> = (findProperty("rndr.abis") as String? ?: "arm64-v8a").split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
 android {
     namespace = "dev.rndr.modernvulkan"
@@ -27,7 +30,7 @@ android {
         versionCode = 1
         versionName = "1.0"
         ndk {
-            abiFilters += "arm64-v8a"
+            abiFilters += abis
         }
         externalNativeBuild {
             cmake {
@@ -77,10 +80,12 @@ val fetchValidationLayer = tasks.register("fetchValidationLayer") {
             archive.parentFile.mkdirs()
             URI(url).toURL().openStream().use { input -> archive.outputStream().use { input.copyTo(it) } }
         }
-        val layer = zipTree(archive).matching { include("**/arm64-v8a/libVkLayer_khronos_validation.so") }.singleFile
-        val destination = output.resolve("arm64-v8a")
-        destination.mkdirs()
-        layer.copyTo(destination.resolve(layer.name), overwrite = true)
+        for (abi in abis) {
+            val layer = zipTree(archive).matching { include("**/$abi/libVkLayer_khronos_validation.so") }.singleFile
+            val destination = output.resolve(abi)
+            destination.mkdirs()
+            layer.copyTo(destination.resolve(layer.name), overwrite = true)
+        }
     }
 }
 
