@@ -19,6 +19,17 @@
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
 
+namespace
+{
+struct SurfaceGeometry
+{
+    VkExtent2D extent = {};
+    Rndr::Forge::SurfaceRotation rotation = Rndr::Forge::SurfaceRotation::None;
+};
+
+SurfaceGeometry SelectGeometry(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr::GenericWindow& window);
+}  // namespace
+
 static Opal::Optional<VkPresentModeKHR> ToVkPresentMode(Rndr::Forge::PresentMode present_mode)
 {
     switch (present_mode)
@@ -313,6 +324,22 @@ Opal::Expected<Rndr::Forge::AcquiredTexture, Rndr::ErrorCode> Rndr::Forge::SwapC
         RNDR_FORGE_CHECK_EXPECTED(Recreate(), Result);
         return Result(AcquiredTexture{});
     }
+#if RNDR_ANDROID
+    // Android reports a turn of the screen as a suboptimal present, but not the size that goes with it, and for a moment
+    // the surface can report the new rotation with the old size. A swap chain made in that moment is the wrong shape and
+    // nothing says so again, so the surface is asked every frame and a settled change makes the swap chain again.
+    VkSurfaceCapabilitiesKHR capabilities{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_device->GetPhysicalDevice().GetNativePhysicalDevice(), m_surface->GetNativeSurface(),
+                                                  &capabilities) == VK_SUCCESS)
+    {
+        const SurfaceGeometry geometry = SelectGeometry(capabilities, m_surface->GetWindow());
+        if (geometry.extent.width != m_extent.width || geometry.extent.height != m_extent.height || geometry.rotation != m_rotation)
+        {
+            RNDR_FORGE_CHECK_EXPECTED(Recreate(), Result);
+            return Result(AcquiredTexture{});
+        }
+    }
+#endif
 
     u32 texture_index = k_invalid_texture_index;
     const VkResult result = vkAcquireNextImageKHR(m_device->GetNativeDevice(), m_swap_chain, m_desc.acquire_timeout,
@@ -458,6 +485,27 @@ VkSurfaceTransformFlagBitsKHR ToVkSurfaceTransform(Rndr::Forge::SurfaceRotation 
             return VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     }
 }
+
+/**
+ * The extent and rotation a swap chain for this surface is created with. The extent is in the display's natural
+ * orientation: created that way and turned by the presentation engine's own transform, which costs nothing, rather than
+ * in the window's and turned by a composition pass every frame. Android reports a surface that is not pre-rotated as
+ * suboptimal, so without this every present on a turned phone recreates it. A zero extent means no swap chain.
+ */
+SurfaceGeometry SelectGeometry(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr::GenericWindow& window)
+{
+    SurfaceGeometry geometry{.extent = SelectExtent(capabilities, window)};
+    if (geometry.extent.width == 0 || geometry.extent.height == 0)
+    {
+        return geometry;
+    }
+    geometry.rotation = SelectRotation(capabilities);
+    if (geometry.rotation == Rndr::Forge::SurfaceRotation::Clockwise90 || geometry.rotation == Rndr::Forge::SurfaceRotation::Clockwise270)
+    {
+        geometry.extent = {.width = geometry.extent.height, .height = geometry.extent.width};
+    }
+    return geometry;
+}
 }  // namespace
 
 Rndr::Matrix4x4f Rndr::Forge::SwapChain::GetPreRotation() const
@@ -534,7 +582,9 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
         return ErrorCode::FeatureNotSupported;
     }
 
-    VkExtent2D extent = SelectExtent(swap_chain_support.capabilities, m_surface->GetWindow());
+    const SurfaceGeometry geometry = SelectGeometry(swap_chain_support.capabilities, m_surface->GetWindow());
+    const VkExtent2D extent = geometry.extent;
+    const SurfaceRotation rotation = geometry.rotation;
     if (extent.width == 0 || extent.height == 0)
     {
         // The window has no client area, so there is nothing to present to. Release the swap chain and let the next
@@ -543,14 +593,6 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
         m_extent = {};
         m_rotation = SurfaceRotation::None;
         return ErrorCode::Success;
-    }
-    // Created in the display's natural orientation and turned by the presentation engine's own transform, which
-    // costs nothing, rather than in the window's and turned by a composition pass every frame. Android reports a
-    // surface that is not pre-rotated as suboptimal, so without this every present on a turned phone recreates it.
-    const SurfaceRotation rotation = SelectRotation(swap_chain_support.capabilities);
-    if (rotation == SurfaceRotation::Clockwise90 || rotation == SurfaceRotation::Clockwise270)
-    {
-        extent = {.width = extent.height, .height = extent.width};
     }
     RNDR_LOG_INFO("Swap chain extent: ({}, {}), rotated {} degrees", extent.width, extent.height, static_cast<i32>(rotation) * 90);
 
