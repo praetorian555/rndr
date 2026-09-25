@@ -59,6 +59,8 @@ public:
     void SetCloseSupported(bool supported) override;
     void SetVisibleInTaskbar(bool visible) override;
     void SetAlwaysOnTop(bool always_on_top) override;
+    /** Through AndroidApplication::RequestOrientation. */
+    ErrorCode SetOrientation(ScreenOrientation orientation) override;
 
     [[nodiscard]] bool IsMaximized() const override;
     /** True while the activity is in the background and has no native window. */

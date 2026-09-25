@@ -19,6 +19,20 @@ enum class GenericWindowMode : u8
 };
 
 /**
+ * Which way up the screen shows the application. Only a phone or a tablet turns; a desktop window has no
+ * orientation, and there it is only recorded.
+ */
+enum class ScreenOrientation : u8
+{
+    /** Whatever the system does for an application that asks nothing: follows the device within the user's rotation lock. */
+    Any,
+    /** Landscape, either way up, turning over when the device is turned over. */
+    Landscape,
+    /** Portrait, either way up, turning over when the device is turned over. */
+    Portrait
+};
+
+/**
  * Represents how the window should modify cursor's position.
  */
 enum class CursorPositionMode : u8
@@ -111,6 +125,12 @@ struct GenericWindowDesc
     bool start_visible = true;
     /** If >= 0, center the window on the monitor with this index. Overrides start_x/start_y. */
     int monitor_index = -1;
+    /**
+     * Which way up the screen shows the application; see GenericWindow::SetOrientation. On Android it is asked for
+     * before the first native window arrives, so that window already has the orientation. Any leaves the activity
+     * as its manifest declares it.
+     */
+    ScreenOrientation orientation = ScreenOrientation::Any;
 };
 
 class GenericWindow
@@ -225,6 +245,21 @@ public:
     /** Returns the shape set by SetCursorShape; CursorShape::Arrow until one is set. */
     [[nodiscard]] CursorShape GetCursorShape() const { return m_cursor_shape; }
 
+    /**
+     * Ask for the screen to show the application this way up. On Android the activity turns to match, and the window
+     * is resized and the swap chain recreated as for any rotation. A desktop window has no orientation, so there the
+     * value is only recorded.
+     * @return ErrorCode::PlatformError when Android refuses the request, which leaves the orientation as it was.
+     */
+    virtual ErrorCode SetOrientation(ScreenOrientation orientation)
+    {
+        m_orientation = orientation;
+        return ErrorCode::Success;
+    }
+
+    /** The orientation last asked for, through SetOrientation or GenericWindowDesc::orientation. */
+    [[nodiscard]] ScreenOrientation GetOrientation() const { return m_orientation; }
+
     [[nodiscard]] virtual Vector2i GetPosition() const = 0;
     [[nodiscard]] virtual Vector2i GetSize() const = 0;
 
@@ -252,11 +287,12 @@ public:
     [[nodiscard]] f32 GetDpiScale() const { return m_dpi_scale; }
 
 protected:
-    GenericWindow(const GenericWindowDesc& desc) : m_desc(desc) {}
+    GenericWindow(const GenericWindowDesc& desc) : m_desc(desc), m_orientation(desc.orientation) {}
 
     GenericWindowDesc m_desc;
     CursorPositionMode m_cursor_pos_mode = CursorPositionMode::Normal;
     CursorShape m_cursor_shape = CursorShape::Arrow;
+    ScreenOrientation m_orientation = ScreenOrientation::Any;
     bool m_is_closed = false;
     f32 m_dpi_scale = 1.0f;
 

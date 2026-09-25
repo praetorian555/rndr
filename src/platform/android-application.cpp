@@ -7,6 +7,8 @@
 
 #include <sys/stat.h>
 
+#include <jni.h>
+
 #include <android/asset_manager.h>
 #include <android/configuration.h>
 #include <android/input.h>
@@ -221,6 +223,64 @@ void Rndr::AndroidApplication::CloseWindow()
     {
         ANativeActivity_finish(m_app->activity);
     }
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::RequestOrientation(ScreenOrientation orientation)
+{
+    // The values of android.content.pm.ActivityInfo's SCREEN_ORIENTATION_ constants.
+    constexpr jint k_unspecified = -1;
+    constexpr jint k_sensor_landscape = 6;
+    constexpr jint k_sensor_portrait = 7;
+    jint requested = k_unspecified;
+    switch (orientation)
+    {
+        case ScreenOrientation::Landscape:
+            requested = k_sensor_landscape;
+            break;
+        case ScreenOrientation::Portrait:
+            requested = k_sensor_portrait;
+            break;
+        default:
+            break;
+    }
+
+    // android_main runs on a thread of the glue's own, which the VM does not know until it is attached. One that
+    // was attached by someone else stays attached.
+    JavaVM* vm = m_app->activity->vm;
+    JNIEnv* env = nullptr;
+    const jint env_status = vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+    const bool attach_here = env_status == JNI_EDETACHED;
+    if (attach_here && vm->AttachCurrentThread(&env, nullptr) != JNI_OK)
+    {
+        RNDR_LOG_ERROR("Could not attach the thread to the Java VM to set the screen orientation");
+        return ErrorCode::PlatformError;
+    }
+    if (!attach_here && env_status != JNI_OK)
+    {
+        RNDR_LOG_ERROR("The Java VM refused an environment to set the screen orientation, error {}", env_status);
+        return ErrorCode::PlatformError;
+    }
+
+    ErrorCode status = ErrorCode::Success;
+    jobject activity = m_app->activity->clazz;
+    jclass activity_class = env->GetObjectClass(activity);
+    jmethodID set_requested_orientation = env->GetMethodID(activity_class, "setRequestedOrientation", "(I)V");
+    if (set_requested_orientation != nullptr)
+    {
+        env->CallVoidMethod(activity, set_requested_orientation, requested);
+    }
+    if (env->ExceptionCheck() == JNI_TRUE)
+    {
+        env->ExceptionClear();
+        RNDR_LOG_ERROR("Activity.setRequestedOrientation({}) threw", requested);
+        status = ErrorCode::PlatformError;
+    }
+    env->DeleteLocalRef(activity_class);
+    if (attach_here)
+    {
+        vm->DetachCurrentThread();
+    }
+    return status;
 }
 
 Rndr::ErrorCode Rndr::AndroidApplication::ExtractAssets(const char* asset_directory, const Opal::StringUtf8& destination)

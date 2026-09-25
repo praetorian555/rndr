@@ -102,6 +102,13 @@ public:
      */
     ErrorCode ExtractAssets(const char* asset_directory, const Opal::StringUtf8& destination);
 
+    /**
+     * Ask the activity to show itself this way up, through Activity.setRequestedOrientation - the NDK has no call
+     * for it, so it goes through JNI. The turn itself arrives later, as a resize and a new native window size.
+     * @return ErrorCode::PlatformError when the call could not be made or threw; the log says which.
+     */
+    ErrorCode RequestOrientation(ScreenOrientation orientation);
+
 private:
     static void OnAppCommand(android_app* app, i32 command);
     static i32 OnInputEvent(android_app* app, AInputEvent* event);

@@ -59,6 +59,34 @@ TEST_CASE("A window keeps the cursor shape it is given", "[window]")
     app->DestroyGenericWindow(std::move(window));
 }
 
+TEST_CASE("A desktop window records the orientation it is asked for and stays as it is", "[window]")
+{
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    Opal::Ref<GenericWindow> window = app->CreateGenericWindow({.width = 64,
+                                                                .height = 48,
+                                                                .name = "Window test",
+                                                                .resizable = false,
+                                                                .has_title_bar = false,
+                                                                .has_border = false,
+                                                                .show_in_taskbar = false,
+                                                                .start_visible = false,
+                                                                .orientation = ScreenOrientation::Portrait})
+                                          .GetValue();
+    const Vector2i size = window->GetSize();
+
+    REQUIRE(window->GetOrientation() == ScreenOrientation::Portrait);
+
+    REQUIRE(window->SetOrientation(ScreenOrientation::Landscape) == ErrorCode::Success);
+    REQUIRE(window->GetOrientation() == ScreenOrientation::Landscape);
+    app->ProcessSystemEvents();
+    REQUIRE(window->GetSize() == size);
+
+    REQUIRE(window->SetOrientation(ScreenOrientation::Any) == ErrorCode::Success);
+    REQUIRE(window->GetOrientation() == ScreenOrientation::Any);
+
+    app->DestroyGenericWindow(std::move(window));
+}
+
 #if RNDR_WINDOWS
 TEST_CASE("Every cursor shape maps to a system cursor", "[window]")
 {

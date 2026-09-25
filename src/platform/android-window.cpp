@@ -27,6 +27,15 @@ Opal::Expected<Opal::ScopePtr<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::Andro
         RNDR_LOG_ERROR("An Android activity has one window, and it already exists");
         return ResultType(ErrorCode::InvalidArgument);
     }
+    // Asked for before the window is waited on, so that the first one the activity hands over is already turned.
+    if (desc.orientation != ScreenOrientation::Any)
+    {
+        const ErrorCode orientation_status = app->RequestOrientation(desc.orientation);
+        if (orientation_status != ErrorCode::Success)
+        {
+            return ResultType(orientation_status);
+        }
+    }
     const ErrorCode err = app->WaitForNativeWindow();
     if (err != ErrorCode::Success)
     {
@@ -106,6 +115,16 @@ void Rndr::AndroidWindow::Focus() {}
 void Rndr::AndroidWindow::SetMode(GenericWindowMode mode)
 {
     RNDR_UNUSED(mode);
+}
+
+Rndr::ErrorCode Rndr::AndroidWindow::SetOrientation(ScreenOrientation orientation)
+{
+    const ErrorCode status = m_app->RequestOrientation(orientation);
+    if (status != ErrorCode::Success)
+    {
+        return status;
+    }
+    return GenericWindow::SetOrientation(orientation);
 }
 
 Rndr::ErrorCode Rndr::AndroidWindow::SetOpacity(f32 opacity)
