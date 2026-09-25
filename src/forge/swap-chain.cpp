@@ -546,7 +546,22 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
     }
 
     create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;  // swap_chain_support.capabilities.currentTransform;
-    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    // Opaque where the surface offers it. Android's surfaces offer only Inherit, which leaves it to the window, and
+    // that window is opaque unless the app asks otherwise.
+    const VkCompositeAlphaFlagsKHR supported_composite_alpha = swap_chain_support.capabilities.supportedCompositeAlpha;
+    if ((supported_composite_alpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) != 0)
+    {
+        create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    }
+    else if ((supported_composite_alpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) != 0)
+    {
+        create_info.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    }
+    else
+    {
+        RNDR_LOG_ERROR("Forge: this surface offers neither opaque nor inherited composite alpha");
+        return ErrorCode::FeatureNotSupported;
+    }
     create_info.presentMode = present_mode;
     // If set to VK_TRUE it means that we don't care about the color of the pixels if they are occluded by other window.
     create_info.clipped = VK_TRUE;
