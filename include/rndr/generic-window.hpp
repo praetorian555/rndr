@@ -146,6 +146,8 @@ struct GenericWindowDesc
      * as its manifest declares it.
      */
     ScreenOrientation orientation = ScreenOrientation::Any;
+    /** See GenericWindow::SetPreferredRefreshRate. 0 for no preference. */
+    f32 preferred_refresh_rate = 0.0f;
 };
 
 class GenericWindow
@@ -283,6 +285,29 @@ public:
      */
     [[nodiscard]] SafeInsets GetSafeInsets() const { return m_safe_insets; }
 
+    /**
+     * Ask for the display to refresh at this rate while the window is shown, in hertz; 0 for no preference. A hint:
+     * on Android the system weighs it against the panel's modes, the user's settings, battery saver and heat, and
+     * only switches when the switch is seamless. The rate it settles on is MonitorInfo::refresh_rate, and a change
+     * is reported through Application::on_monitor_change. A desktop display's rate is not an application's to set,
+     * so there it is only recorded.
+     * @return ErrorCode::InvalidArgument for a negative or non-finite rate, which is not recorded;
+     *         ErrorCode::PlatformError when Android refuses it, which is recorded and asked for again with the next
+     *         native window.
+     */
+    virtual ErrorCode SetPreferredRefreshRate(f32 rate)
+    {
+        if (!(rate >= 0.0f) || rate > 1.0e6f)
+        {
+            return ErrorCode::InvalidArgument;
+        }
+        m_preferred_refresh_rate = rate;
+        return ErrorCode::Success;
+    }
+
+    /** The rate last asked for, through SetPreferredRefreshRate or GenericWindowDesc::preferred_refresh_rate. */
+    [[nodiscard]] f32 GetPreferredRefreshRate() const { return m_preferred_refresh_rate; }
+
     [[nodiscard]] virtual Vector2i GetPosition() const = 0;
     [[nodiscard]] virtual Vector2i GetSize() const = 0;
 
@@ -310,13 +335,17 @@ public:
     [[nodiscard]] f32 GetDpiScale() const { return m_dpi_scale; }
 
 protected:
-    GenericWindow(const GenericWindowDesc& desc) : m_desc(desc), m_orientation(desc.orientation) {}
+    GenericWindow(const GenericWindowDesc& desc)
+        : m_desc(desc), m_orientation(desc.orientation), m_preferred_refresh_rate(desc.preferred_refresh_rate > 0.0f ? desc.preferred_refresh_rate : 0.0f)
+    {
+    }
 
     GenericWindowDesc m_desc;
     CursorPositionMode m_cursor_pos_mode = CursorPositionMode::Normal;
     CursorShape m_cursor_shape = CursorShape::Arrow;
     ScreenOrientation m_orientation = ScreenOrientation::Any;
     SafeInsets m_safe_insets;
+    f32 m_preferred_refresh_rate = 0.0f;
     bool m_is_closed = false;
     f32 m_dpi_scale = 1.0f;
 

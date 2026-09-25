@@ -50,6 +50,8 @@ Opal::Expected<Opal::ScopePtr<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::Andro
     }
     app->SetWindow(static_cast<AndroidWindow*>(window.Get()));
     app->RefreshSafeInsets();
+    // A hint, so a refusal is logged by the call and is not a reason to fail the window.
+    (void)app->ApplyPreferredRefreshRate();
     return ResultType(std::move(window));
 }
 
@@ -126,6 +128,16 @@ Rndr::ErrorCode Rndr::AndroidWindow::SetOrientation(ScreenOrientation orientatio
         return status;
     }
     return GenericWindow::SetOrientation(orientation);
+}
+
+Rndr::ErrorCode Rndr::AndroidWindow::SetPreferredRefreshRate(f32 rate)
+{
+    const ErrorCode status = GenericWindow::SetPreferredRefreshRate(rate);
+    if (status != ErrorCode::Success)
+    {
+        return status;
+    }
+    return m_app->ApplyPreferredRefreshRate();
 }
 
 Rndr::ErrorCode Rndr::AndroidWindow::SetOpacity(f32 opacity)

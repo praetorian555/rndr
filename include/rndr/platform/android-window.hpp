@@ -61,6 +61,8 @@ public:
     void SetAlwaysOnTop(bool always_on_top) override;
     /** Through AndroidApplication::RequestOrientation. */
     ErrorCode SetOrientation(ScreenOrientation orientation) override;
+    /** Recorded, then handed to the native window through AndroidApplication::ApplyPreferredRefreshRate. */
+    ErrorCode SetPreferredRefreshRate(f32 rate) override;
 
     [[nodiscard]] bool IsMaximized() const override;
     /** True while the activity is in the background and has no native window. */

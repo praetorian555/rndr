@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 #include <catch2/catch2.hpp>
@@ -83,6 +84,34 @@ TEST_CASE("A desktop window records the orientation it is asked for and stays as
 
     REQUIRE(window->SetOrientation(ScreenOrientation::Any) == ErrorCode::Success);
     REQUIRE(window->GetOrientation() == ScreenOrientation::Any);
+
+    app->DestroyGenericWindow(std::move(window));
+}
+
+TEST_CASE("A desktop window records the refresh rate it is asked for", "[window]")
+{
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    Opal::Ref<GenericWindow> window = app->CreateGenericWindow({.width = 64,
+                                                                .height = 48,
+                                                                .name = "Window test",
+                                                                .resizable = false,
+                                                                .has_title_bar = false,
+                                                                .has_border = false,
+                                                                .show_in_taskbar = false,
+                                                                .start_visible = false,
+                                                                .preferred_refresh_rate = 120.0f})
+                                          .GetValue();
+    REQUIRE(window->GetPreferredRefreshRate() == 120.0f);
+
+    REQUIRE(window->SetPreferredRefreshRate(60.0f) == ErrorCode::Success);
+    REQUIRE(window->GetPreferredRefreshRate() == 60.0f);
+    REQUIRE(window->SetPreferredRefreshRate(0.0f) == ErrorCode::Success);
+    REQUIRE(window->GetPreferredRefreshRate() == 0.0f);
+
+    // Refused, and the last good rate kept.
+    REQUIRE(window->SetPreferredRefreshRate(-1.0f) == ErrorCode::InvalidArgument);
+    REQUIRE(window->SetPreferredRefreshRate(std::numeric_limits<f32>::quiet_NaN()) == ErrorCode::InvalidArgument);
+    REQUIRE(window->GetPreferredRefreshRate() == 0.0f);
 
     app->DestroyGenericWindow(std::move(window));
 }

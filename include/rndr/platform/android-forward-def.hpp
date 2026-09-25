@@ -6,6 +6,7 @@
 struct android_app;
 struct ANativeWindow;
 struct AInputEvent;
+struct AChoreographer;
 // jni.h's C++ spellings of jclass and jmethodID.
 class _jclass;
 struct _jmethodID;

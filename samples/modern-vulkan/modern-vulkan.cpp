@@ -148,8 +148,10 @@ void Run(android_app* android_application)
     constexpr f64 k_title_update_period_seconds = 0.25;
 
     auto rndr_app = Require(Rndr::Application::Create({.enable_input_system = true, .android_application = android_application}));
-    // Landscape on a phone, either way up; a desktop window has no orientation and ignores it.
-    auto window = Require(rndr_app->CreateGenericWindow({.orientation = Rndr::ScreenOrientation::Landscape}));
+    // Landscape on a phone, either way up, at 120 Hz where the display offers it and the system agrees; a desktop
+    // window has no orientation and no say in the display's rate, and records both.
+    auto window = Require(
+        rndr_app->CreateGenericWindow({.orientation = Rndr::ScreenOrientation::Landscape, .preferred_refresh_rate = 120.0f}));
 
     // Where the model and its textures are read from. On Android the APK's assets are copied out to the app's
     // own storage first, so that the loaders open them by path there the way they do here; the compiled shaders
@@ -566,8 +568,8 @@ void Run(android_app* android_application)
         {
             last_title_update_seconds = end_time;
             char title[128] = {};
-            snprintf(title, sizeof(title), "Forge - modern-vulkan - CPU %.2f ms - GPU %.3f ms", static_cast<f64>(delta_seconds) * 1000.0,
-                     gpu_milliseconds);
+            snprintf(title, sizeof(title), "Forge - modern-vulkan - CPU %.2f ms - GPU %.3f ms - %d Hz", static_cast<f64>(delta_seconds) * 1000.0,
+                     gpu_milliseconds, rndr_app->GetMonitorForWindow(*window).refresh_rate);
 #if RNDR_ANDROID
             // An activity has no title bar to put it in.
             static f64 s_last_log_seconds = 0.0;

@@ -258,6 +258,9 @@ elseif (ANDROID)
     # libandroid for the native window, the looper and the asset manager, liblog for logcat. Both are NDK
     # system libraries every device has.
     target_link_libraries(rndr PRIVATE android log)
+    # The minimum API is 29 and a few calls are newer, the refresh rate ones 30. Weak, their symbols leave the library
+    # loadable on an older device, where the __builtin_available guard around each call skips it.
+    target_compile_definitions(rndr PRIVATE __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__)
     # Public: the application's android_main is handed an android_app and reads it through this header.
     target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${ANDROID_NDK}/sources/android/native_app_glue>)
 elseif (UNIX)

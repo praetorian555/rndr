@@ -3,6 +3,7 @@
 #if RNDR_ANDROID
 
 #include <climits>
+#include <cmath>
 #include <cstring>
 #include <mutex>
 
@@ -12,6 +13,7 @@
 #include <jni.h>
 
 #include <android/asset_manager.h>
+#include <android/choreographer.h>
 #include <android/configuration.h>
 #include <android/input.h>
 #include <android/keycodes.h>
@@ -194,10 +196,29 @@ Rndr::AndroidApplication::AndroidApplication(SystemMessageHandler* message_handl
     m_app->onInputEvent = &OnInputEvent;
     m_dpi_scale = ReadDpiScale(m_app);
     SetUpJava();
+
+    // The choreographer belongs to this thread's looper and calls back through it, so the rate arrives inside
+    // ProcessSystemEvents like any other event. The first registration is guaranteed a call with the current rate.
+    if (__builtin_available(android 30, *))
+    {
+        m_choreographer = AChoreographer_getInstance();
+        if (m_choreographer != nullptr)
+        {
+            AChoreographer_registerRefreshRateCallback(m_choreographer, &OnRefreshRateChanged, this);
+        }
+    }
 }
 
 Rndr::AndroidApplication::~AndroidApplication()
 {
+    if (m_choreographer != nullptr)
+    {
+        if (__builtin_available(android 30, *))
+        {
+            AChoreographer_unregisterRefreshRateCallback(m_choreographer, &OnRefreshRateChanged, this);
+        }
+        m_choreographer = nullptr;
+    }
     // The window reports into this object while it is destroyed, so it goes first, the way ~LinuxApplication
     // drains its windows before the connection.
     while (m_generic_windows.GetSize() > 0)
@@ -458,6 +479,42 @@ Rndr::ErrorCode Rndr::AndroidApplication::SetTextInputActive(bool active)
         return ErrorCode::PlatformError;
     }
     return PlatformApplication::SetTextInputActive(active);
+}
+
+void Rndr::AndroidApplication::OnRefreshRateChanged(int64_t vsync_period_nanos, void* data)
+{
+    if (vsync_period_nanos <= 0)
+    {
+        return;
+    }
+    auto* app = static_cast<AndroidApplication*>(data);
+    const f32 rate = static_cast<f32>(1.0e9 / static_cast<f64>(vsync_period_nanos));
+    if (std::abs(rate - app->m_refresh_rate) < 0.01f)
+    {
+        return;
+    }
+    app->m_refresh_rate = rate;
+    RNDR_LOG_INFO("Display refresh rate: {:.2f} Hz", rate);
+    app->m_message_handler->OnMonitorChange();
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::ApplyPreferredRefreshRate()
+{
+    if (m_window == nullptr || m_window->m_native_window == nullptr)
+    {
+        return ErrorCode::Success;
+    }
+    if (__builtin_available(android 30, *))
+    {
+        const int32_t status = ANativeWindow_setFrameRate(m_window->m_native_window, m_window->GetPreferredRefreshRate(),
+                                                          ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT);
+        if (status != 0)
+        {
+            RNDR_LOG_ERROR("ANativeWindow_setFrameRate({}) failed, error {}", m_window->GetPreferredRefreshRate(), status);
+            return ErrorCode::PlatformError;
+        }
+    }
+    return ErrorCode::Success;
 }
 
 void Rndr::AndroidApplication::QueueCommittedText(const Opal::StringUtf32& text)
@@ -731,6 +788,8 @@ void Rndr::AndroidApplication::HandleCommand(i32 command)
             const Vector2i old_size = m_window->GetSize();
             RefreshSafeInsets();
             m_window->m_native_window = m_app->window;
+            // The rate was asked of the native window this one replaces.
+            (void)ApplyPreferredRefreshRate();
             m_window->m_width = ANativeWindow_getWidth(m_app->window);
             m_window->m_height = ANativeWindow_getHeight(m_app->window);
             m_message_handler->OnWindowNativeHandleChanged(*m_window);
@@ -1255,7 +1314,7 @@ Rndr::MonitorInfo Rndr::AndroidApplication::GetPrimaryMonitor() const
     monitor.work_area_position = monitor.position;
     monitor.work_area_size = monitor.size;
     monitor.dpi_scale = m_dpi_scale;
-    monitor.refresh_rate = 60;
+    monitor.refresh_rate = static_cast<i32>(std::lround(m_refresh_rate));
     monitor.is_primary = true;
     return monitor;
 }

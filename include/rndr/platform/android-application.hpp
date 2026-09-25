@@ -128,6 +128,13 @@ public:
      */
     static void QueueCommittedText(const Opal::StringUtf32& text);
 
+    /**
+     * Hand the window's preferred refresh rate to its native window, through ANativeWindow_setFrameRate. A native
+     * window forgets it when it is replaced, so this runs again for each one. Nothing to do below API 30.
+     * @return ErrorCode::Success, also while there is no native window; ErrorCode::PlatformError when it is refused.
+     */
+    ErrorCode ApplyPreferredRefreshRate();
+
 private:
     static void OnAppCommand(android_app* app, i32 command);
     static i32 OnInputEvent(android_app* app, AInputEvent* event);
@@ -171,6 +178,12 @@ private:
     /** RndrActivity.setTextInputActive, or null when the activity is a plain NativeActivity. */
     _jmethodID* m_set_text_input_active = nullptr;
 
+    /** The choreographer the refresh rate callback is registered with, or null below API 30. */
+    AChoreographer* m_choreographer = nullptr;
+    /** The display's refresh rate as the system last reported it, in hertz. */
+    f32 m_refresh_rate = 60.0f;
+
+    static void OnRefreshRateChanged(int64_t vsync_period_nanos, void* data);
     /** Committed text waiting for ProcessSystemEvents. Guarded by a mutex in the source, since the UI thread fills it. */
     Opal::DynamicArray<uchar32> m_pending_characters;
 
