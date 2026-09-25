@@ -40,12 +40,16 @@ public class RndrActivity extends NativeActivity {
         runOnUiThread(() -> {
             InputMethodManager inputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (active) {
+                textInputView.setFocusable(true);
+                textInputView.setFocusableInTouchMode(true);
                 textInputView.requestFocus();
                 inputMethodManager.restartInput(textInputView);
                 inputMethodManager.showSoftInput(textInputView, 0);
             } else {
                 inputMethodManager.hideSoftInputFromWindow(textInputView.getWindowToken(), 0);
                 textInputView.clearFocus();
+                textInputView.setFocusable(false);
+                textInputView.setFocusableInTouchMode(false);
             }
         });
     }
@@ -53,12 +57,16 @@ public class RndrActivity extends NativeActivity {
     /** Text the keyboard committed. Registered by AndroidApplication; runs on the UI thread. */
     static native void nativeCommitText(String text);
 
-    /** A focusable view with nothing to draw, there to own the InputConnection. */
+    /**
+     * A view with nothing to draw, there to own the InputConnection. Focusable only while text input is active: a
+     * window gives its first focusable view the focus when it opens, and some keyboards (Samsung's) show themselves
+     * for a focused text editor, so a focusable one from the start put the keyboard up on launch.
+     */
     private static final class TextInputView extends View {
         TextInputView(Context context) {
             super(context);
-            setFocusable(true);
-            setFocusableInTouchMode(true);
+            setFocusable(false);
+            setFocusableInTouchMode(false);
         }
 
         @Override
