@@ -1,10 +1,12 @@
 #include <chrono>
+#include <cmath>
 #include <thread>
 
 #include "example-controller.h"
 #include "opal/assert.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/in-place-array.h"
+#include "opal/math-constants.h"
 #include "opal/paths.h"
 #include "opal/threading/thread.h"
 #include "opal/time.h"
@@ -109,6 +111,22 @@ Rndr::Forge::SwapChainDesc MakeSwapChainDesc(const Rndr::Forge::Device& device, 
 }
 
 #if RNDR_ANDROID
+/**
+ * Turn rates for a touch drag. The desktop's rate is a mouse's; at a phone's pixel density it turns a centimetre of drag
+ * into most of a right angle, and since a landscape window spans half the angle upright that it does across, the
+ * wobble in a sideways drag shows as pitch twice the size of the yaw it rides on.
+ *
+ * Pitch keeps the scene under the finger: the angle the projection spans upright, over the pixels it spans. Yaw turns
+ * a full circle across the width of the window instead, since keeping the scene under the finger there would take
+ * four or five drags to look behind.
+ */
+void MatchTouchToView(ExampleController& controller, i32 width, i32 height)
+{
+    const Rndr::Matrix4x4f projection = controller.GetProjectionTransform();
+    controller.SetYawSpeed(2.0f * Opal::k_pi_float / static_cast<f32>(width));
+    controller.SetPitchSpeed(2.0f * std::atan(1.0f / std::abs(projection.elements[1][1])) / static_cast<f32>(height));
+}
+
 // rndr defines no entry point on any platform. On Android this is the one NativeActivity's glue calls, on a thread
 // of its own, every time the activity is created.
 void android_main(android_app* app)
@@ -340,6 +358,7 @@ void Run(android_app* android_application)
 #if RNDR_ANDROID
     // A touch drag is mouse motion, and there is no F1 to press on a phone, so the camera starts out steerable.
     controller.Enable(true);
+    MatchTouchToView(controller, window_width, window_height);
 #else
     controller.Enable(false);
 #endif
@@ -390,6 +409,9 @@ void Run(android_app* android_application)
         {
             window_size = new_window_size;
             controller.SetScreenSize(window_size.x, window_size.y);
+#if RNDR_ANDROID
+            MatchTouchToView(controller, window_size.x, window_size.y);
+#endif
         }
         controller.Tick(delta_seconds);
 

@@ -11,9 +11,11 @@
         android:hasCode="false"
         android:label="rndr modern-vulkan">
 
-        <!-- The configuration changes make a rotation a resize of the running activity rather than a restart of it. -->
+        <!-- The configuration changes make a rotation a resize of the running activity rather than a restart of it.
+             Landscape either way up, so turning the phone over flips the picture rather than stretching it. -->
         <activity
             android:name="android.app.NativeActivity"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true">
             <meta-data
