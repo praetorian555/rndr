@@ -44,6 +44,47 @@ once, and the run that follows is not the one you meant to test.
 Wireless instead of a cable (Android 11+): on the phone, Developer options > Wireless debugging > Pair device
 with pairing code, then `adb pair <ip>:<pair-port>` and `adb connect <ip>:<port>`.
 
+## The emulator
+
+The Android emulator runs the sample well enough to test without a phone: with the host GPU it offers Vulkan
+1.3 with dynamic rendering, synchronization2, buffer device address and descriptor indexing, which is all Forge
+asks for. It is set up on this machine as the AVD `rndr-api36` (Android 16, x86_64, Pixel 7 profile), kept on F:
+because the emulator wants 12 GB free where the AVD lives and C: has less.
+
+```bash
+ANDROID_AVD_HOME='F:\Android\avd' /f/Android/Sdk/emulator/emulator.exe -avd rndr-api36 -gpu host -no-snapshot-save
+adb -e shell getprop sys.boot_completed          # 1 once it has booted
+```
+
+It needs its own APK: the image is x86_64, and the ARM translation it offers arm64 apps crashes in
+`vkCreateInstance`. The ABIs are a Gradle property, `arm64-v8a` alone by default:
+
+```powershell
+.\gradlew.bat installDebug '-Prndr.abis=x86_64'            # the emulator
+.\gradlew.bat installDebug '-Prndr.abis=arm64-v8a,x86_64'  # both, one APK
+```
+
+With a phone and the emulator attached at once, `adb -d` picks the phone and `adb -e` the emulator; Gradle's
+`installDebug` installs on every device whose ABI the APK carries.
+
+What differs from a phone:
+
+- The guest driver (gfxstream, `vulkan.ranchu.so`) reports the host GPU as its device and driver, so Vulkan
+  cannot tell it is an emulator. Android can: `ro.kernel.qemu` is 1.
+- Its `vkSetDebugUtilsObjectNameEXT` crashes naming an image, so Forge's `SetDebugName` does nothing under the
+  emulator (`src/forge/debug.cpp`). Captures taken there have no object names.
+- A keyboard works: the sample's O key turns it between landscape and portrait, and the emulator's rotate buttons
+  turn the device.
+
+Setting it up again elsewhere: install the command-line tools into `<sdk>/cmdline-tools/latest`, then
+
+```bash
+android sdk install "system-images/android-36/google_apis/x86_64"
+avdmanager create avd -n rndr-api36 -k "system-images;android-36;google_apis;x86_64" -d pixel_7
+```
+
+`android` is the SDK's new CLI, beside `sdkmanager`, which now only forwards to it.
+
 ## Build, install, run
 
 ```powershell
@@ -166,8 +207,10 @@ adb shell input swipe 1000 540 1100 540 300 && sleep 1 && adb exec-out screencap
 `input` has no multi-touch. Two fingers need a hand, or raw `sendevent` writes, which are specific to the
 phone's touch controller.
 
-Rotation can be forced for a test - the sample asks for `sensorLandscape`, so of the four only 90 and 270 apply
-to it - and the settings put back afterwards:
+Which way up the app is shown is its own to ask for: `GenericWindowDesc::orientation` at creation and
+`GenericWindow::SetOrientation` after, which Android receives as `Activity.setRequestedOrientation`. The sample
+asks for `ScreenOrientation::Landscape`, so of the four rotations only 90 and 270 apply to it. For a test the
+device's rotation can be forced, and the settings put back afterwards:
 
 ```bash
 adb shell settings put system accelerometer_rotation 0
