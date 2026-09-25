@@ -214,7 +214,10 @@ then on:
   `android_main` returns.
 
 `AndroidWindow` maps `GenericWindow` onto what one full-screen native window can do. `GetSize()` is
-`ANativeWindow_getWidth/Height`; `GetPosition()` is (0, 0); `GetNativeDisplayHandle()` returns the
+`WindowManager.getCurrentWindowMetrics().getBounds()` through JNI, and `ANativeWindow_getWidth/Height` only below
+API 30: those two are the size of the buffers last asked for, so once a pre-rotated swap chain exists they are the
+display's natural orientation, and right after a turn of the screen they were seen to be either way round.
+`GetPosition()` is (0, 0); `GetNativeDisplayHandle()` returns the
 `android_app*`, which is what a caller who wants the asset manager or `internalDataPath` needs.
 `RequestClose()` is `ANativeActivity_finish`. `IsVisible()` is whether there is a native window,
 `IsWindowed()` true, `IsResizable()`, `IsBorderlessFullscreen()` and `IsMouseHovering()` false.
@@ -241,7 +244,9 @@ Input, all from `onInputEvent`:
   queues it and wakes the looper; `ProcessSystemEvents` delivers it as `OnCharacter`. The view asks for a
   visible password, so keyboards commit as they go rather than holding a word back to suggest; one that
   composes anyway has the word delivered when it finishes. The connection keeps no text, so Backspace and
-  Enter come back as key events. On the desktop both calls only record the request.
+  Enter come back as key events. On the desktop both calls only record the request. The view is focusable only
+  while text input is active: a window focuses its first focusable view when it opens, and Samsung's keyboard
+  shows itself for a focused text editor, so on the A56 it came up on launch.
 - Cursor: `ShowCursor`, `IsCursorVisible`, `SetCursorPosition` are no-ops; `GetCursorPosition` is the last
   touch, which is in screen space already since the window is the screen.
 - Safe insets: `GenericWindow::GetSafeInsets` is the system bars and the display cutout, from
@@ -304,7 +309,12 @@ As built (2026-09-25), where it differs from the above or the above left it open
   `dependencies.cmake` changes.
 
 `SelectExtent` needs nothing: Android reports the window size in `currentExtent`, and the no-window state
-is covered by the `IsMinimized()` check. The swap chain is pre-rotated: `preTransform` is the surface's
+is covered by the `IsMinimized()` check. That size is not always current, though: for a moment after a turn of
+the screen the surface reports the new `currentTransform` with the old `currentExtent`, or the other way round, and
+a swap chain made then is the wrong shape - the frame squashed into a corner - with nothing to say so again, since
+Android reports only the transform as suboptimal. On Android `AcquireTexture` therefore asks for the surface
+capabilities every frame and makes the swap chain again when the extent or rotation they imply has changed; on the
+A56 each turn settles within a frame or two. The swap chain is pre-rotated: `preTransform` is the surface's
 `currentTransform`, the textures are created in the display's natural orientation (the extent turned back
 for 90 and 270), and `SwapChain::GetRotation` / `GetPreRotation` tell the caller to turn its projection to
 match. Identity was not an option on Android: a surface whose `preTransform` differs from
