@@ -14926,6 +14926,7 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
  *
  * Needs no device, only the two compilers.
  */
+#if defined(RNDR_TEST_SLANGC)
 /**
  * A matrix in a buffer, for the comparison below. slangc lays matrices out column-major unless told otherwise and
  * the session defaults to row-major, and a shader with no matrix in it compiles to the same bytes either way.
@@ -14944,6 +14945,7 @@ void main_compute(uint3 thread_id : SV_DispatchThreadID, uniform Transforms* tra
     output_buffer[thread_id.x] = mul(transforms->matrix, float4(1.0, 2.0, 3.0, 1.0));
 }
 )";
+#endif
 
 TEST_CASE("Forge slangc and ShaderCompiler produce the same module", "[forge]")
 {
