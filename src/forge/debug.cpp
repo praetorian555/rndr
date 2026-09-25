@@ -13,8 +13,31 @@
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/vulkan-result.hpp"
 
+#if RNDR_ANDROID
+#include <sys/system_properties.h>
+#endif
+
 namespace
 {
+/**
+ * The Android emulator's guest Vulkan driver (gfxstream, vulkan.ranchu) crashes naming an image: its
+ * vkSetDebugUtilsObjectNameEXT dereferences null for VK_OBJECT_TYPE_IMAGE. It reports the host GPU's vendor, device
+ * and driver IDs, so nothing in Vulkan tells it apart, and ro.kernel.qemu is how Android itself does.
+ */
+bool IsAndroidEmulator()
+{
+#if RNDR_ANDROID
+    static const bool k_is_emulator = []
+    {
+        char value[PROP_VALUE_MAX] = {};
+        return __system_property_get("ro.kernel.qemu", value) > 0 && value[0] == '1';
+    }();
+    return k_is_emulator;
+#else
+    return false;
+#endif
+}
+
 /**
  * The one call every overload is. Silent when the object holds no handle or the instance has no debug utils:
  * a name is a convenience, and refusing to attach one is never worth failing a frame over.
@@ -23,7 +46,7 @@ void SetName(const Rndr::Forge::Device& device, VkObjectType object_type, Rndr::
 {
     // The loader hands out a callable pointer for an extension command whether or not the extension was
     // enabled, so asking the device is what keeps this from being an access violation. See CmdDrawMeshTasks.
-    if (handle == 0 || !device.AreDebugUtilsEnabled() || vkSetDebugUtilsObjectNameEXT == nullptr)
+    if (handle == 0 || !device.AreDebugUtilsEnabled() || vkSetDebugUtilsObjectNameEXT == nullptr || IsAndroidEmulator())
     {
         return;
     }
