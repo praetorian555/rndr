@@ -95,6 +95,10 @@ Opal::Expected<Opal::ScopePtr<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::Linux
     }
 
     Opal::ScopePtr<GenericWindow> window = Opal::MakeScoped<GenericWindow, LinuxWindow>(Opal::GetDefaultAllocator(), desc);
+    if (!window.IsValid())
+    {
+        return ResultType(ErrorCode::OutOfMemory);
+    }
     const ErrorCode err = static_cast<LinuxWindow*>(window.Get())->Initialize(desc);
     if (err != ErrorCode::Success)
     {

@@ -286,6 +286,10 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
     if (collect_debug_messages)
     {
         context.m_debug_log = Opal::MakeShared<DebugMessageLog>(Opal::GetDefaultAllocator());
+        if (!context.m_debug_log.IsValid())
+        {
+            return Result(ErrorCode::OutOfMemory);
+        }
         context.m_debug_log->max_stored_messages = context.m_desc.max_stored_debug_messages;
         context.m_debug_log->logged_types = context.m_desc.logged_message_types;
         // The callback is handed the log rather than the context, since the context can be moved afterwards

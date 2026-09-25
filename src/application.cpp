@@ -33,6 +33,10 @@ Opal::Expected<Opal::ScopePtr<Rndr::Application>, Rndr::ErrorCode> Rndr::Applica
         return ResultType(ErrorCode::InvalidArgument);
     }
     Opal::ScopePtr<Application> app = Opal::MakeScoped<Application>(nullptr, desc);
+    if (!app.IsValid() || !app->m_platform_application.IsValid() || (desc.enable_input_system && !app->m_input_system.IsValid()))
+    {
+        return ResultType(ErrorCode::OutOfMemory);
+    }
     g_instance = app.Get();
     return ResultType(std::move(app));
 }
