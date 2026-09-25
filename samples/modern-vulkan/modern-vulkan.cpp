@@ -86,6 +86,28 @@ inline void RequireOk(Rndr::ErrorCode status)
     }
 }
 
+/**
+ * The swap chain desc for this surface. The desc's default format is B8G8R8A8_SRGB, which desktop drivers offer and
+ * Android does not: its surfaces list R8G8B8A8 and nothing in BGR order. The first sRGB format the surface offers is
+ * taken, so the shaders write linear colour on either.
+ */
+Rndr::Forge::SwapChainDesc MakeSwapChainDesc(const Rndr::Forge::Device& device, const Rndr::Forge::Surface& surface)
+{
+    const Rndr::Forge::SwapChainSupportDetails support = Require(surface.GetSwapChainSupportDetails(device.GetPhysicalDevice()));
+    for (const Rndr::PixelFormat candidate : {Rndr::PixelFormat::B8G8R8A8_SRGB, Rndr::PixelFormat::R8G8B8A8_SRGB})
+    {
+        for (const VkSurfaceFormatKHR& offered : support.formats)
+        {
+            if (offered.format == Rndr::ToVkFormat(candidate) && offered.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            {
+                return {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT, .pixel_format = candidate};
+            }
+        }
+    }
+    Opal::HandleContractViolation("This surface offers neither B8G8R8A8_SRGB nor R8G8B8A8_SRGB.");
+    return {};
+}
+
 #if RNDR_ANDROID
 // rndr defines no entry point on any platform. On Android this is the one NativeActivity's glue calls, on a thread
 // of its own, every time the activity is created.
@@ -134,7 +156,7 @@ void Run(android_app* android_application)
     Rndr::Forge::DeviceQueue& present_queue = Require(device.GetQueue(Rndr::Forge::QueueFamily::Present));
 
     Rndr::Forge::SwapChain swap_chain =
-        Require(Rndr::Forge::SwapChain::Create(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT}));
+        Require(Rndr::Forge::SwapChain::Create(device, surface, MakeSwapChainDesc(device, surface)));
 
     const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(model_directory, "Suzanne.gltf").GetValue();
     Rndr::Forge::Mesh mesh;
@@ -295,8 +317,7 @@ void Run(android_app* android_application)
                 return;
             }
             p->surface = Require(Rndr::Forge::Surface::Create(p->graphics_context, changed_window));
-            p->swap_chain = Require(Rndr::Forge::SwapChain::Create(p->device, p->surface,
-                                                                   {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT}));
+            p->swap_chain = Require(Rndr::Forge::SwapChain::Create(p->device, p->surface, MakeSwapChainDesc(p->device, p->surface)));
             p->frame_context = Require(Rndr::Forge::FrameContext::Create(p->device, p->swap_chain, p->graphics_queue, p->present_queue,
                                                                          {.frames_in_flight = k_frames_in_flight}));
         });
