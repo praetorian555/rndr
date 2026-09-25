@@ -207,7 +207,8 @@ then on:
   rebuilds both on the way back in; Forge's objects already own nothing of the window but the handle
   they were created over.
 - `APP_CMD_WINDOW_RESIZED` and `APP_CMD_CONFIG_CHANGED` report `OnWindowSizeChanged` and refresh the DPI
-  scale from `AConfiguration_getDensity` (density / 160), which is `OnWindowDpiChanged`.
+  scale from `AConfiguration_getDensity` (density / 160), which is `OnWindowDpiChanged`. They also ask for the
+  preferred refresh rate again (below).
 - `APP_CMD_GAINED_FOCUS` / `LOST_FOCUS` drive `IsFocused()`. `APP_CMD_DESTROY` goes through
   `OnWindowClose`, which marks the window closed, so the sample's `while (!window->IsClosed())` ends and
   `android_main` returns.
@@ -252,8 +253,15 @@ Input, all from `onInputEvent`:
 - Clipboard: `ClipboardManager` through JNI (`src/platform/android-jni.hpp`), with the text crossing as
   UTF-16, since CheckJNI aborts a debuggable app that gives `NewStringUTF` real UTF-8. Android 10 and later
   hand the clip only to the app with the focus, so a read from the background is empty.
-- Monitors: one, sized from the native window, `dpi_scale` from the density, `refresh_rate` 60 because
-  the real figure is `Display.getRefreshRate` through JNI.
+- Monitors: one, sized from the native window, `dpi_scale` from the density, `refresh_rate` from
+  `AChoreographer`'s refresh rate callback (API 30), registered on the application's thread so it arrives
+  inside `ProcessSystemEvents`; a change is `OnMonitorChange`. 60 until the first callback, and below API 30.
+- Refresh rate: `GenericWindow::SetPreferredRefreshRate` (or `GenericWindowDesc::preferred_refresh_rate`) is
+  `ANativeWindow_setFrameRate` with default compatibility, a vote the system weighs against the panel's modes,
+  the user's settings, battery saver and heat. Asked for with each native window and again on every resize and
+  configuration change: on a cold start into landscape the vote made at window creation was gone by the first
+  frames, and asked again it stays, through turns of the screen and background and back. The function lives in
+  `libnativewindow`, not `libandroid`, so rndr links both. The desktop only records the rate.
 - Gamepads arrive in the same event stream (`AINPUT_SOURCE_GAMEPAD` / `JOYSTICK`, `AKEYCODE_BUTTON_*`,
   `AMOTION_EVENT_AXIS_*`) and would take a table each; out of scope for the milestone, noted because it
   is cheap.
@@ -498,7 +506,6 @@ Canvas on Android (GLES against a GL 4.5 API); an AAudio device behind `AudioDev
 (`src/audio/audio-device.cpp:7` is where it slots); gamepad (same event stream, two tables); touch as its
 own input primitive (multi-touch, gestures, pressure); an on-screen keyboard's composing text shown while it
 is composed, and a text field's own contents given to the keyboard; `imgui-system` on Android (`imgui_impl_android.cpp` exists upstream); immersive mode behind
-`SetMode(BorderlessFullscreen)` (JNI); the real refresh rate (JNI, or `AChoreographer` from API 30); HWASan;
-GameActivity; Slang on the device. Each slots behind the seams above later, and a JNI one goes through
-`JniScope` (`src/platform/android-jni.hpp`), which the orientation, the clipboard, the safe insets and text input
-already use.
+`SetMode(BorderlessFullscreen)` (JNI); HWASan; GameActivity; Slang on the device. Each slots behind the seams above
+later, and a JNI one goes through `JniScope` (`src/platform/android-jni.hpp`), which the orientation, the clipboard,
+the safe insets and text input already use.

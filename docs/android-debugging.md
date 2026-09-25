@@ -126,8 +126,13 @@ What to look for:
   being recreated every frame.
 - `[Vulkan Validation] ...` - validation messages, under the `Rndr` tag. Only the debug APK carries the layer;
   `Vulkan validation layer enabled.` at startup confirms it loaded.
-- `Forge - modern-vulkan - CPU ... GPU ...` - every two seconds while frames are presented. None means the loop
-  is stuck, or has no window (backgrounded).
+- `Forge - modern-vulkan - CPU ... GPU ... - N Hz` - every two seconds while frames are presented. None means the
+  loop is stuck, or has no window (backgrounded). N is `MonitorInfo::refresh_rate`.
+- `Display refresh rate: N Hz` - whenever `AChoreographer` reports a rate other than the last one; the first report
+  is silent when it is 60. The sample asks for 120, and whether the vote reached the compositor is in
+  `adb shell dumpsys SurfaceFlinger | grep RndrActivity`, as `requestedFrameRate: {120.00 Hz ...}` on the
+  activity's layer; `0.00 Hz` there means it was lost. The emulator's panel has one 60 Hz mode, so it shows the vote
+  but never a switch.
 - `threaded_app: APP_CMD_INIT_WINDOW` / `APP_CMD_TERM_WINDOW` - the activity gaining and losing its window.
 - `Safe insets: left L, top T, right R, bottom B` - whenever `GenericWindow::GetSafeInsets` changes: the status and
   navigation bars and the camera cutout, in window pixels. The system's own figures to compare against are the

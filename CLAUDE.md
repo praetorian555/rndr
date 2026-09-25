@@ -59,7 +59,8 @@ running it on a phone are in [docs/android-debugging.md](docs/android-debugging.
 The emulator always runs from F:, never C: - launch it with `ANDROID_AVD_HOME='F:\Android\avd'` as in
 [docs/android-debugging.md](docs/android-debugging.md#the-emulator). It wants 12 GB free where the AVD lives
 and C: does not have it. When done with it, shut it down (`adb -e emu kill`) and confirm it is gone - no
-`emulator` or `qemu-system-*` process left in `Get-Process` - before moving on.
+`emulator` or `qemu-system-*` process left in `Get-Process` - before moving on. The kill leaves
+`emulator -kill <pid> -sleep 20` watchdogs behind for up to 20 seconds; wait them out and check again.
 
 ## Tests
 
