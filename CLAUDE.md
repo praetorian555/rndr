@@ -56,6 +56,11 @@ and shaders are compiled on the host at build time. The configure line, the Grad
 is not checked yet are in [docs/android-plan.md](docs/android-plan.md); adb, logcat, stack traces and the rest of
 running it on a phone are in [docs/android-debugging.md](docs/android-debugging.md).
 
+The emulator always runs from F:, never C: - launch it with `ANDROID_AVD_HOME='F:\Android\avd'` as in
+[docs/android-debugging.md](docs/android-debugging.md#the-emulator). It wants 12 GB free where the AVD lives
+and C: does not have it. When done with it, shut it down (`adb -e emu kill`) and confirm it is gone - no
+`emulator` or `qemu-system-*` process left in `Get-Process` - before moving on.
+
 ## Tests
 
 Catch2, single `rndr-test` binary, run a subset by tag:
