@@ -53,7 +53,7 @@ using namespace Rndr;
  */
 Rndr::ShaderCache& GetShaderCache()
 {
-    static Rndr::ShaderCache cache{Opal::StringUtf8(RNDR_CORE_ASSETS_DIR "/../build/shader-cache")};
+    static Rndr::ShaderCache cache{ForgeTest::GetTestDataPath("shader-cache")};
     return cache;
 }
 
@@ -6703,7 +6703,7 @@ TEST_CASE("Forge shader cache", "[forge]")
     }
     ForgeFixture fixture;
 
-    const Opal::StringUtf8 directory{RNDR_CORE_ASSETS_DIR "/../build/shader-cache-test"};
+    const Opal::StringUtf8 directory = ForgeTest::GetTestDataPath("shader-cache-test");
     Rndr::ShaderCache cache{directory};
     REQUIRE(!cache.GetDirectory().IsEmpty());
 
@@ -6768,6 +6768,25 @@ TEST_CASE("Forge shader cache", "[forge]")
         const Opal::DynamicArray<u8> read_back = reopened.Find(key);
         REQUIRE(read_back == written);
         REQUIRE(reopened.GetHitCount() == 1);
+    }
+    SECTION("A cache directory names the compiler that filled it")
+    {
+        // What a build without the compiler keys its lookups on. Removed first, so a file an earlier run left
+        // cannot stand in for the one this Store has to write.
+        const Opal::StringUtf8 tag_path = Opal::Paths::Combine(directory, Opal::StringUtf8("build-tag")).GetValue().Clone();
+        if (Opal::Exists(tag_path))
+        {
+            REQUIRE(Opal::DeleteFile(tag_path) == Opal::ErrorCode::Success);
+        }
+        const Opal::DynamicArray<u8> written = compile(k_cache_source, "main_first");
+        REQUIRE(!key.build_tag.IsEmpty());
+        REQUIRE(Opal::Exists(tag_path));
+
+        Rndr::ShaderCache reopened{directory};
+        REQUIRE(reopened.GetDirectoryBuildTag() == key.build_tag);
+        const Rndr::ShaderCacheKey reopened_key = reopened.MakeKey(k_cache_source, "main_first", Rndr::ShaderOutputFormat::SpirV);
+        REQUIRE(reopened_key == key);
+        REQUIRE(reopened.Find(reopened_key) == written);
     }
     SECTION("A blob from a different Slang is not used")
     {
@@ -14737,7 +14756,7 @@ const Opal::StringUtf8& TestScratchDirectory()
 {
     static const Opal::StringUtf8 directory = []
     {
-        Opal::StringUtf8 path(RNDR_CORE_ASSETS_DIR "/../build/forge-test-scratch");
+        Opal::StringUtf8 path = ForgeTest::GetTestDataPath("forge-test-scratch");
         // Already there is the ordinary case and not a failure, so the code is dropped rather than checked.
         (void)Opal::CreateDirectory(path);
         return path;
@@ -14750,13 +14769,25 @@ Opal::StringUtf8 TestScratchPath(const char* file_name)
     return Opal::Paths::Combine(*TestScratchDirectory(), file_name).GetValue();
 }
 
-/** The SPIR-V Slang produces for one entry point, which is what a caller of FromSpirv* would have on hand. */
+/**
+ * The SPIR-V Slang produces for one entry point, which is what a caller of FromSpirv* would have on hand. A build
+ * without the compiler (Android) takes it from the suite's shader cache instead, which is the one a desktop run
+ * filled and the device was given; an entry missing from it fails here rather than as a shader that is not there.
+ */
 Opal::DynamicArray<u8> CompileToSpirv(const char* source, const char* entry_point)
 {
+#if RNDR_SHADER_COMPILER
     ShaderCompiler compiler;
     REQUIRE(compiler.LoadModule(Opal::StringUtf8(source), ShaderOutputFormat::SpirV) == ErrorCode::Success);
     CompileResult result = ForgeTest::Unwrap(compiler.CompileEntryPoint(Opal::StringUtf8(entry_point)));
     return std::move(result.code);
+#else
+    Opal::DynamicArray<u8> code =
+        GetShaderCache().Find(GetShaderCache().MakeKey(Opal::StringUtf8(source), Opal::StringUtf8(entry_point), ShaderOutputFormat::SpirV));
+    INFO("No compiler in this build, and the shader cache has no " << entry_point);
+    REQUIRE(!code.IsEmpty());
+    return code;
+#endif
 }
 
 }  // namespace
@@ -14885,6 +14916,54 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
         REQUIRE(Forge::Shader::FromSpirvFile(fixture.device, path, {.entry_point = "no_such_entry"}).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
     }
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
+/**
+ * Android has no Slang, so its shaders are compiled on the host by slangc at build time (rndr_compile_shader in
+ * cmake/shaders.cmake) and loaded as SPIR-V. That is the shader the desktop compiles from the same source only as
+ * long as slangc is given what ShaderCompiler sets on its session, and nothing else says it is: this compiles one
+ * entry point both ways, slangc with the very option list the build uses, and wants the same bytes.
+ *
+ * Needs no device, only the two compilers.
+ */
+TEST_CASE("Forge slangc and ShaderCompiler produce the same module", "[forge]")
+{
+#if !defined(RNDR_TEST_SLANGC)
+    SKIP("This build has no host slangc.");
+#else
+    const Opal::StringUtf8 slangc(RNDR_TEST_SLANGC);
+    if (!Opal::Exists(slangc))
+    {
+        SKIP("slangc is not where the build said it would be.");
+    }
+    const Opal::StringUtf8 source_path = TestScratchPath("slangc-equivalence.slang");
+    const Opal::StringUtf8 output_path = TestScratchPath("slangc-equivalence.spv");
+    REQUIRE(Opal::WriteBytesToFile(source_path, {reinterpret_cast<const u8*>(k_compute_source), strlen(k_compute_source)}) ==
+            Opal::ErrorCode::Success);
+    // Left over from an earlier run, it would be compared in place of what slangc failed to write.
+    if (Opal::Exists(output_path))
+    {
+        REQUIRE(Opal::DeleteFile(output_path) == Opal::ErrorCode::Success);
+    }
+
+    // cmd.exe drops the first and last quote of a line that starts with one, so the whole line is quoted once more.
+#if RNDR_WINDOWS
+    constexpr const char* k_command_format = "\"\"%s\" \"%s\" %s -entry main_compute -stage compute -o \"%s\"\"";
+#else
+    constexpr const char* k_command_format = "\"%s\" \"%s\" %s -entry main_compute -stage compute -o \"%s\"";
+#endif
+    char command[4096] = {};
+    snprintf(command, sizeof(command), k_command_format, slangc.GetData(), source_path.GetData(), RNDR_TEST_SLANGC_OPTIONS,
+             output_path.GetData());
+    REQUIRE(std::system(command) == 0);
+
+    Opal::Expected<Opal::DynamicArray<u8>, Opal::ErrorCode> read = Opal::ReadFileAsBytes(output_path);
+    REQUIRE(read.HasValue());
+    const Opal::DynamicArray<u8> from_slangc = std::move(read.GetValue());
+    const Opal::DynamicArray<u8> from_compiler = CompileToSpirv(k_compute_source, "main_compute");
+    REQUIRE(!from_slangc.IsEmpty());
+    REQUIRE(from_slangc == from_compiler);
+#endif
 }
 
 /**

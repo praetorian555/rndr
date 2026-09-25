@@ -17,6 +17,10 @@ struct SystemMessageHandler
     virtual void OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height) = 0;
     virtual void OnMonitorChange() {}
     virtual void OnWindowDpiChanged(const GenericWindow& window, f32 new_dpi_scale) { (void)window; (void)new_dpi_scale; }
+    // The window now has a different native handle, possibly null. Only Android reports it: the activity loses its
+    // window in the background and gets a new one back. Reported while the old handle is still valid, so a surface
+    // built over it is destroyed in here, and rebuilt in here once the handle is not null.
+    virtual void OnWindowNativeHandleChanged(const GenericWindow& window) { (void)window; }
 
     virtual bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) = 0;
     virtual bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) = 0;

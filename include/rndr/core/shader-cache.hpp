@@ -33,7 +33,10 @@ struct ShaderCacheKey : Opal::ClonableBase<ShaderCacheKey>
      */
     Opal::StringUtf8 build_tag;
 
-    /** Fills in `build_tag` from Slang, since no caller has a reason to pass a different one. */
+    /**
+     * Fills in `build_tag` from Slang, since no caller has a reason to pass a different one. Empty on a build
+     * without the compiler - ShaderCache::MakeKey is the one that works there.
+     */
     [[nodiscard]] static ShaderCacheKey Make(const Opal::StringUtf8& source, const Opal::StringUtf8& entry_point,
                                              ShaderOutputFormat format);
 
@@ -82,8 +85,23 @@ public:
      */
     [[nodiscard]] Opal::DynamicArray<u8> Find(const ShaderCacheKey& key) const;
 
-    /** Keep this code for the key, in memory and, when there is a directory, on disk. */
+    /**
+     * Keep this code for the key, in memory and, when there is a directory, on disk. The directory's build-tag
+     * file is written with the key's tag as well, so a build without the compiler can look the entry up.
+     */
     void Store(const ShaderCacheKey& key, Opal::ArrayView<const u8> code);
+
+    /**
+     * The key a lookup in this cache is made with. With the compiler in the build this is ShaderCacheKey::Make.
+     * Without it (RNDR_SHADER_COMPILER undefined, which is Android) the build tag is the one in the directory's
+     * build-tag file, the tag of the compiler that filled it, so a directory filled on the host answers on a
+     * device that cannot compile. A directory without the file is one in which nothing hits.
+     */
+    [[nodiscard]] ShaderCacheKey MakeKey(const Opal::StringUtf8& source, const Opal::StringUtf8& entry_point,
+                                         ShaderOutputFormat format) const;
+
+    /** The build tag in the directory's build-tag file, empty when there is no directory or no file. */
+    [[nodiscard]] const Opal::StringUtf8& GetDirectoryBuildTag() const { return m_directory_build_tag; }
 
     /** Where blobs are written, empty for a memory-only cache. */
     [[nodiscard]] const Opal::StringUtf8& GetDirectory() const { return m_directory; }
@@ -104,6 +122,7 @@ private:
     };
 
     Opal::StringUtf8 m_directory;
+    Opal::StringUtf8 m_directory_build_tag;
     /** Small enough that a linear scan past the hash beats building a map. */
     mutable Opal::DynamicArray<Entry> m_entries;
     mutable u32 m_hits = 0;

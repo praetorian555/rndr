@@ -25,8 +25,24 @@ option(RNDR_AUDIO "Enable the audio system: clips, a software mixer and a WASAPI
 set(BUILD_SHARED_LIBS ${RNDR_SHARED_LIBS})
 
 # Canvas is WGL-bound (src/canvas/context.cpp) and the audio device is WASAPI-bound, so neither
-# can build on Linux yet. Forge is the Linux rendering path.
-if (UNIX)
+# can build on Linux or Android yet. Forge is the rendering path on both.
+# The NDK toolchain leaves UNIX true, so ANDROID is checked first everywhere UNIX is.
+if (ANDROID)
+    if (RNDR_CANVAS)
+        message(STATUS "RNDR_CANVAS is not supported on Android, forcing it OFF")
+        set(RNDR_CANVAS OFF)
+    endif ()
+    if (RNDR_AUDIO)
+        message(STATUS "RNDR_AUDIO is not supported on Android, forcing it OFF")
+        set(RNDR_AUDIO OFF)
+    endif ()
+    # ASan on Android goes through wrap.sh and a runtime copied into the APK, and HWASan is the
+    # sanitizer arm64 supports; neither is wired up. Off before dependencies.cmake hands it to Opal.
+    if (RNDR_HARDENING)
+        message(STATUS "RNDR_HARDENING is not supported on Android, forcing it OFF")
+        set(RNDR_HARDENING OFF)
+    endif ()
+elseif (UNIX)
     if (RNDR_CANVAS)
         message(STATUS "RNDR_CANVAS is not supported on Linux, forcing it OFF")
         set(RNDR_CANVAS OFF)
@@ -35,6 +51,17 @@ if (UNIX)
         message(STATUS "RNDR_AUDIO is not supported on Linux, forcing it OFF")
         set(RNDR_AUDIO OFF)
     endif ()
+endif ()
+
+# Slang ships no Android build, so there shaders are compiled on the host and loaded as SPIR-V. Not an
+# option: whether the compiler exists is decided by the platform, and Canvas cannot run without it.
+if (ANDROID)
+    set(RNDR_SHADER_COMPILER OFF)
+else ()
+    set(RNDR_SHADER_COMPILER ON)
+endif ()
+if (RNDR_CANVAS AND NOT RNDR_SHADER_COMPILER)
+    message(FATAL_ERROR "RNDR_CANVAS compiles its shaders at run time and needs the Slang compiler, which this platform does not have")
 endif ()
 
 message(STATUS "RNDR_FORGE ${RNDR_FORGE}")
@@ -47,6 +74,7 @@ message(STATUS "RNDR_ASSIMP ${RNDR_ASSIMP}")
 message(STATUS "RNDR_KTX ${RNDR_KTX}")
 message(STATUS "RNDR_SHARED_LIBS ${RNDR_SHARED_LIBS}")
 message(STATUS "RNDR_AUDIO ${RNDR_AUDIO}")
+message(STATUS "RNDR_SHADER_COMPILER ${RNDR_SHADER_COMPILER}")
 
 ## C++ language configuration boilerplate, hide symbols by default
 if (NOT DEFINED CMAKE_CXX_VISIBILITY_PRESET AND NOT DEFINED CMAKE_VISIBILITY_INLINES_HIDDEN)
@@ -70,6 +98,7 @@ if (${RNDR_HARDENING})
 endif ()
 
 include(cmake/dependencies.cmake)
+include(cmake/shaders.cmake)
 
 if (${RNDR_FORGE})
     # The SDK is not a build dependency (headers, volk, VMA and SPIRV-Reflect all come in via
@@ -127,6 +156,12 @@ if (${RNDR_BUILD_TESTS})
     # Catch2 leaves Catch::throw_exception undefined under this flag so the binary can supply its own, which
     # test/catch-no-exceptions.cpp does. Without it Catch2 terminates where that function is called.
     target_compile_definitions(rndr-test PRIVATE CATCH_CONFIG_DISABLE_EXCEPTIONS_CUSTOM_HANDLER)
+    if (RNDR_FORGE AND RNDR_SHADER_COMPILER AND DEFINED RNDR_SLANGC)
+        # The build-time compiler and its options, for the case that checks it agrees with ShaderCompiler.
+        list(JOIN RNDR_SLANGC_OPTIONS " " RNDR_SLANGC_OPTIONS_STRING)
+        target_compile_definitions(rndr-test PRIVATE RNDR_TEST_SLANGC="${RNDR_SLANGC}"
+                RNDR_TEST_SLANGC_OPTIONS="${RNDR_SLANGC_OPTIONS_STRING}")
+    endif ()
     # SYSTEM keeps the vendored Catch2 (and glad) headers out of the -Werror surface; GCC and
     # Clang do not report warnings whose location is a system header.
     target_include_directories(rndr-test SYSTEM PRIVATE extern/catch2/include)
@@ -135,7 +170,7 @@ if (${RNDR_BUILD_TESTS})
     target_link_libraries(rndr-test rndr)
     target_link_libraries(rndr-test rndr_warnings)
     target_link_libraries(rndr-test rndr_options)
-    if (UNIX)
+    if (UNIX AND NOT ANDROID)
         # The clipboard cases talk to the X server as a second client, and serve it from a thread.
         find_package(Threads REQUIRED)
         target_link_libraries(rndr-test PkgConfig::RNDR_XCB Threads::Threads)
@@ -164,7 +199,16 @@ if (${RNDR_BUILD_SAMPLES})
     endif ()
 
     if (${RNDR_FORGE})
-        add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
+        if (ANDROID)
+            # What a NativeActivity loads, rather than an executable, and with its shaders compiled here since the
+            # device cannot. samples/android/ packages it.
+            add_library(modern-vulkan SHARED samples/modern-vulkan/modern-vulkan.cpp)
+            rndr_android_activity(modern-vulkan)
+            rndr_compile_shader(modern-vulkan assets/shaders/modern-vulkan.slang main_vertex vertex)
+            rndr_compile_shader(modern-vulkan assets/shaders/modern-vulkan.slang main_fragment fragment)
+        else ()
+            add_executable(modern-vulkan samples/modern-vulkan/modern-vulkan.cpp)
+        endif ()
         target_link_libraries(modern-vulkan shared imgui)
         rndr_deploy_runtime(modern-vulkan)
     endif ()

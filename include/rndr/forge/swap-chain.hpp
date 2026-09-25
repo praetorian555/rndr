@@ -87,7 +87,9 @@ public:
     /**
      * @param context Instance the surface belongs to. Has to outlive it.
      * @param window Window to present to. Has to outlive it as well.
-     * @return The surface, or whatever the failing creation maps to.
+     * @return The surface, or whatever the failing creation maps to. On Android, ErrorCode::PlatformError while
+     *         the activity is in the background and the window has no native handle - see
+     *         SystemMessageHandler::OnWindowNativeHandleChanged for when to build it again.
      */
     [[nodiscard]] static Opal::Expected<Surface, ErrorCode> Create(const GraphicsContext& context, const GenericWindow& window);
     ~Surface();

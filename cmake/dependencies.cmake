@@ -7,7 +7,7 @@ if (NOT TARGET opal)
     cpmaddpackage(
             NAME opal
             GIT_REPOSITORY https://github.com/praetorian555/opal
-            GIT_TAG opal-0.6.3
+            GIT_TAG opal-0.6.4
             OPTIONS
             "OPAL_BUILD_TESTS OFF"
             "OPAL_HARDENING ${RNDR_HARDENING}"
@@ -105,7 +105,7 @@ endif ()
 # Raw XCB plus libxkbcommon for keyboard translation - the Linux platform layer wraps
 # these directly, mirroring how the Windows layer wraps Win32. xcb-xkb is needed for
 # detectable auto-repeat, xcb-randr for monitors, xcb-xfixes for cursor hiding.
-if (UNIX)
+if (UNIX AND NOT ANDROID)
     message(STATUS "***** Setting up X11/XCB Dependency *****")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(RNDR_XCB REQUIRED IMPORTED_TARGET
@@ -163,10 +163,11 @@ endif ()
 # Setup Slang #####################################################################
 # Pull in prebuilt Slang release binaries instead of building from source (the
 # from-source build is very heavy). CPM downloads and extracts the archive and we
-# wrap it in an imported target named `slang`.
-if ((RNDR_FORGE OR RNDR_CANVAS) AND NOT TARGET slang)
+# wrap it in an imported target named `slang`. Not on a platform without the compiler (see
+# RNDR_SHADER_COMPILER), where there is no archive to take it from.
+set(SLANG_VERSION 2026.10.2)
+if ((RNDR_FORGE OR RNDR_CANVAS) AND RNDR_SHADER_COMPILER AND NOT TARGET slang)
     message(STATUS "***** Setting up Slang Dependency *****")
-    set(SLANG_VERSION 2026.10.2)
     if (WIN32)
         set(SLANG_ARCHIVE "slang-${SLANG_VERSION}-windows-x86_64.zip")
     elseif (LINUX)
@@ -201,6 +202,38 @@ if ((RNDR_FORGE OR RNDR_CANVAS) AND NOT TARGET slang)
     message(STATUS "***** Setup Complete *****")
 endif ()
 
+# Setup the host slangc ###########################################################
+# For rndr_compile_shader (cmake/shaders.cmake), which compiles shaders at build time for a build that cannot
+# at run time. The archive above has one when the target is the host. A cross build (Android) takes the
+# archive for the machine it runs on instead, since the one for the target does not exist.
+if (RNDR_FORGE AND NOT DEFINED RNDR_SLANGC)
+    if (DEFINED slang_SOURCE_DIR)
+        set(RNDR_SLANG_HOST_DIR ${slang_SOURCE_DIR})
+    else ()
+        message(STATUS "***** Setting up the host Slang compiler *****")
+        if (CMAKE_HOST_WIN32)
+            set(SLANG_HOST_ARCHIVE "slang-${SLANG_VERSION}-windows-x86_64.zip")
+        elseif (CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+            set(SLANG_HOST_ARCHIVE "slang-${SLANG_VERSION}-linux-x86_64.tar.gz")
+        else ()
+            message(FATAL_ERROR "No Slang release for the host ${CMAKE_HOST_SYSTEM_NAME} to compile shaders with")
+        endif ()
+        cpmaddpackage(
+                NAME slang-host
+                VERSION ${SLANG_VERSION}
+                URL https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/${SLANG_HOST_ARCHIVE}
+                DOWNLOAD_ONLY YES
+        )
+        set(RNDR_SLANG_HOST_DIR ${slang-host_SOURCE_DIR})
+        message(STATUS "***** Setup Complete *****")
+    endif ()
+    if (CMAKE_HOST_WIN32)
+        set(RNDR_SLANGC ${RNDR_SLANG_HOST_DIR}/bin/slangc.exe CACHE INTERNAL "The host's slangc")
+    else ()
+        set(RNDR_SLANGC ${RNDR_SLANG_HOST_DIR}/bin/slangc CACHE INTERNAL "The host's slangc")
+    endif ()
+endif ()
+
 # Copies Slang's runtime libraries (slang.dll, slang-glslang.dll, ...) next to the
 # given executable target so it can be launched from the build tree on Windows.
 # Internal helper - downstream targets should use rndr_deploy_runtime() instead.
@@ -222,4 +255,16 @@ endfunction()
 function(rndr_deploy_runtime target)
     rndr_copy_slang_runtime(${target})
     rndr_copy_asan_runtime(${target})
+endfunction()
+
+# Makes a shared library the one a NativeActivity loads (android.app.lib_name in the manifest). The activity's
+# entry point, ANativeActivity_onCreate, is in the NDK glue that rndr compiles into its own archive, and nothing
+# the application writes refers to it - so without this the linker leaves it out and the activity fails to start.
+# The application defines android_main, which the glue calls. The activity looks the library up by exact name, so
+# the debug postfix a dependency may set globally (assimp sets "d") is kept off it.
+function(rndr_android_activity target)
+    if (ANDROID)
+        target_link_options(${target} PRIVATE "LINKER:--undefined=ANativeActivity_onCreate")
+        set_target_properties(${target} PROPERTIES DEBUG_POSTFIX "")
+    endif ()
 endfunction()

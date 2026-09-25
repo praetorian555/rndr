@@ -40,11 +40,14 @@ set(SOURCE_LIST
 )
 
 if (${RNDR_CANVAS} OR ${RNDR_FORGE})
+    # The header stays either way: the stage and format enums in it are shared with Forge, not the compiler's.
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/core/shader-compiler.hpp"
-            "${PROJECT_SOURCE_DIR}/src/core/shader-compiler.cpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/core/shader-cache.hpp"
             "${PROJECT_SOURCE_DIR}/src/core/shader-cache.cpp")
+    if (RNDR_SHADER_COMPILER)
+        list(APPEND SOURCE_LIST "${PROJECT_SOURCE_DIR}/src/core/shader-compiler.cpp")
+    endif ()
 endif()
 
 if (${RNDR_CANVAS})
@@ -134,6 +137,19 @@ if (WIN32)
             "${PROJECT_SOURCE_DIR}/include/rndr/imgui-system.hpp"
             "${PROJECT_SOURCE_DIR}/src/imgui-system.cpp"
     )
+elseif (ANDROID)
+    list(APPEND SOURCE_LIST
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/android-forward-def.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/android-application.hpp"
+            "${PROJECT_SOURCE_DIR}/include/rndr/platform/android-window.hpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/android-application.cpp"
+            "${PROJECT_SOURCE_DIR}/src/platform/android-window.cpp"
+            # The NDK's own glue between NativeActivity and a native thread. Plain C shipped as source, and
+            # not ours to fix, so it builds with warnings off the way spirv_reflect.c does.
+            "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c"
+    )
+    set_source_files_properties("${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c"
+            PROPERTIES COMPILE_OPTIONS "-w")
 elseif (UNIX)
     list(APPEND SOURCE_LIST
             "${PROJECT_SOURCE_DIR}/include/rndr/platform/linux-application.hpp"
@@ -202,8 +218,12 @@ target_include_directories(rndr PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/glad/include>)
 target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/stb_image/include>)
 
-if (${RNDR_FORGE} OR ${RNDR_CANVAS})
+if ((${RNDR_FORGE} OR ${RNDR_CANVAS}) AND RNDR_SHADER_COMPILER)
     target_link_libraries(rndr PRIVATE slang)
+endif ()
+if (RNDR_SHADER_COMPILER)
+    # Public, because what a caller gets back from Forge::Shader::FromSource depends on it.
+    target_compile_definitions(rndr PUBLIC RNDR_SHADER_COMPILER)
 endif ()
 
 if (${RNDR_CANVAS})
@@ -232,6 +252,12 @@ if (WIN32)
     # Xinput.lib resolves to XInput 1.4 in the Windows 10 SDK, which ships with every supported
     # Windows version, so there is no runtime redistributable to worry about.
     target_link_libraries(rndr PRIVATE User32.lib Shcore.lib Xinput.lib)
+elseif (ANDROID)
+    # libandroid for the native window, the looper and the asset manager, liblog for logcat. Both are NDK
+    # system libraries every device has.
+    target_link_libraries(rndr PRIVATE android log)
+    # Public: the application's android_main is handed an android_app and reads it through this header.
+    target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${ANDROID_NDK}/sources/android/native_app_glue>)
 elseif (UNIX)
     # The X11/XCB stack found by pkg_check_modules in cmake/dependencies.cmake.
     target_link_libraries(rndr PRIVATE PkgConfig::RNDR_XCB)
@@ -266,6 +292,8 @@ if (${RNDR_FORGE})
     target_compile_definitions(rndr PUBLIC RNDR_FORGE)
     if (WIN32)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_WIN32_KHR -DVK_NO_PROTOTYPES)
+    elseif (ANDROID)
+        target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_ANDROID_KHR -DVK_NO_PROTOTYPES)
     elseif (UNIX)
         target_compile_definitions(rndr PUBLIC -DVK_USE_PLATFORM_XCB_KHR -DVK_NO_PROTOTYPES)
     endif ()

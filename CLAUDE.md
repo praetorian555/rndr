@@ -50,6 +50,11 @@ at mesh loading; without the validation layer a run proves nothing about correct
 `RNDR_HARDENING` defaults to ON and instruments the build with AddressSanitizer. CI configures with it
 OFF, and hardened builds refuse to install.
 
+Android is a cross build with the NDK's toolchain file (`build/android-debug`) and, for the sample APK, a
+Gradle project in `samples/android`. There is no Slang on the device, so `RNDR_SHADER_COMPILER` is off there
+and shaders are compiled on the host at build time. The configure line, the Gradle invocation and what is and
+is not checked yet are in [docs/android-plan.md](docs/android-plan.md).
+
 ## Tests
 
 Catch2, single `rndr-test` binary, run a subset by tag:

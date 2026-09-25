@@ -6,6 +6,10 @@
 
 #if defined(OPAL_PLATFORM_WINDOWS)
 #define RNDR_WINDOWS 1
+// Android defines __linux__, so Opal reports OPAL_PLATFORM_LINUX there - right for Opal's own sources, and wrong
+// for rndr, whose Linux backend is XCB. Checked first for that reason.
+#elif defined(__ANDROID__)
+#define RNDR_ANDROID 1
 #elif defined(OPAL_PLATFORM_LINUX)
 #define RNDR_LINUX 1
 #endif
@@ -20,7 +24,7 @@
 #define RNDR_ALIGN(Amount) __declspec(align(Amount))
 #define RNDR_FORCE_INLINE __forceinline
 #define RNDR_DEBUG_BREAK __debugbreak()
-#elif RNDR_LINUX
+#elif RNDR_LINUX || RNDR_ANDROID
 #if defined(__clang__)
 #define RNDR_OPTIMIZE_OFF _Pragma("clang optimize off")
 #define RNDR_OPTIMIZE_ON _Pragma("clang optimize on")

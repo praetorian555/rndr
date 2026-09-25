@@ -14,6 +14,8 @@
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-application.hpp"
 #include "rndr/platform/windows-window.hpp"
+#elif RNDR_ANDROID
+#include "rndr/platform/android-application.hpp"
 #elif RNDR_LINUX
 #include "rndr/platform/linux-application.hpp"
 #include "rndr/platform/linux-window.hpp"
@@ -32,6 +34,13 @@ Opal::Expected<Opal::ScopePtr<Rndr::Application>, Rndr::ErrorCode> Rndr::Applica
         RNDR_LOG_ERROR("Rndr Application already created, only one can be live at a time");
         return ResultType(ErrorCode::InvalidArgument);
     }
+#if RNDR_ANDROID
+    if (desc.android_application == nullptr)
+    {
+        RNDR_LOG_ERROR("On Android the Application needs the android_app that android_main was given");
+        return ResultType(ErrorCode::InvalidArgument);
+    }
+#endif
     Opal::ScopePtr<Application> app = Opal::MakeScoped<Application>(nullptr, desc);
     if (!app.IsValid() || !app->m_platform_application.IsValid() || (desc.enable_input_system && !app->m_input_system.IsValid()))
     {
@@ -61,6 +70,9 @@ Rndr::Application::Application(const ApplicationDesc& desc) : m_desc(desc)
     }
 #if RNDR_WINDOWS
     m_platform_application = Opal::MakeScoped<PlatformApplication, WindowsApplication>(Opal::GetDefaultAllocator(), this);
+#elif RNDR_ANDROID
+    m_platform_application =
+        Opal::MakeScoped<PlatformApplication, AndroidApplication>(Opal::GetDefaultAllocator(), this, desc.android_application);
 #elif RNDR_LINUX
     m_platform_application = Opal::MakeScoped<PlatformApplication, LinuxApplication>(Opal::GetDefaultAllocator(), this);
 #else
@@ -227,6 +239,15 @@ void Rndr::Application::OnWindowDpiChanged(const GenericWindow& window, f32 new_
         system_message_handler->OnWindowDpiChanged(window, new_dpi_scale);
     }
     on_window_dpi_change.Execute(window, new_dpi_scale);
+}
+
+void Rndr::Application::OnWindowNativeHandleChanged(const GenericWindow& window)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnWindowNativeHandleChanged(window);
+    }
+    on_window_native_handle_change.Execute(window);
 }
 
 bool Rndr::Application::OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated)

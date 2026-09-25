@@ -6,7 +6,9 @@
 #include "opal/hash.h"
 #include "opal/paths.h"
 
+#if RNDR_SHADER_COMPILER
 #include "slang.h"
+#endif
 
 #include "rndr/log.hpp"
 
@@ -19,6 +21,15 @@ namespace
  */
 constexpr Rndr::u32 k_magic = 0x43535221;  // "!RSC"
 constexpr Rndr::u32 k_version = 1;
+
+/** Names the compiler that filled a cache directory, for a build that has none of its own to ask. */
+constexpr const char* k_build_tag_file_name = "build-tag";
+
+Opal::StringUtf8 GetBuildTagPath(const Opal::StringUtf8& directory)
+{
+    Opal::Expected<Opal::StringUtf8, Opal::ErrorCode> path = Opal::Paths::Combine(directory, Opal::StringUtf8(k_build_tag_file_name));
+    return path.HasValue() ? path.GetValue().Clone() : Opal::StringUtf8();
+}
 
 /** Appends the bytes of a POD value, which is how every length in the blob is written. */
 template <typename T>
@@ -79,8 +90,11 @@ Rndr::ShaderCacheKey Rndr::ShaderCacheKey::Make(const Opal::StringUtf8& source, 
     key.source = source.Clone();
     key.entry_point = entry_point.Clone();
     key.format = format;
+#if RNDR_SHADER_COMPILER
     const char* build_tag = spGetBuildTagString();
     key.build_tag = build_tag != nullptr ? Opal::StringUtf8(build_tag) : Opal::StringUtf8();
+#endif
+    // Without a compiler the tag stays empty and matches no entry a compiler wrote, so every lookup misses.
     return key;
 }
 
@@ -106,6 +120,16 @@ Rndr::ShaderCache::ShaderCache(const Opal::StringUtf8& directory) : m_directory(
     }
     if (Opal::Exists(m_directory))
     {
+        const Opal::StringUtf8 tag_path = GetBuildTagPath(m_directory);
+        if (!tag_path.IsEmpty() && Opal::Exists(tag_path))
+        {
+            Opal::Expected<Opal::DynamicArray<u8>, Opal::ErrorCode> tag = Opal::ReadFileAsBytes(tag_path);
+            if (tag.HasValue())
+            {
+                m_directory_build_tag =
+                    Opal::StringUtf8(reinterpret_cast<const char*>(tag.GetValue().GetData()), static_cast<i64>(tag.GetValue().GetSize()));
+            }
+        }
         return;
     }
     if (Opal::CreateDirectory(m_directory) != Opal::ErrorCode::Success)
@@ -115,6 +139,16 @@ Rndr::ShaderCache::ShaderCache(const Opal::StringUtf8& directory) : m_directory(
         RNDR_LOG_WARNING("Could not create the shader cache directory {}, caching in memory only.", m_directory.GetData());
         m_directory = Opal::StringUtf8();
     }
+}
+
+Rndr::ShaderCacheKey Rndr::ShaderCache::MakeKey(const Opal::StringUtf8& source, const Opal::StringUtf8& entry_point,
+                                                ShaderOutputFormat format) const
+{
+    ShaderCacheKey key = ShaderCacheKey::Make(source, entry_point, format);
+#if !RNDR_SHADER_COMPILER
+    key.build_tag = m_directory_build_tag.Clone();
+#endif
+    return key;
 }
 
 Opal::StringUtf8 Rndr::ShaderCache::GetFilePath(const ShaderCacheKey& key) const
@@ -240,5 +274,18 @@ void Rndr::ShaderCache::Store(const ShaderCacheKey& key, Opal::ArrayView<const u
         // The memory tier already has it, so this run is unaffected. Worth a word, since a cache that never
         // writes looks exactly like one that is working until somebody times a second run.
         RNDR_LOG_WARNING("Could not write the shader cache entry {}.", path.GetData());
+        return;
     }
+    const Opal::StringUtf8 tag_path = GetBuildTagPath(m_directory);
+    if (key.build_tag.IsEmpty() || (key.build_tag == m_directory_build_tag && Opal::Exists(tag_path)))
+    {
+        return;
+    }
+    const Opal::ArrayView<const u8> tag(reinterpret_cast<const u8*>(key.build_tag.GetData()), key.build_tag.GetSize());
+    if (tag_path.IsEmpty() || Opal::WriteBytesToFile(tag_path, tag) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_WARNING("Could not write the shader cache build tag into {}.", m_directory.GetData());
+        return;
+    }
+    m_directory_build_tag = key.build_tag.Clone();
 }

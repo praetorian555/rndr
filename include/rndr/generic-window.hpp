@@ -265,6 +265,7 @@ private:
     friend class PlatformApplication;
     friend class WindowsApplication;
     friend class LinuxApplication;
+    friend class AndroidApplication;
     void MarkClosed() { m_is_closed = true; }
     void SetDpiScale(f32 dpi_scale) { m_dpi_scale = dpi_scale; }
 };

@@ -30,8 +30,17 @@
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/transfer.hpp"
 #include "rndr/generic-window.hpp"
+#include "rndr/log.hpp"
 #include "rndr/projections.hpp"
 #include "rndr/types.hpp"
+
+#if RNDR_ANDROID
+#include <android/native_activity.h>
+
+#include "android_native_app_glue.h"
+
+#include "rndr/platform/android-application.hpp"
+#endif
 
 using i32 = Rndr::i32;
 using u32 = Rndr::u32;
@@ -48,7 +57,7 @@ struct PerFrameData
     u32 selected = 1;
 };
 
-void Run();
+void Run(android_app* android_application);
 
 /**
  * Unwrap what a Forge call reported. Forge logs which call failed and why before it hands back a code, so a
@@ -77,20 +86,40 @@ inline void RequireOk(Rndr::ErrorCode status)
     }
 }
 
+#if RNDR_ANDROID
+// rndr defines no entry point on any platform. On Android this is the one NativeActivity's glue calls, on a thread
+// of its own, every time the activity is created.
+void android_main(android_app* app)
+{
+    Run(app);
+}
+#else
 int main()
 {
-    Run();
+    Run(nullptr);
     return 0;
 }
+#endif
 
-void Run()
+void Run(android_app* android_application)
 {
     constexpr i32 k_frames_in_flight = 2;
     /** How often the window title is rewritten. A figure that changes every frame cannot be read. */
     constexpr f64 k_title_update_period_seconds = 0.25;
 
-    auto rndr_app = Require(Rndr::Application::Create({.enable_input_system = true}));
+    auto rndr_app = Require(Rndr::Application::Create({.enable_input_system = true, .android_application = android_application}));
     auto window = Require(rndr_app->CreateGenericWindow({}));
+
+    // Where the model and its textures are read from. On Android the APK's assets are copied out to the app's
+    // own storage first, so that the loaders open them by path there the way they do here; the compiled shaders
+    // ride along with them.
+#if RNDR_ANDROID
+    Opal::StringUtf8 model_directory(android_application->activity->internalDataPath);
+    model_directory += "/assets";
+    RequireOk(Rndr::AndroidApplication::Get()->ExtractAssets("", model_directory));
+#else
+    const Opal::StringUtf8 model_directory = Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF").GetValue();
+#endif
 
     Rndr::Forge::GraphicsContext graphics_context = Require(Rndr::Forge::GraphicsContext::Create({.collect_debug_messages = true}));
     Rndr::Forge::Surface surface = Require(Rndr::Forge::Surface::Create(graphics_context, *window));
@@ -107,8 +136,7 @@ void Run()
     Rndr::Forge::SwapChain swap_chain =
         Require(Rndr::Forge::SwapChain::Create(device, surface, {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT}));
 
-    const Opal::StringUtf8 mesh_path =
-        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne.gltf").GetValue();
+    const Opal::StringUtf8 mesh_path = Opal::Paths::Combine(model_directory, "Suzanne.gltf").GetValue();
     Rndr::Forge::Mesh mesh;
     RequireOk(Rndr::Forge::LoadMesh(mesh_path, mesh));
     Opal::DynamicArray<Rndr::u8> combined_vertex_index_data;
@@ -151,10 +179,9 @@ void Run()
                                                }
                                            }));
 
-    const Opal::StringUtf8 albedo_texture_path =
-        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_BaseColor.png").GetValue();
+    const Opal::StringUtf8 albedo_texture_path = Opal::Paths::Combine(model_directory, "Suzanne_BaseColor.png").GetValue();
     const Opal::StringUtf8 metallic_roughness_texture_path =
-        Opal::Paths::Combine(RNDR_CORE_ASSETS_DIR, "sample-models", "Suzanne", "glTF", "Suzanne_MetallicRoughness.png").GetValue();
+        Opal::Paths::Combine(model_directory, "Suzanne_MetallicRoughness.png").GetValue();
     const Rndr::Bitmap albedo_bitmap = Require(Rndr::File::LoadImage(albedo_texture_path, true, true));
     const Rndr::Bitmap mr_bitmap = Require(Rndr::File::LoadImage(metallic_roughness_texture_path, true, true));
     const Rndr::Forge::Texture albedo_texture = Require(Rndr::Forge::Texture::Create(device, graphics_queue, albedo_bitmap));
@@ -170,6 +197,13 @@ void Run()
     descriptor_pool_desc.max_sets = k_frames_in_flight;
     const Rndr::Forge::DescriptorPool descriptor_pool = Require(Rndr::Forge::DescriptorPool::Create(device, descriptor_pool_desc));
 
+#if RNDR_ANDROID
+    // No Slang on the device: the build compiled both entry points on the host (rndr_compile_shader).
+    const Rndr::Forge::Shader vertex_shader = Require(Rndr::Forge::Shader::FromSpirvFile(
+        device, Opal::Paths::Combine(model_directory, "modern-vulkan.main_vertex.spv").GetValue(), {.entry_point = "main_vertex"}));
+    const Rndr::Forge::Shader fragment_shader = Require(Rndr::Forge::Shader::FromSpirvFile(
+        device, Opal::Paths::Combine(model_directory, "modern-vulkan.main_fragment.spv").GetValue(), {.entry_point = "main_fragment"}));
+#else
     // Slang is the whole of this sample's startup cost - seconds for these two entry points, against
     // milliseconds for everything built out of them. Cached, a second run reads two files instead.
     Rndr::ShaderCache shader_cache{Opal::StringUtf8(RNDR_CORE_ASSETS_DIR "/../build/shader-cache")};
@@ -178,6 +212,7 @@ void Run()
         Require(Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_vertex", .cache = shader_cache}));
     const Rndr::Forge::Shader fragment_shader =
         Require(Rndr::Forge::Shader::FromSource(device, shader_path, {.entry_point = "main_fragment", .cache = shader_cache}));
+#endif
     const Opal::Ref<const Rndr::Forge::Shader> pipeline_shaders[] = {vertex_shader, fragment_shader};
 
     // Setup the descriptor set layout. It has two bindings and both are textures with samplers. Naming the
@@ -233,6 +268,39 @@ void Run()
         Rndr::Forge::SetDebugName(device, gpu_timers[i], "frame timing");
     }
 
+    // Android takes the activity's window away in the background and hands back a new one, and a surface is
+    // built over one window. Everything built on the surface goes with it, and comes back over the new window.
+    // Only reported on Android; nothing on the desktop ever calls this. Held through one pointer, since a
+    // delegate keeps its callable inline and a capture of each of these would not fit.
+    struct Presentation
+    {
+        Rndr::Forge::GraphicsContext& graphics_context;
+        Rndr::Forge::Device& device;
+        Rndr::Forge::DeviceQueue& graphics_queue;
+        Rndr::Forge::DeviceQueue& present_queue;
+        Rndr::Forge::Surface& surface;
+        Rndr::Forge::SwapChain& swap_chain;
+        Rndr::Forge::FrameContext& frame_context;
+    };
+    Presentation presentation{graphics_context, device, graphics_queue, present_queue, surface, swap_chain, frame_context};
+    rndr_app->on_window_native_handle_change.Bind(
+        [p = &presentation](const Rndr::GenericWindow& changed_window)
+        {
+            (void)p->device.WaitForAll();
+            p->frame_context.Destroy();
+            p->swap_chain.Destroy();
+            p->surface.Destroy();
+            if (changed_window.GetNativeHandle() == nullptr)
+            {
+                return;
+            }
+            p->surface = Require(Rndr::Forge::Surface::Create(p->graphics_context, changed_window));
+            p->swap_chain = Require(Rndr::Forge::SwapChain::Create(p->device, p->surface,
+                                                                   {.use_depth = true, .depth_pixel_format = Rndr::PixelFormat::D32_SFLOAT}));
+            p->frame_context = Require(Rndr::Forge::FrameContext::Create(p->device, p->swap_chain, p->graphics_queue, p->present_queue,
+                                                                         {.frames_in_flight = k_frames_in_flight}));
+        });
+
     Rndr::Vector2i window_size = window->GetSize();
     const i32 window_width = window_size.x;
     const i32 window_height = window_size.y;
@@ -248,7 +316,12 @@ void Run()
                                               .start_yaw_radians = 0,
                                               .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};
     ExampleController controller(*rndr_app, window_width, window_height, fly_camera_desc, 10.0f, 0.005f, 0.005f);
+#if RNDR_ANDROID
+    // A touch drag is mouse motion, and there is no F1 to press on a phone, so the camera starts out steerable.
+    controller.Enable(true);
+#else
     controller.Enable(false);
+#endif
 
     bool fps_mode = false;
     window->EnableHighPrecisionCursorMode(true);
@@ -282,7 +355,13 @@ void Run()
     {
         auto start_time = Opal::GetSeconds();
 
-        rndr_app->ProcessSystemEvents();
+        // With nothing to render into - the activity is in the background - there is nothing to do until the OS
+        // says something, so wait for it rather than spin.
+        rndr_app->ProcessSystemEvents(frame_context.IsValid() ? 0 : Rndr::Application::k_infinite_timeout);
+        if (!frame_context.IsValid())
+        {
+            continue;
+        }
         rndr_app->GetInputSystemChecked().ProcessSystemEvents(delta_seconds);
 
         const Rndr::Vector2i new_window_size = window->GetSize();
@@ -394,7 +473,17 @@ void Run()
             char title[128] = {};
             snprintf(title, sizeof(title), "Forge - modern-vulkan - CPU %.2f ms - GPU %.3f ms", static_cast<f64>(delta_seconds) * 1000.0,
                      gpu_milliseconds);
+#if RNDR_ANDROID
+            // An activity has no title bar to put it in.
+            static f64 s_last_log_seconds = 0.0;
+            if (end_time - s_last_log_seconds > 2.0)
+            {
+                s_last_log_seconds = end_time;
+                RNDR_LOG_INFO("{}", title);
+            }
+#else
             window->SetTitle(Opal::StringUtf8(title));
+#endif
         }
     }
 

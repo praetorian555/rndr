@@ -63,20 +63,27 @@ The other decisions:
 
 | Phase | State |
 |---|---|
-| 0 — toolchain and portability groundwork | Not started |
-| 1 — AndroidApplication + AndroidWindow | Not started |
-| 2 — Forge surface | Not started |
-| 3 — shaders and assets | Not started |
-| 4 — sample APK | Not started |
-| 5 — tests on the device and CI | Not started |
+| 0 — toolchain and portability groundwork | Done |
+| 1 — AndroidApplication + AndroidWindow | Compiles; not run on a device |
+| 2 — Forge surface | Compiles; not run on a device |
+| 3 — shaders and assets | Host side checked on Windows and Linux; asset extraction not run on a device |
+| 4 — sample APK | The APK builds; not installed - no device |
+| 5 — tests on the device and CI | `rndr-test` builds for Android and the CI job is written; runner APK and device runs not started |
 
-Machine state on 2026-09-25: no Android SDK or NDK installed, no `ANDROID_HOME`, `JAVA_HOME` points at
-JDK 10 (Gradle 8 needs 17). Nothing in Phase 0 can start before the toolchain is there.
+Machine state on 2026-09-25: SDK at `F:\Android\Sdk` with NDK 30.0.16248370, platform-tools and the
+android-37 platform; JDK 21 at `F:\Program Files\Java\jdk-21.0.12.1`. All three variables are set for the
+user, not the machine, so a shell opened before the install still sees `JAVA_HOME` at JDK 10 and no
+`ANDROID_HOME`. The SDK's own `cmake` package is not installed: the configure below runs the CMake and Ninja
+that Visual Studio ships, and Gradle's `externalNativeBuild` (Phase 4) fetches the package itself (CMake 3.31.6
+since Phase 4 asks for it). No device is attached and no emulator image is installed, so nothing below has run
+on Android yet.
 
 ## Phase 0 — toolchain and portability groundwork
 
-Install, in this order: Android Studio or the command-line tools, then through its SDK manager NDK r28,
-platform-tools (`adb`) and the platform for `targetSdk`; JDK 17; set `ANDROID_HOME` and `ANDROID_NDK_HOME`.
+Install, in this order: Android Studio or the command-line tools, then through its SDK manager the current
+stable NDK (r30 at the time of writing; nothing here depends on the version), platform-tools (`adb`) and
+the platform for `targetSdk`; JDK 21 (the LTS Studio bundles - a newer JDK is only as usable as the Gradle
+that runs on it); set `ANDROID_HOME` and `ANDROID_NDK_HOME`.
 A device with developer mode and USB debugging on, or nothing yet - the phase ends at a build, not a run.
 
 Groundwork in the tree, none of it Android code yet:
@@ -85,10 +92,10 @@ Groundwork in the tree, none of it Android code yet:
   defines `__linux__`, so Opal's `defines.h` says `OPAL_PLATFORM_LINUX` there and rndr's
   `#elif defined(OPAL_PLATFORM_LINUX)` would pull in the XCB backend. The check is `__ANDROID__`. The
   macro set (`RNDR_DEBUG_BREAK`, `RNDR_FORCE_INLINE`, `RNDR_ALIGN`, `RNDR_OPTIMIZE_OFF/ON`) is the Clang
-  half of the Linux branch. Opal itself is left alone: its Linux sources are Bionic-clean (futex through
-  `syscall`, pthread, `dirent`, BSD sockets, `mmap`) and `OPAL_PLATFORM_LINUX` is the right answer for
-  them. An `OPAL_PLATFORM_ANDROID` upstream is a nicety, not a need, and would have to keep the Linux
-  define alongside it or break Opal's own `#if`s.
+  half of the Linux branch. `OPAL_PLATFORM_LINUX` stays the right answer for Opal's own
+  sources, which are Linux code Bionic mostly accepts (futex through `syscall`, pthread, `dirent`, BSD
+  sockets, `mmap`). An `OPAL_PLATFORM_ANDROID` upstream is a nicety, not a need, and would have to keep
+  the Linux define alongside it or break Opal's own `#if`s. "Mostly" is the first finding below.
 - The Forge sources branch on `OPAL_PLATFORM_*` directly (`src/forge/graphics-context.cpp:5,470`,
   `src/forge/swap-chain.cpp`) and need the Android check first for the same reason. `src/file.cpp`,
   `src/canvas/context.cpp`, `src/audio/audio-device.cpp` and `src/imgui-system.cpp` also branch on the
@@ -132,6 +139,34 @@ Checked by: the Android build above, and the Windows and Linux suites unchanged 
 the one change that reaches the desktop builds, so `rndr-test` on `build/msvc-debug` and the Linux CI job
 are the regression check. Portability fixes the first NDK build turns up are recorded under this phase
 as they come, the way the Linux plan recorded its first GCC build.
+
+What the first NDK build turned up (2026-09-25, NDK 30, Clang 21):
+
+- **Opal 0.6.3 does not build for arm64.** `hash-table-base.h` included `<emmintrin.h>` unconditionally
+  for the SSE2 group probe, so every translation unit that reaches a hash map failed; and `thread.cpp`
+  called `pthread_setaffinity_np`, which Bionic does not have. Both are fixed in Opal 0.6.4, which rndr
+  pins - a NEON probe on aarch64 with a scalar loop for anything else, and `sched_setaffinity` on the
+  kernel thread id the handle already carries - checked by Opal's full suite under `qemu-aarch64` (a
+  clang-20 cross build in WSL against Ubuntu's arm64 cross sysroot, unpacked without root) and on MSVC
+  and GCC. To try an Opal change before it is released, an arm64 configure adds
+  `-DCPM_opal_SOURCE=D:/Dev/opal`, and it has to be `--fresh`: a build directory that already fetched
+  Opal keeps compiling the fetched copy.
+- The same qemu run fails two Opal cases that have nothing to do with the port. "Matrix 4x4 inverse
+  operator / duplicated row" expects `InvalidArgument` for a singular matrix and gets a value: Clang
+  contracts the determinant into FMAs on aarch64, the result is a rounding error away from zero rather than
+  zero, and with `-ffp-contract=off` the case passes. That is an Opal bug on any FMA target, device
+  included. "Socket UDP over loopback / empty datagram" looks like qemu-user refusing a null buffer of
+  length zero, and needs a device to say for sure.
+- rndr's own sources needed nothing beyond what is listed above. With Opal fixed, the arm64 build of
+  `rndr` fails in exactly three translation units, all by design: `application.cpp` and
+  `platform-application.cpp` have no backend to construct (Phase 1) and `swap-chain.cpp` no surface to
+  create (Phase 2). So `librndr.a` links at the end of Phase 2, not this phase, and this phase is checked
+  by those three being the only failures. An `x86_64` Android configure, where SSE2 exists, gives the
+  same three with the released Opal.
+
+On a Windows host the configure is the one above with the NDK's toolchain file by its Windows path, and
+`-G Ninja` finds the `ninja.exe` Visual Studio ships under `Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja`
+once that is on `PATH`.
 
 ## Phase 1 — AndroidApplication + AndroidWindow
 
@@ -211,6 +246,21 @@ configuration, and its behaviour is checked by the sample in Phase 4 and by the 
 where `[forge-window]` builds a window through it. `[init]` and `[input]` are headless and platform-neutral
 and run on the device as an executable in Phase 5 as they are.
 
+As built (2026-09-25), where it differs from the above or the above left it open:
+
+- The desc field is `ApplicationDesc::android_application`. A member named `android_app` of type `android_app*`
+  changes the meaning of the type name inside the class, which GCC rejects.
+- `~AndroidApplication` finishes the activity if nothing did, then pumps until `destroyRequested`, with the
+  callbacks unhooked. The glue's activity thread waits on `android_main`'s thread for every window and input
+  queue change, so an `android_main` that returns while the activity lives leaves that thread waiting for good.
+- `CloseWindow` is the one close path - back and `RequestClose` both - and finishes the activity when the
+  handler does not veto. `APP_CMD_DESTROY` (swiped away from recents) cannot be refused, so a veto there is
+  logged and overruled.
+- A mouse's buttons are diffed from `AMotionEvent_getButtonState` on every event, since naming the button an
+  `ACTION_BUTTON_PRESS` is about takes `AMotionEvent_getActionButton`, which is API 33.
+- The glue's include directory is public on Android: the application's `android_main` reads `android_app`.
+- `ExtractAssets` (Phase 3) lives here too, beside `WaitForNativeWindow` and `CloseWindow`.
+
 ## Phase 2 — Forge surface
 
 - `src/forge/graphics-context.cpp` `GetRequiredInstanceExtensions`: `VK_KHR_ANDROID_SURFACE_EXTENSION_NAME`
@@ -240,6 +290,9 @@ layers from a debuggable app's own library directory, so `RNDR_FORGE_VALIDATION`
 Checked by: `[forge]` is headless and does not reach this code; `[forge-window]` does, and runs through
 the runner APK in Phase 5. Until then the sample is the check, with `collect_debug_messages` on and the
 message count in the title where the FPS is.
+
+As built: as above. The one thing added is that `Surface::Create` answers `PlatformError` for a window with no
+native handle, and says so in `swap-chain.hpp`.
 
 ## Phase 3 — shaders and assets
 
@@ -296,6 +349,23 @@ Checked by:
   what the Phase 5 device run exercises.
 - `FromSpirvInMemory` and `FromSpirvFile` are already covered (`smoke-test.cpp:14765`).
 
+As built (2026-09-25):
+
+- The option list is `RNDR_SLANGC_OPTIONS` in `cmake/shaders.cmake`, and the test is handed that same list as
+  `RNDR_TEST_SLANGC_OPTIONS` rather than a copy of it, so it pins what the build runs. "Forge slangc and
+  ShaderCompiler produce the same module" passes on Windows and on Linux: the bytes are identical. With
+  `-fvk-use-entrypoint-name` dropped from the list it fails, so it has teeth.
+- The host compiler is `RNDR_SLANGC`: from the Slang archive already fetched when the target is the host, from
+  a second `slang-host` package keyed on `CMAKE_HOST_SYSTEM_NAME` when it is not. `rndr_compile_shader` writes
+  under `RNDR_SPIRV_DIR`, default `${CMAKE_BINARY_DIR}/spirv`, settable so the Gradle build can name it.
+- `ShaderCache::MakeKey` and the `build-tag` file are as planned. `Store` also rewrites the file when it has gone
+  missing, not only when the tag changed - the new section of "Forge shader cache" found that. `ShaderCacheKey::Make`
+  stays, and is what `MakeKey` calls on a build with the compiler.
+- The three suite paths go through `ForgeTest::GetTestDataPath` (`forge-test-common.hpp`), which reads
+  `RNDR_TEST_DATA_DIR` and falls back to the build directory.
+- `ExtractAssets` is not recursive - `AAssetDir` lists the files of a directory and not its subdirectories - and
+  skips a file already there with the same size. The sample's assets are flat, so one call does.
+
 ## Phase 4 — sample APK
 
 `samples/android/` is a Gradle project - `settings.gradle.kts`, `build.gradle.kts`, `app/build.gradle.kts`,
@@ -335,6 +405,29 @@ same reason:
 4. Rotate the device: the resize path, and the swap chain recreated at the new extent.
 5. Back closes the app cleanly, with `android_main` returning rather than the process being killed.
 
+As built (2026-09-25) - the APK builds; none of the list above has run:
+
+- The module is `samples/android/modern-vulkan/` rather than `app/`, since Phase 5's runner is the second module
+  of the same project. Gradle 9.8.0 through a committed wrapper, AGP 9.4.1, compile and target SDK 37, JDK 21.
+- `externalNativeBuild` pins CMake 3.31.6: AGP otherwise fetches 3.22.1, and rndr needs 3.28.
+- Built and installed with `JAVA_HOME` at JDK 21 and `ANDROID_HOME` set:
+
+      cd samples/android
+      ./gradlew assembleDebug
+      adb install -r modern-vulkan/build/outputs/apk/debug/modern-vulkan-debug.apk
+
+- `rndr_android_activity` is `LINKER:--undefined=ANativeActivity_onCreate` plus an empty `DEBUG_POSTFIX`:
+  assimp sets `CMAKE_DEBUG_POSTFIX` to `d` for everything, and the activity loads the library by exact name.
+- AGP merges assets before it runs the native build, and the SPIR-V is written by the native build, so
+  `mergeDebugAssets` is made to depend on `externalNativeBuildDebug`. The layer comes from a
+  `fetchValidationLayer` task into the debug `jniLibs`.
+- The debug APK is 33 MB: the validation layer is 23.7 MB of it, `libmodern-vulkan.so` 5.7 MB stripped. The
+  library needs nothing but system libraries - libc++ is static and volk opens `libvulkan.so` itself.
+- The sample's handler holds what it rebuilds through one pointer: Opal's delegates keep the callable inline in
+  32 bytes, and a capture of the seven objects does not fit. In the background, with no frame context, the loop
+  waits in `ProcessSystemEvents(k_infinite_timeout)` instead of spinning. The camera starts steerable, since a
+  phone has no F1, and the title line goes to the log every two seconds.
+
 ## Phase 5 — tests on the device and CI
 
 Two routes onto the device, because the loader gives a plain executable no validation layer:
@@ -366,6 +459,16 @@ later experiment whose 1.3 support has to be verified first.
 Checked by: the executable run green on a device with `RNDR_TEST_REQUIRE_VULKAN=1`, the runner APK's
 `[forge]` and `[forge-window]` green with the layer loaded (the log shows the layer's own banner, which is
 the equivalent of CI's `vulkaninfo` check), and the CI job green.
+
+As built so far (2026-09-25):
+
+- `rndr-test` builds and links for arm64. The one thing in the suite that called the compiler directly,
+  `CompileToSpirv`, takes the code from the suite's shader cache on a build without one, and fails there if the
+  pushed cache lacks the entry.
+- The `android` CI job is in `ci.yml`, compile-only, arm64, tests and samples on. It needs Opal 0.6.4, the
+  first release that builds for arm64, which is what rndr pins.
+- Not started: the runner APK, `ForgeTest::HasShaderCompiler()` and the skips behind it - the first device run
+  says which cases need one - and every run on a device.
 
 ## Out of scope (explicit, so nothing half-lands)
 

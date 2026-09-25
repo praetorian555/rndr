@@ -101,7 +101,8 @@ public:
      * annotated entry point to compile.
      * @return The shader, ErrorCode::FileNotFound for a file that is not there or is empty,
      *         ErrorCode::ShaderCompilationError when Slang refused the source, or whatever
-     *         FromSpirvInMemory reported about what came out of it.
+     *         FromSpirvInMemory reported about what came out of it. On a build without the Slang
+     *         compiler (Android), see FromSourceInMemory.
      */
     [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSource(const Device& device, const Opal::StringUtf8& path,
                                                                       const ShaderDesc& desc = {});
@@ -110,7 +111,9 @@ public:
      * Create a shader by compiling Slang source code in memory. The desc.entry_point selects
      * which annotated entry point to compile.
      * @return The shader, ErrorCode::InvalidArgument for empty source, ErrorCode::ShaderCompilationError
-     *         when Slang refused it, or whatever FromSpirvInMemory reported.
+     *         when Slang refused it, or whatever FromSpirvInMemory reported. On a build without the Slang
+     *         compiler (RNDR_SHADER_COMPILER undefined, which is Android) a cache hit still loads, and
+     *         anything else is ErrorCode::FeatureNotSupported - use FromSpirvFile there.
      */
     [[nodiscard]] static Opal::Expected<Shader, ErrorCode> FromSourceInMemory(const Device& device, const Opal::StringUtf8& source,
                                                                               const ShaderDesc& desc = {});

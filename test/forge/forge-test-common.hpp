@@ -136,6 +136,39 @@ inline bool IsEnvironmentFlagSet(const char* name)
     return is_set;
 }
 
+/**
+ * Where the suite keeps what it writes and reads back: the shader cache and the scratch files. RNDR_TEST_DATA_DIR
+ * when it is set, and the build directory beside the checkout otherwise. On a device the checkout's path means
+ * nothing, so `adb shell` points the variable at what was pushed.
+ * @param name A directory under the data directory.
+ */
+inline Opal::StringUtf8 GetTestDataPath(const char* name)
+{
+    Opal::StringUtf8 root;
+#if defined(_MSC_VER)
+    char* value = nullptr;
+    size_t size = 0;
+    if (_dupenv_s(&value, &size, "RNDR_TEST_DATA_DIR") == 0 && value != nullptr)
+    {
+        root = Opal::StringUtf8(value);
+        free(value);
+    }
+#else
+    const char* value = std::getenv("RNDR_TEST_DATA_DIR");
+    if (value != nullptr)
+    {
+        root = Opal::StringUtf8(value);
+    }
+#endif
+    if (root.IsEmpty())
+    {
+        root = Opal::StringUtf8(RNDR_CORE_ASSETS_DIR "/../build");
+    }
+    root += "/";
+    root += name;
+    return root;
+}
+
 }  // namespace ForgeTest
 
 /**

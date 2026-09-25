@@ -9,6 +9,7 @@
 
 #include "rndr/error-codes.hpp"
 #include "rndr/monitor-info.hpp"
+#include "rndr/platform/android-forward-def.hpp"
 #include "rndr/system-message-handler.hpp"
 
 namespace Rndr
@@ -18,6 +19,12 @@ struct ApplicationDesc
 {
     /** If we should enable the input system. Defaults to no. */
     bool enable_input_system = false;
+
+    /**
+     * Android only, and required there: the android_app the glue passed to android_main. Ignored elsewhere.
+     * rndr defines no entry point, so the application's android_main hands it over here.
+     */
+    android_app* android_application = nullptr;
 };
 
 class GenericWindow;
@@ -41,8 +48,13 @@ public:
     using GamepadConnectionDelegate = Opal::MultiDelegate<void(u8 /*gamepad_index*/, bool /*is_connected*/)>;
     GamepadConnectionDelegate on_gamepad_connection_change;
 
+    /** See SystemMessageHandler::OnWindowNativeHandleChanged. Fired on Android only. */
+    using WindowNativeHandleChangeDelegate = Opal::MultiDelegate<void(const GenericWindow& /*window*/)>;
+    WindowNativeHandleChangeDelegate on_window_native_handle_change;
+
     /**
-     * Creates the one Application instance. Reports ErrorCode::InvalidArgument when one already exists.
+     * Creates the one Application instance. Reports ErrorCode::InvalidArgument when one already exists, and on
+     * Android when desc.android_application is null.
      */
     [[nodiscard]] static Opal::Expected<Opal::ScopePtr<Application>, ErrorCode> Create(const ApplicationDesc& desc = ApplicationDesc{});
 
@@ -100,6 +112,7 @@ public:
     void OnWindowSizeChanged(const GenericWindow& window, i32 width, i32 height) override;
     void OnMonitorChange() override;
     void OnWindowDpiChanged(const GenericWindow& window, f32 new_dpi_scale) override;
+    void OnWindowNativeHandleChanged(const GenericWindow& window) override;
 
     bool OnButtonDown(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;
     bool OnButtonUp(const GenericWindow& window, InputPrimitive key_code, bool is_repeated) override;

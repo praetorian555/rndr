@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Forge asks for Vulkan 1.3 and refuses anything less, so the installer and the store refuse it first. -->
+    <uses-feature
+        android:name="android.hardware.vulkan.version"
+        android:required="true"
+        android:version="0x403000" />
+
+    <application
+        android:hasCode="false"
+        android:label="rndr modern-vulkan">
+
+        <!-- The configuration changes make a rotation a resize of the running activity rather than a restart of it. -->
+        <activity
+            android:name="android.app.NativeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="modern-vulkan" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

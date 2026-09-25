@@ -2,9 +2,9 @@
 
 #include "opal/math-base.h"
 
-#if defined(OPAL_PLATFORM_WINDOWS)
+#if RNDR_WINDOWS
 #include "rndr/platform/windows-header.hpp"
-#elif defined(OPAL_PLATFORM_LINUX)
+#elif RNDR_LINUX
 #include <xcb/xcb.h>
 #endif
 
@@ -55,7 +55,7 @@ Opal::Expected<Rndr::Forge::Surface, Rndr::ErrorCode> Rndr::Forge::Surface::Crea
 {
     using Result = Opal::Expected<Surface, ErrorCode>;
 
-#if defined(OPAL_PLATFORM_WINDOWS)
+#if RNDR_WINDOWS
     Surface surface;
     surface.m_window = window;
     VkWin32SurfaceCreateInfoKHR surface_create_info{};
@@ -66,7 +66,24 @@ Opal::Expected<Rndr::Forge::Surface, Rndr::ErrorCode> Rndr::Forge::Surface::Crea
                                  "vkCreateWin32SurfaceKHR", Result);
     surface.m_context = &context;
     return Result(std::move(surface));
-#elif defined(OPAL_PLATFORM_LINUX)
+#elif RNDR_ANDROID
+    // The activity has no window while it is in the background. A surface over nothing is not something to
+    // retry from in here; the application builds it again when the window comes back.
+    if (window.GetNativeHandle() == nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: the activity has no native window to create a surface over, it is in the background");
+        return Result(ErrorCode::PlatformError);
+    }
+    Surface surface;
+    surface.m_window = window;
+    VkAndroidSurfaceCreateInfoKHR surface_create_info{};
+    surface_create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+    surface_create_info.window = reinterpret_cast<ANativeWindow*>(window.GetNativeHandle());
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateAndroidSurfaceKHR(context.GetInstance(), &surface_create_info, nullptr, &surface.m_surface),
+                                 "vkCreateAndroidSurfaceKHR", Result);
+    surface.m_context = &context;
+    return Result(std::move(surface));
+#elif RNDR_LINUX
     Surface surface;
     surface.m_window = window;
     VkXcbSurfaceCreateInfoKHR surface_create_info{};

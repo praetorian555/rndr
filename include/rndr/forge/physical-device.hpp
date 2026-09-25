@@ -65,8 +65,9 @@ public:
      * device created before any window exists has to ask. On Windows this is
      * vkGetPhysicalDeviceWin32PresentationSupportKHR, which answers per family with nothing but the
      * physical device. On Linux the equivalent XCB query needs a connection and a visual, both of which
-     * only a window supplies, so the graphics-capable family is returned instead; whether it can present
-     * to a particular surface is verified when a swap chain is created over one.
+     * only a window supplies, and Android has no such query, so on both the graphics-capable family is
+     * returned instead; whether it can present to a particular surface is verified when a swap chain is
+     * created over one.
      *
      * Empty when no family can present, which is an answer rather than a failure.
      */

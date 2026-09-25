@@ -477,7 +477,7 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSo
     ShaderCacheKey key;
     if (desc.cache != nullptr)
     {
-        key = ShaderCacheKey::Make(source, desc.entry_point, ShaderOutputFormat::SpirV);
+        key = desc.cache->MakeKey(source, desc.entry_point, ShaderOutputFormat::SpirV);
         const Opal::DynamicArray<u8> cached = desc.cache->Find(key);
         if (!cached.IsEmpty())
         {
@@ -485,6 +485,7 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSo
         }
     }
 
+#if RNDR_SHADER_COMPILER
     // ShaderCompiler is shared with Canvas and reports the same way everything else here does, so the codes
     // below travel out as they are. What went wrong is already in the log by the time one arrives.
     Opal::DynamicArray<u8> code;
@@ -509,6 +510,12 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSo
         desc.cache->Store(key, {code.GetData(), code.GetSize()});
     }
     return FromSpirvInMemory(device, Opal::ArrayView<const u8>(code.GetData(), code.GetSize()), desc);
+#else
+    RNDR_LOG_ERROR("Forge: this build has no shader compiler and the cache has no code for entry point '{}'; load SPIR-V "
+                   "compiled on the host instead",
+                   desc.entry_point.GetData());
+    return Result(ErrorCode::FeatureNotSupported);
+#endif
 }
 
 Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSource(const Device& device, const Opal::StringUtf8& path,

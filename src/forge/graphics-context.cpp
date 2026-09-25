@@ -1,8 +1,8 @@
 #include "rndr/forge/graphics-context.hpp"
 
-#include "opal/defines.h"
+#include "rndr/definitions.hpp"
 
-#if defined(OPAL_PLATFORM_WINDOWS)
+#if RNDR_WINDOWS
 #include "rndr/platform/windows-header.hpp"
 #endif
 
@@ -467,10 +467,12 @@ Opal::DynamicArray<const char*> Rndr::Forge::GraphicsContext::GetRequiredInstanc
     }
     // We need this extension if we want to display the image to the display
     required_extension_names.PushBack(VK_KHR_SURFACE_EXTENSION_NAME);
-#if defined(OPAL_PLATFORM_WINDOWS)
+#if RNDR_WINDOWS
     // We need it if we want to display the image to the display on Windows
     required_extension_names.PushBack(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#elif defined(OPAL_PLATFORM_LINUX)
+#elif RNDR_ANDROID
+    required_extension_names.PushBack(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+#elif RNDR_LINUX
     // Same on Linux, where the window system is X11 reached through XCB
     required_extension_names.PushBack(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
 #endif

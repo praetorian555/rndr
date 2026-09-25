@@ -4,6 +4,8 @@
 
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-window.hpp"
+#elif RNDR_ANDROID
+#include "rndr/platform/android-window.hpp"
 #elif RNDR_LINUX
 #include "rndr/platform/linux-window.hpp"
 #endif
@@ -42,6 +44,8 @@ Opal::Expected<Opal::Ref<Rndr::GenericWindow>, Rndr::ErrorCode> Rndr::PlatformAp
 
 #if RNDR_WINDOWS
     Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> window_result = WindowsWindow::Create(resolved_desc);
+#elif RNDR_ANDROID
+    Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> window_result = AndroidWindow::Create(resolved_desc);
 #elif RNDR_LINUX
     Opal::Expected<Opal::ScopePtr<GenericWindow>, ErrorCode> window_result = LinuxWindow::Create(resolved_desc);
 #else

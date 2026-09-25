@@ -444,6 +444,10 @@ Rndr::ErrorCode Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source,
     // Preserve original Slang entry-point names in the emitted SPIR-V instead of renaming them
     // all to "main". This lets downstream consumers (e.g. spirv-reflect) look up entry points by
     // their original name. GLSL has no such option - its entry point is always "main".
+    //
+    // The SPIR-V options here - this one, the spirv_1_5 profile and GENERATE_SPIRV_DIRECTLY below - are
+    // repeated as slangc flags in RNDR_SLANGC_OPTIONS (cmake/shaders.cmake), which compiles Android's
+    // shaders on the host. Change one list and the other has to follow; a [forge] case compares the output.
     slang::CompilerOptionEntry session_options[] = {
         {slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
     };
