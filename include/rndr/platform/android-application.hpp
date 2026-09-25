@@ -149,6 +149,12 @@ private:
     /** The window's size changed or may have - rotation reports a config change before the resize. */
     void RefreshWindowSize();
     void RefreshDpiScale();
+    /**
+     * The window's size, from WindowMetrics from API 30. Not ANativeWindow_getWidth/Height, which are the size of the
+     * buffers last asked for: once a pre-rotated swap chain exists that is the display's natural orientation rather
+     * than the window's, and right after a turn of the screen it was seen to be either.
+     */
+    [[nodiscard]] Vector2i QueryWindowSize(ANativeWindow* native_window) const;
     void UpdateModifierKeys(i32 meta_state);
     /** Reports the pointer's new position as mouse motion, and remembers it as the cursor position. */
     void MovePointer(const Vector2i& position);

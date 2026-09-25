@@ -561,32 +561,81 @@ void Rndr::AndroidApplication::DeliverPendingCharacters()
 namespace
 {
 /**
- * The window's system bar and display cutout insets, from
- * WindowManager.getCurrentWindowMetrics().getWindowInsets().getInsets(Type.systemBars() | Type.displayCutout()).
- * A WindowManager query rather than a View's, so it is answered on the calling thread without the UI thread.
+ * WindowManager.getCurrentWindowMetrics(), API 30. A WindowManager query rather than a View's, so it is answered on the
+ * calling thread without the UI thread.
+ * @return The metrics, a local reference in the scope's frame, or null when a call threw, which the scope has logged.
  */
-Opal::Expected<Rndr::SafeInsets, Rndr::ErrorCode> ReadSafeInsets(const Rndr::JniScope& jni)
+jobject GetCurrentWindowMetrics(const Rndr::JniScope& jni)
 {
-    using Result = Opal::Expected<Rndr::SafeInsets, Rndr::ErrorCode>;
-
     jmethodID get_window_manager = jni->GetMethodID(jni->GetObjectClass(jni.GetActivity()), "getWindowManager", "()Landroid/view/WindowManager;");
     if (jni.Threw("looking up Activity.getWindowManager"))
     {
-        return Result(Rndr::ErrorCode::PlatformError);
+        return nullptr;
     }
     jobject window_manager = jni->CallObjectMethod(jni.GetActivity(), get_window_manager);
     if (jni.Threw("getting the window manager") || window_manager == nullptr)
     {
-        return Result(Rndr::ErrorCode::PlatformError);
+        return nullptr;
     }
     jmethodID get_current_window_metrics =
         jni->GetMethodID(jni->GetObjectClass(window_manager), "getCurrentWindowMetrics", "()Landroid/view/WindowMetrics;");
     if (jni.Threw("looking up WindowManager.getCurrentWindowMetrics"))
     {
-        return Result(Rndr::ErrorCode::PlatformError);
+        return nullptr;
     }
     jobject metrics = jni->CallObjectMethod(window_manager, get_current_window_metrics);
-    if (jni.Threw("getting the window metrics") || metrics == nullptr)
+    if (jni.Threw("getting the window metrics"))
+    {
+        return nullptr;
+    }
+    return metrics;
+}
+
+/** The window's size in pixels, from WindowManager.getCurrentWindowMetrics().getBounds(). */
+Opal::Expected<Rndr::Vector2i, Rndr::ErrorCode> ReadWindowSize(const Rndr::JniScope& jni)
+{
+    using Result = Opal::Expected<Rndr::Vector2i, Rndr::ErrorCode>;
+
+    jobject metrics = GetCurrentWindowMetrics(jni);
+    if (metrics == nullptr)
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jmethodID get_bounds = jni->GetMethodID(jni->GetObjectClass(metrics), "getBounds", "()Landroid/graphics/Rect;");
+    if (jni.Threw("looking up WindowMetrics.getBounds"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jobject bounds = jni->CallObjectMethod(metrics, get_bounds);
+    if (jni.Threw("getting the window bounds") || bounds == nullptr)
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    jclass rect_class = jni->GetObjectClass(bounds);
+    jmethodID width = jni->GetMethodID(rect_class, "width", "()I");
+    jmethodID height = jni->GetMethodID(rect_class, "height", "()I");
+    if (jni.Threw("looking up Rect.width and Rect.height"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    const Rndr::Vector2i size(jni->CallIntMethod(bounds, width), jni->CallIntMethod(bounds, height));
+    if (jni.Threw("measuring the window bounds"))
+    {
+        return Result(Rndr::ErrorCode::PlatformError);
+    }
+    return Result(size);
+}
+
+/**
+ * The window's system bar and display cutout insets, from
+ * WindowManager.getCurrentWindowMetrics().getWindowInsets().getInsets(Type.systemBars() | Type.displayCutout()).
+ */
+Opal::Expected<Rndr::SafeInsets, Rndr::ErrorCode> ReadSafeInsets(const Rndr::JniScope& jni)
+{
+    using Result = Opal::Expected<Rndr::SafeInsets, Rndr::ErrorCode>;
+
+    jobject metrics = GetCurrentWindowMetrics(jni);
+    if (metrics == nullptr)
     {
         return Result(Rndr::ErrorCode::PlatformError);
     }
@@ -673,6 +722,23 @@ void Rndr::AndroidApplication::RefreshSafeInsets()
     m_window->m_safe_insets = insets.GetValue();
     RNDR_LOG_INFO("Safe insets: left {}, top {}, right {}, bottom {}", m_window->m_safe_insets.left, m_window->m_safe_insets.top,
                   m_window->m_safe_insets.right, m_window->m_safe_insets.bottom);
+}
+
+Rndr::Vector2i Rndr::AndroidApplication::QueryWindowSize(ANativeWindow* native_window) const
+{
+    if (android_get_device_api_level() >= 30)
+    {
+        const JniScope jni(m_app->activity);
+        if (jni.IsValid())
+        {
+            const Opal::Expected<Vector2i, ErrorCode> size = ReadWindowSize(jni);
+            if (size.HasValue() && size.GetValue().x > 0 && size.GetValue().y > 0)
+            {
+                return size.GetValue();
+            }
+        }
+    }
+    return {ANativeWindow_getWidth(native_window), ANativeWindow_getHeight(native_window)};
 }
 
 Rndr::ErrorCode Rndr::AndroidApplication::ExtractAssets(const char* asset_directory, const Opal::StringUtf8& destination)
@@ -790,8 +856,9 @@ void Rndr::AndroidApplication::HandleCommand(i32 command)
             m_window->m_native_window = m_app->window;
             // The rate was asked of the native window this one replaces.
             (void)ApplyPreferredRefreshRate();
-            m_window->m_width = ANativeWindow_getWidth(m_app->window);
-            m_window->m_height = ANativeWindow_getHeight(m_app->window);
+            const Vector2i new_size = QueryWindowSize(m_app->window);
+            m_window->m_width = new_size.x;
+            m_window->m_height = new_size.y;
             m_message_handler->OnWindowNativeHandleChanged(*m_window);
             if (m_window->GetSize() != old_size)
             {
@@ -860,8 +927,9 @@ void Rndr::AndroidApplication::RefreshWindowSize()
     {
         return;
     }
-    const i32 width = ANativeWindow_getWidth(m_window->m_native_window);
-    const i32 height = ANativeWindow_getHeight(m_window->m_native_window);
+    const Vector2i size = QueryWindowSize(m_window->m_native_window);
+    const i32 width = size.x;
+    const i32 height = size.y;
     if (width == m_window->m_width && height == m_window->m_height)
     {
         return;
@@ -1302,7 +1370,7 @@ Rndr::MonitorInfo Rndr::AndroidApplication::GetPrimaryMonitor() const
     monitor.name = "Display";
     if (m_app->window != nullptr)
     {
-        monitor.size = Vector2i(ANativeWindow_getWidth(m_app->window), ANativeWindow_getHeight(m_app->window));
+        monitor.size = QueryWindowSize(m_app->window);
     }
     else if (m_window != nullptr)
     {
