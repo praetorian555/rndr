@@ -445,9 +445,10 @@ Rndr::ErrorCode Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source,
     // all to "main". This lets downstream consumers (e.g. spirv-reflect) look up entry points by
     // their original name. GLSL has no such option - its entry point is always "main".
     //
-    // The SPIR-V options here - this one, the spirv_1_5 profile and GENERATE_SPIRV_DIRECTLY below - are
-    // repeated as slangc flags in RNDR_SLANGC_OPTIONS (cmake/shaders.cmake), which compiles Android's
-    // shaders on the host. Change one list and the other has to follow; a [forge] case compares the output.
+    // The SPIR-V options here - this one, the spirv_1_5 profile and GENERATE_SPIRV_DIRECTLY below, and the
+    // row-major matrix layout - are repeated as slangc flags in RNDR_SLANGC_OPTIONS (cmake/shaders.cmake), which
+    // compiles Android's shaders on the host. Change one list and the other has to follow; a [forge] case compares
+    // the output. The layout is the session's default already and slangc's opposite, so it is spelled out here.
     slang::CompilerOptionEntry session_options[] = {
         {slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
     };
@@ -470,6 +471,7 @@ Rndr::ErrorCode Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source,
     }
     session_desc.targets = &target_desc;
     session_desc.targetCount = 1;
+    session_desc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_ROW_MAJOR;
     // No search paths, so the string below is the whole of what Slang sees and hashing it is exact. Setting
     // searchPaths here would let a module pull in a file this never reads, and ShaderCacheKey would go on
     // claiming a hit for a source that changed underneath it.

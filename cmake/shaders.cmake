@@ -5,7 +5,7 @@
 # src/core/shader-compiler.cpp), and the two lists have to stay equal: a shader compiled here is otherwise not
 # the one the desktop compiles from the same source. The [forge] case "Forge slangc and ShaderCompiler produce
 # the same module" runs slangc with this list and compares the bytes.
-set(RNDR_SLANGC_OPTIONS -target spirv -profile spirv_1_5 -emit-spirv-directly -fvk-use-entrypoint-name)
+set(RNDR_SLANGC_OPTIONS -target spirv -profile spirv_1_5 -emit-spirv-directly -fvk-use-entrypoint-name -matrix-layout-row-major)
 
 # Where rndr_compile_shader writes, one directory per target. Settable, so that whatever packages the files - the
 # Gradle build in samples/android - can name a directory it knows rather than one under a build tree it does not.
