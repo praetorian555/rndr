@@ -148,7 +148,8 @@ void Run(android_app* android_application)
     constexpr f64 k_title_update_period_seconds = 0.25;
 
     auto rndr_app = Require(Rndr::Application::Create({.enable_input_system = true, .android_application = android_application}));
-    auto window = Require(rndr_app->CreateGenericWindow({}));
+    // Landscape on a phone, either way up; a desktop window has no orientation and ignores it.
+    auto window = Require(rndr_app->CreateGenericWindow({.orientation = Rndr::ScreenOrientation::Landscape}));
 
     // Where the model and its textures are read from. On Android the APK's assets are copied out to the app's
     // own storage first, so that the loaders open them by path there the way they do here; the compiled shaders
@@ -351,6 +352,18 @@ void Run(android_app* android_application)
         .AddAction("Exit").GetValue()
         .Bind(Rndr::Key::Escape, Rndr::Trigger::Pressed)
         .OnButton([&window](Rndr::Trigger, bool) { window->RequestClose(); });
+    // Turns a phone between landscape and portrait. A desktop window records it and stays as it is.
+    base_input_context
+        .AddAction("Toggle Orientation").GetValue()
+        .Bind(Rndr::Key::O, Rndr::Trigger::Pressed)
+        .OnButton(
+            [&window](Rndr::Trigger, bool)
+            {
+                const Rndr::ScreenOrientation next = window->GetOrientation() == Rndr::ScreenOrientation::Portrait
+                                                         ? Rndr::ScreenOrientation::Landscape
+                                                         : Rndr::ScreenOrientation::Portrait;
+                RequireOk(window->SetOrientation(next));
+            });
     const Rndr::FlyCameraDesc fly_camera_desc{.start_position = {0.0f, 1.0f, 10.0f},
                                               .start_yaw_radians = 0,
                                               .projection_desc = {.near = 0.1f, .far = 32.0f, .complexity = Rndr::ApiComplexity::Advanced}};
