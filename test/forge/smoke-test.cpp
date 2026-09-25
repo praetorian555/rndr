@@ -14926,6 +14926,25 @@ TEST_CASE("Forge shaders built from SPIR-V rather than from source", "[forge]")
  *
  * Needs no device, only the two compilers.
  */
+/**
+ * A matrix in a buffer, for the comparison below. slangc lays matrices out column-major unless told otherwise and
+ * the session defaults to row-major, and a shader with no matrix in it compiles to the same bytes either way.
+ */
+constexpr const char* k_matrix_compute_source = R"(
+struct Transforms
+{
+    float4x4 matrix;
+};
+RWStructuredBuffer<float4> output_buffer;
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void main_compute(uint3 thread_id : SV_DispatchThreadID, uniform Transforms* transforms)
+{
+    output_buffer[thread_id.x] = mul(transforms->matrix, float4(1.0, 2.0, 3.0, 1.0));
+}
+)";
+
 TEST_CASE("Forge slangc and ShaderCompiler produce the same module", "[forge]")
 {
 #if !defined(RNDR_TEST_SLANGC)
@@ -14936,10 +14955,10 @@ TEST_CASE("Forge slangc and ShaderCompiler produce the same module", "[forge]")
     {
         SKIP("slangc is not where the build said it would be.");
     }
+    const char* source = GENERATE(k_compute_source, k_matrix_compute_source);
     const Opal::StringUtf8 source_path = TestScratchPath("slangc-equivalence.slang");
     const Opal::StringUtf8 output_path = TestScratchPath("slangc-equivalence.spv");
-    REQUIRE(Opal::WriteBytesToFile(source_path, {reinterpret_cast<const u8*>(k_compute_source), strlen(k_compute_source)}) ==
-            Opal::ErrorCode::Success);
+    REQUIRE(Opal::WriteBytesToFile(source_path, {reinterpret_cast<const u8*>(source), strlen(source)}) == Opal::ErrorCode::Success);
     // Left over from an earlier run, it would be compared in place of what slangc failed to write.
     if (Opal::Exists(output_path))
     {
@@ -14960,7 +14979,7 @@ TEST_CASE("Forge slangc and ShaderCompiler produce the same module", "[forge]")
     Opal::Expected<Opal::DynamicArray<u8>, Opal::ErrorCode> read = Opal::ReadFileAsBytes(output_path);
     REQUIRE(read.HasValue());
     const Opal::DynamicArray<u8> from_slangc = std::move(read.GetValue());
-    const Opal::DynamicArray<u8> from_compiler = CompileToSpirv(k_compute_source, "main_compute");
+    const Opal::DynamicArray<u8> from_compiler = CompileToSpirv(source, "main_compute");
     REQUIRE(!from_slangc.IsEmpty());
     REQUIRE(from_slangc == from_compiler);
 #endif
