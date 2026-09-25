@@ -117,7 +117,10 @@ class GenericWindow
 {
 public:
     using DpiChangeDelegate = Opal::MultiDelegate<void(f32 /*new_dpi_scale*/)>;
-    /** Fired when the OS reports a DPI change for this window. */
+    /**
+     * Fired when the OS reports a DPI change for this window. On Windows the window then resizes to the
+     * rect the OS suggests, so it keeps its size in logical units, and the resize is reported as usual.
+     */
     DpiChangeDelegate on_dpi_change;
 
     virtual ~GenericWindow() = default;

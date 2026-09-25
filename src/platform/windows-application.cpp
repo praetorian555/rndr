@@ -260,6 +260,13 @@ Rndr::i32 Rndr::WindowsApplication::ProcessMessage(HWND window_handle, UINT msg_
             window_checked.SetDpiScale(new_dpi_scale);
             window_checked.on_dpi_change.Execute(new_dpi_scale);
             m_message_handler->OnWindowDpiChanged(window_checked, new_dpi_scale);
+            // Take the rect Windows suggests, which keeps the window the same size in logical
+            // units on the new monitor. The resize arrives as WM_SIZE, after the handlers above
+            // have the new scale.
+            // NOLINTNEXTLINE
+            const RECT* suggested = reinterpret_cast<const RECT*>(param_l);
+            SetWindowPos(window_handle, nullptr, suggested->left, suggested->top, suggested->right - suggested->left,
+                         suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
             return 0;
         }
         case WM_INPUT:
