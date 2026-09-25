@@ -252,8 +252,10 @@ Input, all from `onInputEvent`:
 - Safe insets: `GenericWindow::GetSafeInsets` is the system bars and the display cutout, from
   `WindowManager.getCurrentWindowMetrics()` through JNI - a WindowManager query, so it needs no UI thread. The
   target SDK makes the activity edge to edge, so the NDK's content rect is the whole window and says nothing.
-  Read when the window arrives and on every resize and configuration change, before the resize is reported;
-  bars that come and go without a resize are not followed, which nothing does until immersive mode exists.
+  Read when the window arrives and on every resize and configuration change, before the resize is reported,
+  and whenever `RndrActivity` sees the window's insets change: a turn from one landscape to the other brings no
+  resize and no configuration change, and without that the cutout and the navigation bar stayed on the sides they
+  had left. Under a plain NativeActivity only the resizes are followed.
   API 30 and later; below it they are zero, and no device that old has the Vulkan 1.3 Forge needs.
 - Clipboard: `ClipboardManager` through JNI (`src/platform/android-jni.hpp`), with the text crossing as
   UTF-16, since CheckJNI aborts a debuggable app that gives `NewStringUTF` real UTF-8. Android 10 and later

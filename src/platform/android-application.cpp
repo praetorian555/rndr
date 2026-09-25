@@ -104,8 +104,8 @@ Rndr::f32 ReadDpiScale(const android_app* app)
 }
 
 /**
- * Guards AndroidApplication's committed text queue and the pointer to the application that owns it, which the UI thread
- * reaches through QueueCommittedText while android_main may be tearing the application down.
+ * Guards what the UI thread hands AndroidApplication - the committed text queue and the stale insets flag - and the
+ * pointer to the application that owns them, which the UI thread reaches while android_main may be tearing it down.
  */
 std::mutex g_text_input_mutex;
 
@@ -131,6 +131,12 @@ void JNICALL NativeCommitText(JNIEnv* env, jclass /*activity_class*/, jstring te
         return;
     }
     Rndr::AndroidApplication::QueueCommittedText(code_points);
+}
+
+/** RndrActivity.nativeWindowInsetsChanged. Runs on the UI thread. */
+void JNICALL NativeWindowInsetsChanged(JNIEnv* /*env*/, jclass /*activity_class*/)
+{
+    Rndr::AndroidApplication::QueueSafeInsetsRefresh();
 }
 
 /**
@@ -266,6 +272,16 @@ void Rndr::AndroidApplication::ProcessSystemEvents(u32 timeout_ms)
         }
     }
     DeliverPendingCharacters();
+    bool is_safe_insets_stale = false;
+    {
+        const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+        is_safe_insets_stale = m_is_safe_insets_stale;
+        m_is_safe_insets_stale = false;
+    }
+    if (is_safe_insets_stale)
+    {
+        RefreshSafeInsets();
+    }
 }
 
 Rndr::ErrorCode Rndr::AndroidApplication::WaitForNativeWindow()
@@ -375,13 +391,14 @@ void Rndr::AndroidApplication::SetUpJava()
         }
     }
 
-    // RndrActivity declares nativeCommitText; a plain NativeActivity does not, and registering it there throws.
-    // That is an app that chose key events only, not an error.
+    // RndrActivity declares these; a plain NativeActivity does not, and registering them there throws. That is an
+    // app that chose key events only, and insets read on resizes only, not an error.
     jclass activity_class = jni->GetObjectClass(jni.GetActivity());
     const JNINativeMethod natives[] = {
         {"nativeCommitText", "(Ljava/lang/String;)V", reinterpret_cast<void*>(&NativeCommitText)},
+        {"nativeWindowInsetsChanged", "()V", reinterpret_cast<void*>(&NativeWindowInsetsChanged)},
     };
-    if (jni->RegisterNatives(activity_class, natives, 1) != JNI_OK)
+    if (jni->RegisterNatives(activity_class, natives, static_cast<jint>(sizeof(natives) / sizeof(natives[0]))) != JNI_OK)
     {
         jni->ExceptionClear();
         RNDR_LOG_INFO("The activity is not dev.rndr.RndrActivity, so the on-screen keyboard can only send key events");
@@ -532,6 +549,17 @@ void Rndr::AndroidApplication::QueueCommittedText(const Opal::StringUtf32& text)
             g_android_app->m_pending_characters.PushBack(reported);
         }
     }
+    ALooper_wake(g_android_app->m_app->looper);
+}
+
+void Rndr::AndroidApplication::QueueSafeInsetsRefresh()
+{
+    const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+    if (g_android_app == nullptr)
+    {
+        return;
+    }
+    g_android_app->m_is_safe_insets_stale = true;
     ALooper_wake(g_android_app->m_app->looper);
 }
 

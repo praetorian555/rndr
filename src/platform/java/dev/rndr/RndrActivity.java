@@ -30,6 +30,21 @@ public class RndrActivity extends NativeActivity {
         super.onCreate(savedInstanceState);
         textInputView = new TextInputView(this);
         addContentView(textInputView, new ViewGroup.LayoutParams(1, 1));
+        // A turn from one landscape to the other changes neither the size nor the configuration, so native code hears
+        // of nothing; the insets swap sides all the same, and this is where that shows.
+        getWindow().getDecorView().setOnApplyWindowInsetsListener((view, insets) -> {
+            notifyWindowInsetsChanged();
+            return view.onApplyWindowInsets(insets);
+        });
+    }
+
+    private static void notifyWindowInsetsChanged() {
+        try {
+            nativeWindowInsetsChanged();
+        } catch (UnsatisfiedLinkError e) {
+            // The first insets can arrive before android_main has registered the method. The window reads its insets
+            // when it is created, so there is nothing to catch up on.
+        }
     }
 
     /**
@@ -56,6 +71,9 @@ public class RndrActivity extends NativeActivity {
 
     /** Text the keyboard committed. Registered by AndroidApplication; runs on the UI thread. */
     static native void nativeCommitText(String text);
+
+    /** The window's insets changed. Registered by AndroidApplication; runs on the UI thread. */
+    static native void nativeWindowInsetsChanged();
 
     /**
      * A view with nothing to draw, there to own the InputConnection. Focusable only while text input is active: a

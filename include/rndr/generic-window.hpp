@@ -279,9 +279,9 @@ public:
 
     /**
      * The insets the system takes from this window. All zero on the desktop, where the window's client area is the
-     * application's. On Android they are read when the window arrives and again when it is resized or the
-     * configuration changes, before the resize is reported, so reading them is free and a resize handler already
-     * sees the new ones.
+     * application's. On Android they are read when the window arrives, again when it is resized or the
+     * configuration changes, before the resize is reported, and when the system says they changed - as on a turn
+     * from one landscape to the other - so reading them is free and a resize handler already sees the new ones.
      */
     [[nodiscard]] SafeInsets GetSafeInsets() const { return m_safe_insets; }
 

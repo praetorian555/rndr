@@ -129,6 +129,12 @@ public:
     static void QueueCommittedText(const Opal::StringUtf32& text);
 
     /**
+     * The window's insets changed, as RndrActivity hears on the UI thread - including on a turn from one landscape to
+     * the other, which brings no resize or configuration change. Read again at the next ProcessSystemEvents.
+     */
+    static void QueueSafeInsetsRefresh();
+
+    /**
      * Hand the window's preferred refresh rate to its native window, through ANativeWindow_setFrameRate. A native
      * window forgets it when it is replaced, so this runs again for each one, and again on every resize and
      * configuration change: on a cold start into landscape the rate asked for at creation was gone by the first
@@ -194,6 +200,8 @@ private:
     static void OnRefreshRateChanged(int64_t vsync_period_nanos, void* data);
     /** Committed text waiting for ProcessSystemEvents. Guarded by a mutex in the source, since the UI thread fills it. */
     Opal::DynamicArray<uchar32> m_pending_characters;
+    /** Set by QueueSafeInsetsRefresh, under the same mutex. */
+    bool m_is_safe_insets_stale = false;
 
     void SetUpJava();
     void TearDownJava();
