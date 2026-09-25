@@ -9,6 +9,7 @@
 #endif
 
 #include "opal/container/in-place-array.h"
+#include "opal/math/transform.h"
 
 #include "rndr/forge/device.hpp"
 #include "rndr/forge/physical-device.hpp"
@@ -188,6 +189,7 @@ Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
     : m_desc(other.m_desc),
       m_swap_chain(other.m_swap_chain),
       m_extent(other.m_extent),
+      m_rotation(other.m_rotation),
       m_device(std::move(other.m_device)),
       m_surface(std::move(other.m_surface)),
       m_color_textures(std::move(other.m_color_textures)),
@@ -200,6 +202,7 @@ Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
     other.m_color_textures.Clear();
     other.m_desc = {};
     other.m_extent = {};
+    other.m_rotation = SurfaceRotation::None;
     other.m_current_texture_index = k_invalid_texture_index;
 }
 
@@ -214,6 +217,7 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     m_depth_texture = std::move(other.m_depth_texture);
     m_desc = other.m_desc;
     m_extent = other.m_extent;
+    m_rotation = other.m_rotation;
     m_current_texture_index = other.m_current_texture_index;
 
     other.m_swap_chain = VK_NULL_HANDLE;
@@ -222,6 +226,7 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     other.m_color_textures.Clear();
     other.m_desc = {};
     other.m_extent = {};
+    other.m_rotation = SurfaceRotation::None;
     other.m_current_texture_index = k_invalid_texture_index;
 
     return *this;
@@ -265,6 +270,7 @@ void Rndr::Forge::SwapChain::Destroy()
     m_device = nullptr;
     m_desc = {};
     m_extent = {};
+    m_rotation = SurfaceRotation::None;
 }
 
 Opal::Expected<const Rndr::Forge::Texture&, Rndr::ErrorCode> Rndr::Forge::SwapChain::GetCurrentColorTexture() const
@@ -413,7 +419,75 @@ VkExtent2D SelectExtent(const VkSurfaceCapabilitiesKHR& capabilities, const Rndr
         .height =
             Opal::Clamp(static_cast<Rndr::u32>(window_size.y), capabilities.minImageExtent.height, capabilities.maxImageExtent.height)};
 }
+
+/**
+ * The rotation the surface is shown at, when it is one a swap chain can be created pre-rotated by. A mirrored or an
+ * inherited transform is left to the presentation engine, which is where it was before pre-rotation existed.
+ */
+Rndr::Forge::SurfaceRotation SelectRotation(const VkSurfaceCapabilitiesKHR& capabilities)
+{
+    const VkSurfaceTransformFlagBitsKHR current = capabilities.currentTransform;
+    if ((capabilities.supportedTransforms & current) == 0)
+    {
+        return Rndr::Forge::SurfaceRotation::None;
+    }
+    switch (current)
+    {
+        case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+            return Rndr::Forge::SurfaceRotation::Clockwise90;
+        case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+            return Rndr::Forge::SurfaceRotation::Clockwise180;
+        case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+            return Rndr::Forge::SurfaceRotation::Clockwise270;
+        default:
+            return Rndr::Forge::SurfaceRotation::None;
+    }
+}
+
+VkSurfaceTransformFlagBitsKHR ToVkSurfaceTransform(Rndr::Forge::SurfaceRotation rotation)
+{
+    switch (rotation)
+    {
+        case Rndr::Forge::SurfaceRotation::Clockwise90:
+            return VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR;
+        case Rndr::Forge::SurfaceRotation::Clockwise180:
+            return VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR;
+        case Rndr::Forge::SurfaceRotation::Clockwise270:
+            return VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR;
+        default:
+            return VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    }
+}
 }  // namespace
+
+Rndr::Matrix4x4f Rndr::Forge::SwapChain::GetPreRotation() const
+{
+    // Counter-clockwise in clip space by the angle the display is turned clockwise, written out rather than built
+    // from a sine and a cosine so that the zeros are zeros.
+    Matrix4x4f result = Opal::Identity<f32>();
+    switch (m_rotation)
+    {
+        case SurfaceRotation::Clockwise90:
+            result.elements[0][0] = 0.0f;
+            result.elements[0][1] = -1.0f;
+            result.elements[1][0] = 1.0f;
+            result.elements[1][1] = 0.0f;
+            break;
+        case SurfaceRotation::Clockwise180:
+            result.elements[0][0] = -1.0f;
+            result.elements[1][1] = -1.0f;
+            break;
+        case SurfaceRotation::Clockwise270:
+            result.elements[0][0] = 0.0f;
+            result.elements[0][1] = 1.0f;
+            result.elements[1][0] = -1.0f;
+            result.elements[1][1] = 0.0f;
+            break;
+        default:
+            break;
+    }
+    return result;
+}
 
 Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
 {
@@ -460,16 +534,25 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
         return ErrorCode::FeatureNotSupported;
     }
 
-    const VkExtent2D extent = SelectExtent(swap_chain_support.capabilities, m_surface->GetWindow());
+    VkExtent2D extent = SelectExtent(swap_chain_support.capabilities, m_surface->GetWindow());
     if (extent.width == 0 || extent.height == 0)
     {
         // The window has no client area, so there is nothing to present to. Release the swap chain and let the next
         // AcquireTexture try again once the window is back.
         DestroySwapChain();
         m_extent = {};
+        m_rotation = SurfaceRotation::None;
         return ErrorCode::Success;
     }
-    RNDR_LOG_INFO("Swap chain extent: ({}, {})", extent.width, extent.height);
+    // Created in the display's natural orientation and turned by the presentation engine's own transform, which
+    // costs nothing, rather than in the window's and turned by a composition pass every frame. Android reports a
+    // surface that is not pre-rotated as suboptimal, so without this every present on a turned phone recreates it.
+    const SurfaceRotation rotation = SelectRotation(swap_chain_support.capabilities);
+    if (rotation == SurfaceRotation::Clockwise90 || rotation == SurfaceRotation::Clockwise270)
+    {
+        extent = {.width = extent.height, .height = extent.width};
+    }
+    RNDR_LOG_INFO("Swap chain extent: ({}, {}), rotated {} degrees", extent.width, extent.height, static_cast<i32>(rotation) * 90);
 
     u32 image_count = swap_chain_support.capabilities.minImageCount + 1;
     if (swap_chain_support.capabilities.maxImageCount > 0 && image_count > swap_chain_support.capabilities.maxImageCount)
@@ -545,7 +628,7 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
         create_info.pQueueFamilyIndices = nullptr;
     }
 
-    create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;  // swap_chain_support.capabilities.currentTransform;
+    create_info.preTransform = ToVkSurfaceTransform(rotation);
     // Opaque where the surface offers it. Android's surfaces offer only Inherit, which leaves it to the window, and
     // that window is opaque unless the app asks otherwise.
     const VkCompositeAlphaFlagsKHR supported_composite_alpha = swap_chain_support.capabilities.supportedCompositeAlpha;
@@ -579,6 +662,7 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
     }
     m_swap_chain = new_swap_chain;
     m_extent = extent;
+    m_rotation = rotation;
 
     result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, nullptr);
     if (result != VK_SUCCESS)

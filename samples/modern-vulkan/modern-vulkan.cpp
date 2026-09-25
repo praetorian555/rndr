@@ -424,7 +424,9 @@ void Run(android_app* android_application)
 
         // Update shader data
         PerFrameData shader_data;
-        shader_data.projection = controller.GetProjectionTransform();
+        // The camera projects for the window; on a phone held sideways the swap chain textures are the other way
+        // round, and the pre-rotation turns the frame to match them.
+        shader_data.projection = swap_chain.GetPreRotation() * controller.GetProjectionTransform();
         shader_data.view = controller.GetViewTransform();
         for (i32 i = 0; i < 3; i++)
         {

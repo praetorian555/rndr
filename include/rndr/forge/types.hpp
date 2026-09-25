@@ -274,6 +274,19 @@ enum class PresentMode : u8
     FifoRelaxed
 };
 
+/**
+ * How far the display is turned from its natural orientation, which is how far a swap chain's content has to be
+ * turned so that the presentation engine can show it as it is. Clockwise, as Vulkan counts the surface transform.
+ * Always None on the desktop; a phone held away from its natural orientation reports the angle it is held at.
+ */
+enum class SurfaceRotation : u8
+{
+    None,
+    Clockwise90,
+    Clockwise180,
+    Clockwise270
+};
+
 /** How the presentation engine interprets the values written into a swap chain image. */
 enum class ColorSpace : u8
 {

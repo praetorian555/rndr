@@ -11,6 +11,7 @@
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/math.hpp"
 #include "rndr/pixel-format.hpp"
 #include "rndr/types.hpp"
 
@@ -152,7 +153,23 @@ public:
     [[nodiscard]] bool IsValid() const { return m_swap_chain != VK_NULL_HANDLE; }
     [[nodiscard]] VkSwapchainKHR GetNativeSwapChain() const { return m_swap_chain; }
     [[nodiscard]] const SwapChainDesc& GetDesc() const { return m_desc; }
+    /**
+     * Size of the swap chain textures, in the display's natural orientation. That is the window's size turned back by
+     * GetRotation, so on a phone held sideways width and height are the window's the other way round. Viewport and
+     * scissor are set in this size; the aspect ratio of a projection comes from the window.
+     */
     [[nodiscard]] const VkExtent2D& GetExtent() const { return m_extent; }
+    /**
+     * How far the display is turned from its natural orientation. The swap chain is created pre-rotated by it, so the
+     * presentation engine shows the textures as they are, and whatever is rendered into them has to be turned to match:
+     * multiply the projection by GetPreRotation. Always SurfaceRotation::None on the desktop.
+     */
+    [[nodiscard]] SurfaceRotation GetRotation() const { return m_rotation; }
+    /**
+     * The clip space rotation that turns a frame rendered for the window into one for the swap chain textures, to be
+     * applied after the projection: `GetPreRotation() * projection`. The identity when GetRotation is None.
+     */
+    [[nodiscard]] Matrix4x4f GetPreRotation() const;
     [[nodiscard]] const Texture& GetColorTexture(u32 idx) const { return m_color_textures[idx]; }
     /** The same texture, mutable, since a barrier on it moves the layout it tracks. */
     [[nodiscard]] Texture& GetColorTexture(u32 idx) { return m_color_textures[idx]; }
@@ -213,6 +230,7 @@ private:
     SwapChainDesc m_desc;
     VkSwapchainKHR m_swap_chain = VK_NULL_HANDLE;
     VkExtent2D m_extent = {};
+    SurfaceRotation m_rotation = SurfaceRotation::None;
     Opal::Ref<const Device> m_device;
     Opal::Ref<const Surface> m_surface;
     Opal::DynamicArray<Texture> m_color_textures;

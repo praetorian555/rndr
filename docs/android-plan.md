@@ -277,10 +277,12 @@ As built (2026-09-25), where it differs from the above or the above left it open
   `dependencies.cmake` changes.
 
 `SelectExtent` needs nothing: Android reports the window size in `currentExtent`, and the no-window state
-is covered by the `IsMinimized()` check. What it does not do is pre-rotation: `preTransform` is
-`VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR` (`swap-chain.cpp:531`), and on a portrait device held in landscape
-that costs the compositor a rotation pass every frame. Honouring `currentTransform` means telling the
-caller to rotate its projection, which is an API change and a later item.
+is covered by the `IsMinimized()` check. The swap chain is pre-rotated: `preTransform` is the surface's
+`currentTransform`, the textures are created in the display's natural orientation (the extent turned back
+for 90 and 270), and `SwapChain::GetRotation` / `GetPreRotation` tell the caller to turn its projection to
+match. Identity was not an option on Android: a surface whose `preTransform` differs from
+`currentTransform` is reported suboptimal on every present, and a phone held sideways recreated its swap
+chain every frame until the process aborted. Desktop surfaces report identity, so nothing changes there.
 
 The validation layer comes from the Khronos Vulkan-ValidationLayers release that matches the 1.4.335
 headers - the android binaries archive - and rides in the APK's `jniLibs/arm64-v8a/`. The loader takes
