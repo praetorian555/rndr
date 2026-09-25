@@ -64,10 +64,10 @@ The other decisions:
 | Phase | State |
 |---|---|
 | 0 — toolchain and portability groundwork | Done |
-| 1 — AndroidApplication + AndroidWindow | Compiles; not run on a device |
-| 2 — Forge surface | Compiles; not run on a device |
-| 3 — shaders and assets | Host side checked on Windows and Linux; asset extraction not run on a device |
-| 4 — sample APK | The APK builds; not installed - no device |
+| 1 — AndroidApplication + AndroidWindow | Runs on a Galaxy A56 (SM-A566B, Xclipse 540) |
+| 2 — Forge surface | Runs on the A56, pre-rotated |
+| 3 — shaders and assets | Runs on the A56: SPIR-V compiled on the host, assets extracted on first launch |
+| 4 — sample APK | Runs on the A56: renders, touch look works; Home and back, and Back to exit, not checked |
 | 5 — tests on the device and CI | `rndr-test` builds for Android and the CI job is written; runner APK and device runs not started |
 
 Machine state on 2026-09-25: SDK at `F:\Android\Sdk` with NDK 30.0.16248370, platform-tools and the
@@ -407,7 +407,7 @@ same reason:
 4. Rotate the device: the resize path, and the swap chain recreated at the new extent.
 5. Back closes the app cleanly, with `android_main` returning rather than the process being killed.
 
-As built (2026-09-25) - the APK builds; none of the list above has run:
+As built (2026-09-25) - items 1 and 2 of the list above checked on a Galaxy A56, the rest not yet:
 
 - The module is `samples/android/modern-vulkan/` rather than `app/`, since Phase 5's runner is the second module
   of the same project. Gradle 9.8.0 through a committed wrapper, AGP 9.4.1, compile and target SDK 37, JDK 21.
