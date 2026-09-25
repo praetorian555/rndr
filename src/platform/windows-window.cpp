@@ -149,10 +149,13 @@ Rndr::ErrorCode Rndr::WindowsWindow::MoveTo(i32 pos_x, i32 pos_y)
     }
     m_pos_x = pos_x;
     m_pos_y = pos_y;
-    const BOOL rtn = MoveWindow(RNDR_TO_HWND(m_native_window_handle), pos_x, pos_y, m_width, m_height, TRUE);
+    // Position only: the window keeps whatever size it has now, which the OS may have changed since
+    // creation (a user resize, maximize, or a move to a monitor of another DPI).
+    const BOOL rtn =
+        SetWindowPos(RNDR_TO_HWND(m_native_window_handle), nullptr, pos_x, pos_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     if (rtn == 0)
     {
-        RNDR_LOG_ERROR("MoveWindow failed");
+        RNDR_LOG_ERROR("SetWindowPos failed");
         return ErrorCode::PlatformError;
     }
     return ErrorCode::Success;
