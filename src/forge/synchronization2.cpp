@@ -117,7 +117,8 @@ VkResult Rndr::Forge::QueueSubmit2(const Device& device, VkQueue queue, const Vk
         return vkQueueSubmit2(queue, 1, &submit_info, fence);
     }
     Opal::DynamicArray<VkSemaphore> wait_semaphores(submit_info.waitSemaphoreInfoCount);
-    Opal::DynamicArray<u64> wait_values(submit_info.waitSemaphoreInfoCount);
+    // uint64_t rather than u64: Vulkan points at the former, which is unsigned long on Linux and not unsigned long long.
+    Opal::DynamicArray<uint64_t> wait_values(submit_info.waitSemaphoreInfoCount);
     Opal::DynamicArray<VkPipelineStageFlags> wait_stages(submit_info.waitSemaphoreInfoCount);
     for (u32 i = 0; i < submit_info.waitSemaphoreInfoCount; ++i)
     {
@@ -128,7 +129,7 @@ VkResult Rndr::Forge::QueueSubmit2(const Device& device, VkQueue queue, const Vk
         wait_stages[static_cast<i32>(i)] = ToOriginalStages(device, info.stageMask, false);
     }
     Opal::DynamicArray<VkSemaphore> signal_semaphores(submit_info.signalSemaphoreInfoCount);
-    Opal::DynamicArray<u64> signal_values(submit_info.signalSemaphoreInfoCount);
+    Opal::DynamicArray<uint64_t> signal_values(submit_info.signalSemaphoreInfoCount);
     for (u32 i = 0; i < submit_info.signalSemaphoreInfoCount; ++i)
     {
         signal_semaphores[static_cast<i32>(i)] = submit_info.pSignalSemaphoreInfos[i].semaphore;
