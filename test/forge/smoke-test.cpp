@@ -919,6 +919,20 @@ TEST_CASE("Forge context and device", "[forge]")
     Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc()));
     REQUIRE(device.IsValid());
     REQUIRE(ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)).IsValid());
+
+    // Dynamic rendering wherever the device has it. On 1.1 a device without it records its passes as render passes,
+    // and the rest of the suite then runs through those; on 1.3 it would not have been chosen.
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    REQUIRE(device.UsesRenderPasses() == !device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
+#else
+    REQUIRE_FALSE(device.UsesRenderPasses());
+#endif
+    // The run meant to cover the render passes - under a layer hiding the extension - says so, so that one where the
+    // layer did not load fails here instead of passing on dynamic rendering.
+    if (ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_EXPECT_RENDER_PASSES"))
+    {
+        REQUIRE(device.UsesRenderPasses());
+    }
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 

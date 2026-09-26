@@ -84,6 +84,8 @@ void AliasPromotedCommands()
     // Dynamic rendering (VK_KHR_dynamic_rendering).
     vkCmdBeginRendering = vkCmdBeginRenderingKHR;
     vkCmdEndRendering = vkCmdEndRenderingKHR;
+    // What a device without dynamic rendering makes its render passes with (VK_KHR_create_renderpass2).
+    vkCreateRenderPass2 = vkCreateRenderPass2KHR;
     // The optional features DeviceFeatures names.
     vkGetBufferDeviceAddress = vkGetBufferDeviceAddressKHR;
     vkResetQueryPool = vkResetQueryPoolEXT;

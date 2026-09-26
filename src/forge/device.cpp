@@ -12,6 +12,8 @@
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
 
+#include "render-pass.hpp"
+
 Opal::DynamicArray<Rndr::u32> Rndr::Forge::QueueFamilyIndices::GetValidQueueFamilies() const
 {
     Opal::HashSet<u32> unique_indices(6);
@@ -214,6 +216,12 @@ struct FeatureChain
         // The extension structure is left out of the chain unless all three extensions are there, and then it
         // reports the feature; without them the feature is not there however the device answers.
         vk13.dynamicRendering = has_dynamic_rendering ? dynamic_rendering.dynamicRendering : VK_FALSE;
+        // Local read is built on dynamic rendering, and a device without it renders through render passes, which have
+        // no local read to offer. A driver would not list the extension alone; a layer hiding extensions can.
+        if (!has_dynamic_rendering)
+        {
+            local_read.dynamicRenderingLocalRead = VK_FALSE;
+        }
 #endif
     }
 
@@ -387,9 +395,29 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
     // built on the float controls one.
     extensions.PushBack(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
     extensions.PushBack(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+    // Dynamic rendering when the device has it. One without records its passes as render passes instead
+    // (Device::UsesRenderPasses), made with VK_KHR_create_renderpass2 and resolving depth and stencil through
+    // VK_KHR_depth_stencil_resolve when it has that - without it the device reports no depth stencil resolve modes, and
+    // CmdBeginRendering refuses such a resolve.
+    bool has_dynamic_rendering = true;
     for (const char* name : k_dynamic_rendering_extensions)
     {
-        extensions.PushBack(name);
+        has_dynamic_rendering = has_dynamic_rendering && physical_device.IsExtensionSupported(name);
+    }
+    if (has_dynamic_rendering)
+    {
+        for (const char* name : k_dynamic_rendering_extensions)
+        {
+            extensions.PushBack(name);
+        }
+    }
+    else
+    {
+        extensions.PushBack(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+        if (physical_device.IsExtensionSupported(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME))
+        {
+            extensions.PushBack(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME);
+        }
     }
     // 1.3 lets a shader read or write a storage image without naming its format, which is what Slang emits for a
     // RWTexture, wherever the format allows it; this is where 1.3 got that. Taken when it is there, not demanded,
@@ -520,7 +548,10 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
     require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");
     require(true, supported.vk13.synchronization2, "synchronization2, which Forge requires");
+#if !defined(RNDR_FORGE_VULKAN_1_1)
+    // On 1.1 a device without it renders through render passes instead, and what that needs is an extension.
     require(true, supported.vk13.dynamicRendering, "dynamic rendering, which Forge requires");
+#endif
 
     require(requested.mesh_shader, has_mesh_extension ? supported.mesh.meshShader : VK_FALSE, "mesh_shader");
     require(requested.task_shader, has_mesh_extension ? supported.mesh.taskShader : VK_FALSE, "task_shader");
@@ -821,6 +852,19 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
     device.m_debug_utils_enabled = graphics_context.AreDebugUtilsEnabled();
     RNDR_FORGE_VK_CHECK_EXPECTED(vmaCreateAllocator(&vma_alloc_create_info, &device.m_gpu_allocator), "vmaCreateAllocator", Result);
 
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    if (!device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
+    {
+        device.m_render_pass_cache = Opal::MakeScoped<RenderPassCache>(nullptr);
+        if (!device.m_render_pass_cache.IsValid())
+        {
+            return Result(ErrorCode::OutOfMemory);
+        }
+        RNDR_LOG_INFO("Forge: {} has no dynamic rendering, so passes are recorded as render passes",
+                      static_cast<const char*>(device.m_physical_device.GetProperties().deviceName));
+    }
+#endif
+
     // Every queue holds a reference back to the device it was made from, and this one is about to be moved
     // into the Expected. The move constructor repoints them, so nothing here has to.
     return Result(std::move(device));
@@ -956,6 +1000,19 @@ bool Rndr::Forge::Device::IsExtensionEnabled(const char* extension_name) const
     return false;
 }
 
+Opal::Expected<VkRenderPass, Rndr::ErrorCode> Rndr::Forge::Device::GetRenderPass(const RenderPassKey& key) const
+{
+    using Result = Opal::Expected<VkRenderPass, ErrorCode>;
+    if (!m_render_pass_cache.IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: a render pass was asked of a device that renders dynamically");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    return m_render_pass_cache->Get(m_device, key);
+}
+
+Rndr::Forge::Device::Device() = default;
+
 Rndr::Forge::Device::~Device()
 {
     Destroy();
@@ -980,7 +1037,8 @@ Rndr::Forge::Device::Device(Device&& other) noexcept
       m_enabled_extensions(std::move(other.m_enabled_extensions)),
       m_queue_family_indices(other.m_queue_family_indices),
       m_gpu_allocator(other.m_gpu_allocator),
-      m_debug_utils_enabled(other.m_debug_utils_enabled)
+      m_debug_utils_enabled(other.m_debug_utils_enabled),
+      m_render_pass_cache(std::move(other.m_render_pass_cache))
 {
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
@@ -1009,6 +1067,7 @@ Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
     m_queue_family_indices = other.m_queue_family_indices;
     m_gpu_allocator = other.m_gpu_allocator;
     m_debug_utils_enabled = other.m_debug_utils_enabled;
+    m_render_pass_cache = std::move(other.m_render_pass_cache);
 
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
@@ -1031,6 +1090,11 @@ void Rndr::Forge::Device::Destroy()
         m_gpu_allocator = VK_NULL_HANDLE;
     }
     m_queue_family_to_queue.Clear();
+    if (m_render_pass_cache.IsValid())
+    {
+        m_render_pass_cache->Destroy(m_device);
+        m_render_pass_cache = {};
+    }
     if (m_device != VK_NULL_HANDLE)
     {
         vkDestroyDevice(m_device, nullptr);

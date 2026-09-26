@@ -7,6 +7,7 @@
 #include "opal/container/expected.h"
 #include "opal/container/hash-map.h"
 #include "opal/container/ref.h"
+#include "opal/container/scope-ptr.h"
 #include "opal/container/shared-ptr.h"
 
 #include "rndr/error-codes.hpp"
@@ -22,6 +23,9 @@ using VmaAllocator = struct VmaAllocator_T*;
 
 namespace Rndr::Forge
 {
+
+class RenderPassCache;
+struct RenderPassKey;
 
 enum class QueueFamily : u8
 {
@@ -323,7 +327,8 @@ private:
 class Device
 {
 public:
-    Device() = default;
+    /** Out of line, since it has to be able to destroy the render pass cache, which only the source can see. */
+    Device();
     ~Device();
 
     /**
@@ -370,6 +375,21 @@ public:
     [[nodiscard]] bool AreDebugUtilsEnabled() const { return m_debug_utils_enabled; }
 
     /**
+     * Whether this device records its passes with VkRenderPass and VkFramebuffer objects instead of dynamic rendering,
+     * which is what a RNDR_FORGE_VULKAN_1_1 build does on a device without VK_KHR_dynamic_rendering. CmdBeginRendering
+     * and pipeline creation take care of the difference, so nothing a caller writes changes; it is here to be asked.
+     */
+    [[nodiscard]] bool UsesRenderPasses() const { return m_render_pass_cache.IsValid(); }
+
+    /**
+     * The render pass this device records a pass of this shape with, made the first time it is asked for and kept
+     * until the device goes. Only on a device that UsesRenderPasses; Forge's own, for CommandBuffer and Pipeline.
+     * @return The render pass, ErrorCode::InvalidArgument on a device that renders dynamically, or whatever the failing
+     *         creation maps to.
+     */
+    [[nodiscard]] Opal::Expected<VkRenderPass, ErrorCode> GetRenderPass(const RenderPassKey& key) const;
+
+    /**
      * Whether this device's present queue family can present to the given surface - what every swap chain has
      * to ask of the surface it is built over, asked on its own so that a device created before any window,
      * with DeviceDesc::enable_presentation, can be checked against a surface the moment one exists.
@@ -413,6 +433,8 @@ private:
     QueueFamilyIndices m_queue_family_indices;
     VmaAllocator m_gpu_allocator = VK_NULL_HANDLE;
     bool m_debug_utils_enabled = false;
+    /** Set only on a device without dynamic rendering; see UsesRenderPasses. */
+    Opal::ScopePtr<RenderPassCache> m_render_pass_cache;
 };
 
 }  // namespace Rndr::Forge

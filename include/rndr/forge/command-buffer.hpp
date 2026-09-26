@@ -781,9 +781,19 @@ public:
                                               PipelineStageBits stage = PipelineStageBits::AllCommands);
 
 private:
+    /** Destroy the framebuffers made for the last recording. Only while the buffer is not pending. */
+    void ReleaseFramebuffers() const;
+
     Opal::Ref<const Device> m_device;
     Opal::Ref<DeviceQueue> m_queue;
     VkCommandBuffer m_native_command_buffer = VK_NULL_HANDLE;
+    /**
+     * On a device that records passes as render passes (Device::UsesRenderPasses), the framebuffer each pass of this
+     * recording was made with. Kept until the buffer is recorded again, reset or freed, which Vulkan only allows once
+     * the device is done with it - so no pass still in flight loses its framebuffer. Mutable since Begin and Reset are
+     * const, and what they release is bookkeeping rather than state a caller sees.
+     */
+    mutable Opal::DynamicArray<VkFramebuffer> m_framebuffers;
 };
 
 }  // namespace Rndr::Forge

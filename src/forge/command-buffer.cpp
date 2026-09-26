@@ -10,6 +10,8 @@
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
 
+#include "render-pass.hpp"
+
 Opal::Expected<Rndr::Forge::CommandBuffer, Rndr::ErrorCode> Rndr::Forge::CommandBuffer::Create(const Device& device, DeviceQueue& queue)
 {
     using Result = Opal::Expected<CommandBuffer, ErrorCode>;
@@ -33,8 +35,21 @@ Rndr::Forge::CommandBuffer::~CommandBuffer()
     Destroy();
 }
 
+void Rndr::Forge::CommandBuffer::ReleaseFramebuffers() const
+{
+    for (const VkFramebuffer framebuffer : m_framebuffers)
+    {
+        vkDestroyFramebuffer(m_device->GetNativeDevice(), framebuffer, nullptr);
+    }
+    m_framebuffers.Clear();
+}
+
 void Rndr::Forge::CommandBuffer::Destroy()
 {
+    if (!m_framebuffers.IsEmpty())
+    {
+        ReleaseFramebuffers();
+    }
     if (m_native_command_buffer != VK_NULL_HANDLE)
     {
         vkFreeCommandBuffers(m_device->GetNativeDevice(), m_queue->GetNativeCommandPool(), 1, &m_native_command_buffer);
@@ -44,6 +59,9 @@ void Rndr::Forge::CommandBuffer::Destroy()
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::Begin(bool submit_one_time) const
 {
+    // Beginning resets a recorded buffer, and one being recorded again is not pending, so what it last rendered
+    // into is done with.
+    ReleaseFramebuffers();
     VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = 0};
     begin_info.flags |= submit_one_time ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
 
@@ -59,6 +77,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::End() const
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::Reset() const
 {
+    ReleaseFramebuffers();
     RNDR_FORGE_VK_CHECK(vkResetCommandBuffer(m_native_command_buffer, 0), "vkResetCommandBuffer");
     return ErrorCode::Success;
 }
@@ -1088,6 +1107,15 @@ static Opal::Optional<VkResolveModeFlagBits> ToVkResolveMode(Rndr::Forge::Resolv
     }
 }
 
+/** What a render pass has to know of an attachment that VkRenderingAttachmentInfo does not carry. */
+struct AttachmentShape
+{
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+    bool has_depth = false;
+    bool has_stencil = false;
+};
+
 /**
  * What one rendering attachment contributes to Vulkan: the view of the texture it names, and the layout that
  * texture is in - and the same two for the texture it resolves into, when it names one.
@@ -1100,10 +1128,12 @@ static Opal::Optional<VkResolveModeFlagBits> ToVkResolveMode(Rndr::Forge::Resolv
  * @param is_color Whether the role wants the colour attachment layouts or the depth stencil ones.
  * @param depth_stencil_resolve_modes The resolve modes the device supports for this role when it is depth or
  *        stencil. Colour has none to ask for: Vulkan fixes it by the format.
+ * @param out_shape Where the attachment's format, sample count and aspects go, for a device that records the pass
+ *        as a render pass.
  */
 static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingAttachment(
     const Rndr::Forge::RenderingAttachmentDesc& attachment, const char* role, bool is_color, Rndr::u32 required_layer_count,
-    VkResolveModeFlags depth_stencil_resolve_modes)
+    VkResolveModeFlags depth_stencil_resolve_modes, AttachmentShape& out_shape)
 {
     using namespace Rndr;
     using Result = Opal::Expected<VkRenderingAttachmentInfo, ErrorCode>;
@@ -1135,6 +1165,11 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
         return Result(layout_result.GetError());
     }
     const Forge::ImageLayout layout = layout_result.GetValue();
+    const PixelFormat format = texture.GetDesc().format;
+    out_shape = AttachmentShape{.format = ToVkFormat(format),
+                                .samples = static_cast<VkSampleCountFlagBits>(1u << static_cast<u32>(texture.GetDesc().sample_count)),
+                                .has_depth = IsDepthFormat(format),
+                                .has_stencil = IsStencilFormat(format)};
 
     RNDR_FORGE_TRANSLATE_EXPECTED(load_op, ToVkLoadOp(attachment.load_operation), "RenderingAttachmentDesc::load_operation", Result);
     RNDR_FORGE_TRANSLATE_EXPECTED(store_op, ToVkStoreOp(attachment.store_operation), "RenderingAttachmentDesc::store_operation", Result);
@@ -1231,6 +1266,140 @@ static Opal::Expected<VkRenderingAttachmentInfo, Rndr::ErrorCode> ToVkRenderingA
     return Result(info);
 }
 
+/**
+ * CmdBeginRendering on a device without dynamic rendering (Device::UsesRenderPasses): the same pass, already checked,
+ * recorded as a render pass of one subpass and a framebuffer made for it. Every attachment stays in the layout its
+ * texture is in, as it does in a dynamic pass. An aspect of the depth stencil texture that the pass does not name is
+ * loaded and stored, since a dynamic pass leaves it alone.
+ *
+ * @param out_framebuffer The framebuffer made, which the command buffer keeps until it is recorded again or freed.
+ */
+static Rndr::ErrorCode BeginRenderPass(const Rndr::Forge::Device& device, VkCommandBuffer command_buffer,
+                                       const Rndr::Forge::RenderingDesc& desc,
+                                       Opal::ArrayView<const VkRenderingAttachmentInfo> color_attachments,
+                                       Opal::ArrayView<const AttachmentShape> color_shapes,
+                                       const VkRenderingAttachmentInfo* depth_attachment,
+                                       const VkRenderingAttachmentInfo* stencil_attachment, const AttachmentShape& depth_stencil_shape,
+                                       VkFramebuffer& out_framebuffer)
+{
+    using namespace Rndr;
+
+    Forge::RenderPassKey key;
+    key.view_mask = desc.view_mask;
+    // In the order RenderPassCache numbers the attachments: colours, their resolve targets, depth stencil, its
+    // resolve target.
+    Opal::DynamicArray<VkImageView> views;
+    Opal::DynamicArray<VkClearValue> clear_values;
+    for (i32 i = 0; i < color_attachments.GetSize(); ++i)
+    {
+        const VkRenderingAttachmentInfo& info = color_attachments[i];
+        key.color_attachments.PushBack(Forge::RenderPassAttachment{.format = color_shapes[i].format,
+                                                                   .samples = color_shapes[i].samples,
+                                                                   .load_op = info.loadOp,
+                                                                   .store_op = info.storeOp,
+                                                                   .layout = info.imageLayout});
+        key.color_resolve_layouts.PushBack(info.resolveMode != VK_RESOLVE_MODE_NONE ? info.resolveImageLayout : VK_IMAGE_LAYOUT_UNDEFINED);
+        views.PushBack(info.imageView);
+        clear_values.PushBack(info.clearValue);
+    }
+    for (const VkRenderingAttachmentInfo& info : color_attachments)
+    {
+        if (info.resolveMode != VK_RESOLVE_MODE_NONE)
+        {
+            views.PushBack(info.resolveImageView);
+            clear_values.PushBack(VkClearValue{});
+        }
+    }
+    if (depth_attachment != nullptr || stencil_attachment != nullptr)
+    {
+        // CmdBeginRendering made sure both sides name one texture when both are there.
+        const VkRenderingAttachmentInfo& either = depth_attachment != nullptr ? *depth_attachment : *stencil_attachment;
+        if (depth_attachment != nullptr && stencil_attachment != nullptr &&
+            depth_attachment->imageLayout != stencil_attachment->imageLayout)
+        {
+            // A render pass takes one layout for both aspects unless the device separates them, which 1.2 did.
+            RNDR_LOG_ERROR(
+                "Forge: this device renders through render passes, which keep depth and stencil in one layout, and the pass "
+                "has them in two");
+            return ErrorCode::FeatureNotSupported;
+        }
+        Forge::RenderPassAttachment attachment{
+            .format = depth_stencil_shape.format, .samples = depth_stencil_shape.samples, .layout = either.imageLayout};
+        if (depth_attachment != nullptr)
+        {
+            attachment.load_op = depth_attachment->loadOp;
+            attachment.store_op = depth_attachment->storeOp;
+        }
+        else if (depth_stencil_shape.has_depth)
+        {
+            attachment.load_op = VK_ATTACHMENT_LOAD_OP_LOAD;
+            attachment.store_op = VK_ATTACHMENT_STORE_OP_STORE;
+        }
+        if (stencil_attachment != nullptr)
+        {
+            attachment.stencil_load_op = stencil_attachment->loadOp;
+            attachment.stencil_store_op = stencil_attachment->storeOp;
+        }
+        else if (depth_stencil_shape.has_stencil)
+        {
+            attachment.stencil_load_op = VK_ATTACHMENT_LOAD_OP_LOAD;
+            attachment.stencil_store_op = VK_ATTACHMENT_STORE_OP_STORE;
+        }
+        key.has_depth_stencil = true;
+        key.depth_stencil_attachment = attachment;
+        key.depth_resolve_mode = depth_attachment != nullptr ? depth_attachment->resolveMode : VK_RESOLVE_MODE_NONE;
+        key.stencil_resolve_mode = stencil_attachment != nullptr ? stencil_attachment->resolveMode : VK_RESOLVE_MODE_NONE;
+        views.PushBack(either.imageView);
+        VkClearValue clear_value{};
+        clear_value.depthStencil.depth = depth_attachment != nullptr ? depth_attachment->clearValue.depthStencil.depth : 0.0f;
+        clear_value.depthStencil.stencil = stencil_attachment != nullptr ? stencil_attachment->clearValue.depthStencil.stencil : 0;
+        clear_values.PushBack(clear_value);
+        const VkRenderingAttachmentInfo* resolving = nullptr;
+        if (key.depth_resolve_mode != VK_RESOLVE_MODE_NONE)
+        {
+            resolving = depth_attachment;
+        }
+        else if (key.stencil_resolve_mode != VK_RESOLVE_MODE_NONE)
+        {
+            resolving = stencil_attachment;
+        }
+        if (resolving != nullptr)
+        {
+            key.depth_stencil_resolve_layout = resolving->resolveImageLayout;
+            views.PushBack(resolving->resolveImageView);
+            clear_values.PushBack(VkClearValue{});
+        }
+    }
+
+    const Opal::Expected<VkRenderPass, ErrorCode> render_pass = device.GetRenderPass(key);
+    if (!render_pass.HasValue())
+    {
+        return render_pass.GetError();
+    }
+    const VkExtent2D extent{.width = static_cast<u32>(desc.render_area_extent.x), .height = static_cast<u32>(desc.render_area_extent.y)};
+    const VkFramebufferCreateInfo framebuffer_info{
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = render_pass.GetValue(),
+        .attachmentCount = static_cast<u32>(views.GetSize()),
+        .pAttachments = views.GetData(),
+        .width = extent.width,
+        .height = extent.height,
+        // A multiview pass takes its layers from the view mask, and its framebuffer has one.
+        .layers = desc.view_mask != 0 ? 1 : desc.layer_count,
+    };
+    RNDR_FORGE_VK_CHECK(vkCreateFramebuffer(device.GetNativeDevice(), &framebuffer_info, nullptr, &out_framebuffer), "vkCreateFramebuffer");
+    const VkRenderPassBeginInfo begin_info{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = render_pass.GetValue(),
+        .framebuffer = out_framebuffer,
+        .renderArea = {.extent = extent},
+        .clearValueCount = static_cast<u32>(clear_values.GetSize()),
+        .pClearValues = clear_values.GetData(),
+    };
+    vkCmdBeginRenderPass(command_buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
+    return ErrorCode::Success;
+}
+
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDesc& desc)
 {
     // A multiview pass takes its layers from the mask, and Vulkan ignores layerCount beside one - so a desc
@@ -1267,15 +1436,21 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     const VkPhysicalDeviceDepthStencilResolveProperties& resolve_properties =
         m_device->GetPhysicalDevice().GetDepthStencilResolveProperties();
     Opal::DynamicArray<VkRenderingAttachmentInfo> color_attachments;
+    Opal::DynamicArray<AttachmentShape> color_shapes;
     for (const auto& attachment : desc.color_attachments)
     {
-        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info = ToVkRenderingAttachment(attachment, "colour", true, required_layer_count, 0);
+        AttachmentShape shape;
+        Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
+            ToVkRenderingAttachment(attachment, "colour", true, required_layer_count, 0, shape);
         if (!info.HasValue())
         {
             return info.GetError();
         }
         color_attachments.PushBack(info.GetValue());
+        color_shapes.PushBack(shape);
     }
+    // Both sides name one texture when both are there, so one shape does for the two.
+    AttachmentShape depth_stencil_shape;
 
     // Filled only when the desc carries one, and pointed at only then: an absent depth attachment is a
     // pass that renders without depth, not one whose attachment happens to name no texture.
@@ -1285,7 +1460,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     {
         Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
             ToVkRenderingAttachment(desc.depth_attachment.GetValue(), "depth", false, required_layer_count,
-                                    resolve_properties.supportedDepthResolveModes);
+                                    resolve_properties.supportedDepthResolveModes, depth_stencil_shape);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1301,7 +1476,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
     {
         Opal::Expected<VkRenderingAttachmentInfo, ErrorCode> info =
             ToVkRenderingAttachment(desc.stencil_attachment.GetValue(), "stencil", false, required_layer_count,
-                                    resolve_properties.supportedStencilResolveModes);
+                                    resolve_properties.supportedStencilResolveModes, depth_stencil_shape);
         if (!info.HasValue())
         {
             return info.GetError();
@@ -1344,6 +1519,20 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
         }
     }
 
+    if (m_device->UsesRenderPasses())
+    {
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        const ErrorCode status =
+            BeginRenderPass(*m_device, m_native_command_buffer, desc, {color_attachments.GetData(), color_attachments.GetSize()},
+                            {color_shapes.GetData(), color_shapes.GetSize()}, has_depth ? &depth_attachment : nullptr,
+                            has_stencil ? &stencil_attachment : nullptr, depth_stencil_shape, framebuffer);
+        if (framebuffer != VK_NULL_HANDLE)
+        {
+            m_framebuffers.PushBack(framebuffer);
+        }
+        return status;
+    }
+
     const VkRenderingInfo rendering_info{
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = {.extent = {.width = static_cast<u32>(desc.render_area_extent.x),
@@ -1361,6 +1550,11 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdEndRendering()
 {
+    if (m_device->UsesRenderPasses())
+    {
+        vkCmdEndRenderPass(m_native_command_buffer);
+        return ErrorCode::Success;
+    }
     vkCmdEndRendering(m_native_command_buffer);
     return ErrorCode::Success;
 }
@@ -1844,8 +2038,12 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdWriteTimestamp(const TimestampQue
 }
 
 Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
-    : m_device(std::move(other.m_device)), m_queue(std::move(other.m_queue)), m_native_command_buffer(other.m_native_command_buffer)
+    : m_device(std::move(other.m_device)),
+      m_queue(std::move(other.m_queue)),
+      m_native_command_buffer(other.m_native_command_buffer),
+      m_framebuffers(std::move(other.m_framebuffers))
 {
+    other.m_framebuffers.Clear();
     other.m_native_command_buffer = VK_NULL_HANDLE;
 }
 
@@ -1857,7 +2055,9 @@ Rndr::Forge::CommandBuffer& Rndr::Forge::CommandBuffer::operator=(CommandBuffer&
         m_device = std::move(other.m_device);
         m_queue = std::move(other.m_queue);
         m_native_command_buffer = other.m_native_command_buffer;
+        m_framebuffers = std::move(other.m_framebuffers);
         other.m_native_command_buffer = VK_NULL_HANDLE;
+        other.m_framebuffers.Clear();
     }
     return *this;
 }

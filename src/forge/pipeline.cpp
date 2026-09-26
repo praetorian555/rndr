@@ -10,6 +10,8 @@
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
 
+#include "render-pass.hpp"
+
 static Opal::Optional<VkPrimitiveTopology> ToVkPrimitiveTopology(Rndr::PrimitiveTopology topology)
 {
     switch (topology)
@@ -1033,9 +1035,40 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
         .stencilAttachmentFormat = ToVkFormat(desc.stencil_attachment_format),
     };
 
+    // A device without dynamic rendering builds the pipeline against a render pass instead. Any one with the same
+    // attachment formats, sample count and view mask is compatible with every pass it is drawn in, whatever those load,
+    // store or resolve into, since each pass is a single subpass - so this is the one made from what the desc says.
+    VkRenderPass render_pass = VK_NULL_HANDLE;
+    if (device.UsesRenderPasses())
+    {
+        RenderPassKey key;
+        for (const VkFormat format : vk_color_formats)
+        {
+            key.color_attachments.PushBack(
+                RenderPassAttachment{.format = format, .samples = sample_count, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+            key.color_resolve_layouts.PushBack(VK_IMAGE_LAYOUT_UNDEFINED);
+        }
+        const PixelFormat depth_stencil_format =
+            desc.depth_attachment_format != PixelFormat::Undefined ? desc.depth_attachment_format : desc.stencil_attachment_format;
+        if (depth_stencil_format != PixelFormat::Undefined)
+        {
+            key.has_depth_stencil = true;
+            key.depth_stencil_attachment = RenderPassAttachment{.format = ToVkFormat(depth_stencil_format),
+                                                                .samples = sample_count,
+                                                                .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+        }
+        key.view_mask = desc.view_mask;
+        const Opal::Expected<VkRenderPass, ErrorCode> render_pass_result = device.GetRenderPass(key);
+        if (!render_pass_result.HasValue())
+        {
+            return Result(render_pass_result.GetError());
+        }
+        render_pass = render_pass_result.GetValue();
+    }
+
     const VkGraphicsPipelineCreateInfo pipeline_create_info{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = &rendering_create_info,
+        .pNext = render_pass == VK_NULL_HANDLE ? &rendering_create_info : nullptr,
         .stageCount = static_cast<u32>(shader_stages.GetSize()),
         .pStages = shader_stages.GetData(),
         .pVertexInputState = &vertex_input_state,
@@ -1048,6 +1081,8 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
         .pColorBlendState = &color_blend_state,
         .pDynamicState = &dynamic_state,
         .layout = pipeline.m_pipeline_layout,
+        .renderPass = render_pass,
+        .subpass = 0,
     };
 
     RNDR_FORGE_VK_CHECK_EXPECTED(

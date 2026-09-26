@@ -294,9 +294,10 @@ descriptor indexing arrived in the same release by a different name.
 
 Forge asks for Vulkan 1.3 and turns away a device that reports less. Configured with
 `-DRNDR_FORGE_VULKAN_1_1=ON`, it asks for 1.1 and takes what it relies on from 1.2 and 1.3 from the extensions
-those releases promoted: `VK_KHR_timeline_semaphore`, `VK_KHR_synchronization2`, `VK_KHR_dynamic_rendering` (with the
-`VK_KHR_depth_stencil_resolve` and `VK_KHR_create_renderpass2` it needs) and `VK_KHR_spirv_1_4` (with
-`VK_KHR_shader_float_controls`) always, `VK_KHR_format_feature_flags2` when the device has it, and for each
+those releases promoted: `VK_KHR_timeline_semaphore`, `VK_KHR_synchronization2` and `VK_KHR_spirv_1_4` (with
+`VK_KHR_shader_float_controls`) always, `VK_KHR_dynamic_rendering` (with the `VK_KHR_depth_stencil_resolve` and
+`VK_KHR_create_renderpass2` it needs) or else render passes (below), `VK_KHR_format_feature_flags2` when the device
+has it, and for each
 `DeviceFeatures` field from 1.2 the extension that carries it, only when it is asked for. That is what MoltenVK
 offers, and what drivers that stopped at 1.1 offer when they are recent enough. `Forge::k_vulkan_api_version` says
 which build this is. The API and its behaviour are the same in both, and nothing in either depends on the other,
@@ -315,6 +316,23 @@ so the one choice is made when rndr is configured:
   1.4 anyway. The profile is part of every SPIR-V shader cache key, so the two builds can share a cache directory.
 - `VK_KHR_format_feature_flags2` is what lets a shader read a storage image without naming its format, which is
   what Slang emits for a `RWTexture`; 1.3 has it without asking.
+- A device without `VK_KHR_dynamic_rendering` - about 43% of the Android devices the Vulkan hardware database lists
+  - is taken all the same, as long as it has `VK_KHR_create_renderpass2`, and records every pass as a render pass
+  instead (`Device::UsesRenderPasses`). Nothing a caller writes changes:
+  - `CmdBeginRendering` checks the desc exactly as before, then records a render pass of one subpass and a
+    framebuffer made for this recording, which the command buffer destroys when it is next begun, reset or freed.
+    Every attachment keeps the layout its texture tracks before, during and after the pass, so the pass moves no
+    layout and the barriers around it synchronize it as they do a dynamic pass. An aspect of a depth stencil
+    texture the pass does not name is loaded and stored, since a dynamic pass leaves it alone.
+  - Render passes are made once per shape and kept by the device (`src/forge/render-pass.cpp`).
+  - A graphics pipeline is built against the render pass its formats, sample count and view mask describe. Two render
+    passes of one subpass are compatible whatever they resolve into, so that one serves every pass it is drawn in.
+  - Depth and stencil resolve needs `VK_KHR_depth_stencil_resolve`; without it the device reports no resolve modes
+    and such a pass is refused, as it would be on a device that cannot resolve. Depth and stencil in two layouts are
+    refused too, since a render pass on 1.1 takes one for both. `dynamic_rendering_local_read` is never supported.
+  - Tested by running the suite under the SDK's profiles layer with the extension hidden:
+    `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_profiles VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS=VK_KHR_dynamic_rendering`,
+    with `RNDR_TEST_EXPECT_RENDER_PASSES=1` so the run fails if the layer did not take. The Linux 1.1 CI job does both.
 - `shader_output_layer` is never supported in the 1.1 build. `VK_EXT_shader_viewport_index_layer` would carry it,
   but Slang (2026.10) writes `SV_RenderTargetArrayIndex` from a vertex stage with the `ShaderLayer` capability,
   which SPIR-V only has from 1.5, whatever version it is asked for, so no module compiled for it would load.

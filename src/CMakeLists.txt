@@ -193,6 +193,8 @@ if (${RNDR_FORGE})
             "${PROJECT_SOURCE_DIR}/src/forge/buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/synchronization.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/command-buffer.cpp"
+            "${PROJECT_SOURCE_DIR}/src/forge/render-pass.hpp"
+            "${PROJECT_SOURCE_DIR}/src/forge/render-pass.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/transfer.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/debug.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/query.cpp"
