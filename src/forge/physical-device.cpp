@@ -111,8 +111,8 @@ Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetQueueFamilyIndex(VkQue
 {
     for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
     {
-        const VkQueueFamilyProperties& props = m_queue_family_properties[i];
-        if ((props.queueFlags & queue_flags) == queue_flags && (props.queueFlags & not_queue_flags) == 0)
+        const VkQueueFlags flags = AddImpliedQueueFlags(m_queue_family_properties[i].queueFlags);
+        if ((flags & queue_flags) == queue_flags && (flags & not_queue_flags) == 0)
         {
             return Opal::Optional<u32>(i);
         }

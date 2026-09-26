@@ -15,6 +15,18 @@
 namespace Rndr::Forge
 {
 
+/**
+ * A queue family's flags with the ones Vulkan implies added: a family that can do graphics or compute can do
+ * transfer as well, and a driver may leave VK_QUEUE_TRANSFER_BIT out of such a family - Adreno does. Every
+ * question Forge asks about a family's capabilities goes through this.
+ * @param reported The flags the driver reported for the family.
+ * @return The flags with the implied ones set.
+ */
+[[nodiscard]] constexpr VkQueueFlags AddImpliedQueueFlags(VkQueueFlags reported)
+{
+    return (reported & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)) != 0 ? reported | VK_QUEUE_TRANSFER_BIT : reported;
+}
+
 class PhysicalDevice
 {
 public:
@@ -52,8 +64,9 @@ public:
     [[nodiscard]] const Opal::DynamicArray<VkQueueFamilyProperties>& GetQueueFamilyProperties() const { return m_queue_family_properties; }
     [[nodiscard]] const Opal::DynamicArray<Opal::StringUtf8>& GetSupportedExtensions() const { return m_supported_extensions; }
     /**
-     * Find a queue family that has all of queue_flags and none of not_queue_flags. Empty when this device has no such
-     * family, which is an answer rather than a failure - see the error handling section of docs/forge.md.
+     * Find a queue family that has all of queue_flags and none of not_queue_flags, reading each family's flags with
+     * the ones Vulkan implies added (see AddImpliedQueueFlags). Empty when this device has no such family, which is
+     * an answer rather than a failure - see the error handling section of docs/forge.md.
      */
     [[nodiscard]] Opal::Optional<u32> GetQueueFamilyIndex(VkQueueFlags queue_flags, VkQueueFlags not_queue_flags = 0) const;
 

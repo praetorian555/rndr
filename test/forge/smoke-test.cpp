@@ -859,6 +859,17 @@ TEST_CASE("Forge pure functions of the public headers", "[forge]")
         // A value this switch has no case for reads as unknown rather than as whichever case happens first.
         CHECK(strcmp(Forge::ImageLayoutToString(static_cast<Forge::ImageLayout>(99)), "an unknown layout") == 0);
     }
+    SECTION("AddImpliedQueueFlags gives a graphics or compute family transfer, and nothing else")
+    {
+        // Adreno reports its one family as graphics, compute and sparse binding, without transfer.
+        constexpr VkQueueFlags adreno = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_SPARSE_BINDING_BIT;
+        CHECK(Forge::AddImpliedQueueFlags(adreno) == (adreno | VK_QUEUE_TRANSFER_BIT));
+        CHECK(Forge::AddImpliedQueueFlags(VK_QUEUE_COMPUTE_BIT) == (VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT));
+        // A family that already says transfer, or can do neither graphics nor compute, is left as it is.
+        CHECK(Forge::AddImpliedQueueFlags(VK_QUEUE_TRANSFER_BIT) == VK_QUEUE_TRANSFER_BIT);
+        CHECK(Forge::AddImpliedQueueFlags(VK_QUEUE_VIDEO_DECODE_BIT_KHR) == VK_QUEUE_VIDEO_DECODE_BIT_KHR);
+        CHECK(Forge::AddImpliedQueueFlags(0) == 0);
+    }
 }
 
 TEST_CASE("Forge queue family indices report what was put in them", "[forge]")
