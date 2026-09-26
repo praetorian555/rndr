@@ -803,6 +803,22 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
             return false;
         });
     enabled_features.Fill(device.m_desc.features);
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    // Reading or writing a storage image without naming its format, which 1.3 makes core. Without
+    // VK_KHR_format_feature_flags2 the device may still have the two original features, and turning them on is what
+    // keeps a shader that 1.3 would take working here too, the way it is not the caller's to ask for on 1.3 either.
+    const bool has_format_feature_flags2 = device.IsExtensionEnabled(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+    if (!has_format_feature_flags2)
+    {
+        const VkPhysicalDeviceFeatures& supported = device.m_physical_device.GetFeatures();
+        enabled_features.features2.features.shaderStorageImageReadWithoutFormat = supported.shaderStorageImageReadWithoutFormat;
+        enabled_features.features2.features.shaderStorageImageWriteWithoutFormat = supported.shaderStorageImageWriteWithoutFormat;
+    }
+    device.m_can_read_storage_images_without_format =
+        has_format_feature_flags2 || enabled_features.features2.features.shaderStorageImageReadWithoutFormat == VK_TRUE;
+    device.m_can_write_storage_images_without_format =
+        has_format_feature_flags2 || enabled_features.features2.features.shaderStorageImageWriteWithoutFormat == VK_TRUE;
+#endif
 
     VkDeviceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1058,7 +1074,9 @@ Rndr::Forge::Device::Device(Device&& other) noexcept
       m_debug_utils_enabled(other.m_debug_utils_enabled),
       m_render_pass_cache(std::move(other.m_render_pass_cache)),
       m_has_synchronization2(other.m_has_synchronization2),
-      m_has_timeline_semaphores(other.m_has_timeline_semaphores)
+      m_has_timeline_semaphores(other.m_has_timeline_semaphores),
+      m_can_read_storage_images_without_format(other.m_can_read_storage_images_without_format),
+      m_can_write_storage_images_without_format(other.m_can_write_storage_images_without_format)
 {
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
@@ -1090,6 +1108,8 @@ Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
     m_render_pass_cache = std::move(other.m_render_pass_cache);
     m_has_synchronization2 = other.m_has_synchronization2;
     m_has_timeline_semaphores = other.m_has_timeline_semaphores;
+    m_can_read_storage_images_without_format = other.m_can_read_storage_images_without_format;
+    m_can_write_storage_images_without_format = other.m_can_write_storage_images_without_format;
 
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();

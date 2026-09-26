@@ -377,6 +377,22 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSp
         RNDR_LOG_ERROR("Forge: a shader of this stage needs the device created with DeviceFeatures::{}", missing_feature);
         return Result(ErrorCode::InvalidArgument);
     }
+    // A storage image touched without a format is core on 1.3 and may be missing on a 1.1 device
+    // (Device::CanReadStorageImagesWithoutFormat); a module declaring it there would be refused by the layer and
+    // undefined without one, so it is refused here, naming what it needs.
+    for (u32 i = 0; i < reflect_module.capability_count; ++i)
+    {
+        const SpvCapability capability = reflect_module.capabilities[i].value;
+        if ((capability == SpvCapabilityStorageImageReadWithoutFormat && !device.CanReadStorageImagesWithoutFormat()) ||
+            (capability == SpvCapabilityStorageImageWriteWithoutFormat && !device.CanWriteStorageImagesWithoutFormat()))
+        {
+            RNDR_LOG_ERROR(
+                "Forge: the shader {} a storage image without naming its format, which this device cannot do; give the image a "
+                "format in the shader",
+                capability == SpvCapabilityStorageImageReadWithoutFormat ? "reads" : "writes");
+            return Result(ErrorCode::FeatureNotSupported);
+        }
+    }
 
     // Read while the reflect module is already open, so nothing is reflected twice and no reflection state
     // outlives this constructor - the name below is copied, not pointed at.

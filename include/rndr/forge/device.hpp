@@ -397,6 +397,16 @@ public:
     [[nodiscard]] bool HasTimelineSemaphores() const { return m_has_timeline_semaphores; }
 
     /**
+     * Whether a shader may read, or write, a storage image without naming its format - what Slang emits for a RWTexture
+     * with no format attribute. Always on 1.3, where it is core. A RNDR_FORGE_VULKAN_1_1 build gets it from
+     * VK_KHR_format_feature_flags2 when the device has that, and from the shaderStorageImageReadWithoutFormat and
+     * shaderStorageImageWriteWithoutFormat features when it has only those, which it then turns on by itself. Where
+     * neither is there, Shader creation refuses a module that needs it.
+     */
+    [[nodiscard]] bool CanReadStorageImagesWithoutFormat() const { return m_can_read_storage_images_without_format; }
+    [[nodiscard]] bool CanWriteStorageImagesWithoutFormat() const { return m_can_write_storage_images_without_format; }
+
+    /**
      * The render pass this device records a pass of this shape with, made the first time it is asked for and kept
      * until the device goes. Only on a device that UsesRenderPasses; Forge's own, for CommandBuffer and Pipeline.
      * @return The render pass, ErrorCode::InvalidArgument on a device that renders dynamically, or whatever the failing
@@ -452,6 +462,8 @@ private:
     Opal::ScopePtr<RenderPassCache> m_render_pass_cache;
     bool m_has_synchronization2 = true;
     bool m_has_timeline_semaphores = true;
+    bool m_can_read_storage_images_without_format = true;
+    bool m_can_write_storage_images_without_format = true;
 };
 
 }  // namespace Rndr::Forge

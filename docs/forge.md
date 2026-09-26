@@ -315,8 +315,14 @@ so the one choice is made when rndr is configured:
   through `k_spirv_profile`. 1.3 is what 1.1 takes without an extension, but Slang writes an 8-bit specialization
   constant's conversion as an `OpSpecConstantOp UConvert`, which SPIR-V only allows from 1.4, and mesh shaders need
   1.4 anyway. The profile is part of every SPIR-V shader cache key, so the two builds can share a cache directory.
-- `VK_KHR_format_feature_flags2` is what lets a shader read a storage image without naming its format, which is
-  what Slang emits for a `RWTexture`; 1.3 has it without asking.
+- `VK_KHR_format_feature_flags2` is what lets a shader read or write a storage image without naming its format,
+  which is what Slang emits for a `RWTexture`; 1.3 has it without asking. About 43% of the Android devices the
+  database lists lack it, and on those the 1.1 build turns on the original `shaderStorageImageReadWithoutFormat` and
+  `shaderStorageImageWriteWithoutFormat` features instead, wherever the device has them - not the caller's to ask for,
+  since on 1.3 it is not either. `Device::CanReadStorageImagesWithoutFormat` and `CanWriteStorageImagesWithoutFormat`
+  say what came of it, and where the device has neither, `Shader` creation refuses a module declaring the capability
+  with `ErrorCode::FeatureNotSupported` rather than leaving it to the validation layer; giving the image a format in the
+  shader is the way round it.
 - A device without `VK_KHR_dynamic_rendering` - about 43% of the Android devices the Vulkan hardware database lists
   - is taken all the same, as long as it has `VK_KHR_create_renderpass2`, and records every pass as a render pass
   instead (`Device::UsesRenderPasses`). Nothing a caller writes changes:
@@ -351,7 +357,8 @@ so the one choice is made when rndr is configured:
   reset and signalled with the submit as it ends - so a frame loop behaves the same on either device.
 - The fallbacks are tested by running the suite under the SDK's profiles layer with the extensions hidden,
   `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_profiles` and `VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS=` any of
-  `VK_KHR_dynamic_rendering`, `VK_KHR_synchronization2` and `VK_KHR_timeline_semaphore`, with
+  `VK_KHR_dynamic_rendering`, `VK_KHR_synchronization2`, `VK_KHR_timeline_semaphore` and
+  `VK_KHR_format_feature_flags2`, with
   `RNDR_TEST_EXPECT_RENDER_PASSES=1`, `RNDR_TEST_EXPECT_NO_SYNCHRONIZATION2=1` and
   `RNDR_TEST_EXPECT_NO_TIMELINE_SEMAPHORES=1` for the ones hidden, so that a run where the layer did not take fails
   instead of passing on the extensions. The validation layer Forge enables sits above the profiles one, so

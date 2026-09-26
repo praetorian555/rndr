@@ -927,10 +927,19 @@ TEST_CASE("Forge context and device", "[forge]")
     REQUIRE(device.UsesRenderPasses() == !device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
     REQUIRE(device.HasSynchronization2() == device.IsExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME));
     REQUIRE(device.HasTimelineSemaphores() == device.IsExtensionEnabled(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME));
+    // Without the extension the original features stand in, wherever the device has them.
+    const bool has_format_feature_flags2 = device.IsExtensionEnabled(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+    const VkPhysicalDeviceFeatures& core_features = device.GetPhysicalDevice().GetFeatures();
+    REQUIRE(device.CanReadStorageImagesWithoutFormat() ==
+            (has_format_feature_flags2 || core_features.shaderStorageImageReadWithoutFormat == VK_TRUE));
+    REQUIRE(device.CanWriteStorageImagesWithoutFormat() ==
+            (has_format_feature_flags2 || core_features.shaderStorageImageWriteWithoutFormat == VK_TRUE));
 #else
     REQUIRE_FALSE(device.UsesRenderPasses());
     REQUIRE(device.HasSynchronization2());
     REQUIRE(device.HasTimelineSemaphores());
+    REQUIRE(device.CanReadStorageImagesWithoutFormat());
+    REQUIRE(device.CanWriteStorageImagesWithoutFormat());
 #endif
     // The runs meant to cover a fallback - under a layer hiding the extension - say so, so that one where the layer did
     // not load fails here instead of passing on the extension.
