@@ -363,6 +363,12 @@ so the one choice is made when rndr is configured:
   `RNDR_TEST_EXPECT_NO_TIMELINE_SEMAPHORES=1` for the ones hidden, so that a run where the layer did not take fails
   instead of passing on the extensions. The validation layer Forge enables sits above the profiles one, so
   it checks what is recorded against the device as the layer shows it. The Linux 1.1 CI job does this.
+- A queue family's flags are read with the ones Vulkan implies added (`AddImpliedQueueFlags`): a family that can do
+  graphics or compute can do transfer, and a driver may leave `VK_QUEUE_TRANSFER_BIT` out of it. Adreno 618's
+  one family says graphics, compute and sparse binding only, and taken literally it has no graphics queue.
+- With validation, `VK_EXT_debug_utils` counts as available when the validation layer provides it, not only when
+  the implementation does. On a phone the layer packaged with the app is what brings it; the driver of a Galaxy
+  A71 has none.
 - `shader_output_layer` is never supported in the 1.1 build. `VK_EXT_shader_viewport_index_layer` would carry it,
   but Slang (2026.10) writes `SV_RenderTargetArrayIndex` from a vertex stage with the `ShaderLayer` capability,
   which SPIR-V only has from 1.5, whatever version it is asked for, so no module compiled for it would load.

@@ -225,6 +225,26 @@ constexpr const char* k_validation_layer_name = "VK_LAYER_KHRONOS_validation";
  * Check whether the validation layer is installed on this machine. It ships with the Vulkan SDK, so a build with
  * RNDR_FORGE_VALIDATION still has to cope with it being missing at run time.
  */
+/**
+ * The instance extensions a layer provides, which the implementation's own list leaves out: on a phone the
+ * validation layer packaged with the app is what brings VK_EXT_debug_utils, and the driver does not have it.
+ */
+Opal::DynamicArray<VkExtensionProperties> GetLayerInstanceExtensions(const char* layer_name)
+{
+    Rndr::u32 count = 0;
+    if (vkEnumerateInstanceExtensionProperties(layer_name, &count, nullptr) != VK_SUCCESS || count == 0)
+    {
+        return {};
+    }
+    Opal::DynamicArray<VkExtensionProperties> extensions(count);
+    if (vkEnumerateInstanceExtensionProperties(layer_name, &count, extensions.GetData()) != VK_SUCCESS)
+    {
+        return {};
+    }
+    extensions.Resize(count);
+    return extensions;
+}
+
 bool IsValidationLayerAvailable()
 {
     Rndr::u32 layer_count = 0;
@@ -275,7 +295,17 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
 
     // Check if all the requested instance extensions are supported
     Opal::DynamicArray<const char*> required_extensions = GetRequiredInstanceExtensions(desc, use_validation_layer);
-    const Opal::DynamicArray<VkExtensionProperties> supported_extensions = GetSupportedInstanceExtensions();
+    Opal::DynamicArray<VkExtensionProperties> supported_extensions = GetSupportedInstanceExtensions();
+#if defined(RNDR_FORGE_VALIDATION)
+    // The layer is enabled below, so what it provides is as good as what the implementation does.
+    if (use_validation_layer)
+    {
+        for (const VkExtensionProperties& extension : GetLayerInstanceExtensions(k_validation_layer_name))
+        {
+            supported_extensions.PushBack(extension);
+        }
+    }
+#endif
     for (const char* required_extension_name : required_extensions)
     {
         bool is_found = false;
