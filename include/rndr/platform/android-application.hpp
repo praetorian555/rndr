@@ -130,9 +130,18 @@ public:
 
     /**
      * The window's insets changed, as RndrActivity hears on the UI thread - including on a turn from one landscape to
-     * the other, which brings no resize or configuration change. Read again at the next ProcessSystemEvents.
+     * the other, which brings no resize or configuration change. The safe insets are read again and the on-screen
+     * keyboard updated at the next ProcessSystemEvents, which this wakes.
+     * @param keyboard_visible Whether the on-screen keyboard is up.
+     * @param keyboard_height How far the keyboard covers the window from its bottom edge, in pixels.
      */
-    static void QueueSafeInsetsRefresh();
+    static void QueueWindowInsetsChange(bool keyboard_visible, i32 keyboard_height);
+
+    /**
+     * Work the window's on-screen keyboard out again from the keyboard's last insets and the window's size, and log it
+     * when it changed. See GenericWindow::GetOnScreenKeyboard.
+     */
+    void RefreshOnScreenKeyboard();
 
     /**
      * Hand the window's preferred refresh rate to its native window, through ANativeWindow_setFrameRate. A native
@@ -200,8 +209,11 @@ private:
     static void OnRefreshRateChanged(int64_t vsync_period_nanos, void* data);
     /** Committed text waiting for ProcessSystemEvents. Guarded by a mutex in the source, since the UI thread fills it. */
     Opal::DynamicArray<uchar32> m_pending_characters;
-    /** Set by QueueSafeInsetsRefresh, under the same mutex. */
-    bool m_is_safe_insets_stale = false;
+    /** Set by QueueWindowInsetsChange, under the same mutex. */
+    bool m_are_insets_stale = false;
+    /** The on-screen keyboard as QueueWindowInsetsChange last had it, under the same mutex. */
+    bool m_is_keyboard_visible = false;
+    i32 m_keyboard_height = 0;
 
     void SetUpJava();
     void TearDownJava();

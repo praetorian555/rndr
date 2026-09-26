@@ -127,6 +127,20 @@ TEST_CASE("A desktop window has no safe insets", "[window]")
     app->DestroyGenericWindow(std::move(window));
 }
 
+TEST_CASE("A desktop window has no on-screen keyboard over it", "[window]")
+{
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    Opal::Ref<GenericWindow> window = CreateHiddenWindow(*app);
+
+    // Asking for text records the request; no keyboard comes up over the window.
+    REQUIRE(app->StartTextInput() == ErrorCode::Success);
+    app->ProcessSystemEvents();
+    REQUIRE(window->GetOnScreenKeyboard() == OnScreenKeyboard{});
+    REQUIRE(app->StopTextInput() == ErrorCode::Success);
+
+    app->DestroyGenericWindow(std::move(window));
+}
+
 #if RNDR_WINDOWS
 TEST_CASE("Every cursor shape maps to a system cursor", "[window]")
 {

@@ -104,8 +104,9 @@ Rndr::f32 ReadDpiScale(const android_app* app)
 }
 
 /**
- * Guards what the UI thread hands AndroidApplication - the committed text queue and the stale insets flag - and the
- * pointer to the application that owns them, which the UI thread reaches while android_main may be tearing it down.
+ * Guards what the UI thread hands AndroidApplication - the committed text queue, the stale insets flag and the
+ * on-screen keyboard's insets - and the pointer to the application that owns them, which the UI thread reaches while
+ * android_main may be tearing it down.
  */
 std::mutex g_text_input_mutex;
 
@@ -134,9 +135,9 @@ void JNICALL NativeCommitText(JNIEnv* env, jclass /*activity_class*/, jstring te
 }
 
 /** RndrActivity.nativeWindowInsetsChanged. Runs on the UI thread. */
-void JNICALL NativeWindowInsetsChanged(JNIEnv* /*env*/, jclass /*activity_class*/)
+void JNICALL NativeWindowInsetsChanged(JNIEnv* /*env*/, jclass /*activity_class*/, jboolean keyboard_visible, jint keyboard_height)
 {
-    Rndr::AndroidApplication::QueueSafeInsetsRefresh();
+    Rndr::AndroidApplication::QueueWindowInsetsChange(keyboard_visible == JNI_TRUE, keyboard_height);
 }
 
 /**
@@ -272,15 +273,16 @@ void Rndr::AndroidApplication::ProcessSystemEvents(u32 timeout_ms)
         }
     }
     DeliverPendingCharacters();
-    bool is_safe_insets_stale = false;
+    bool are_insets_stale = false;
     {
         const std::lock_guard<std::mutex> lock(g_text_input_mutex);
-        is_safe_insets_stale = m_is_safe_insets_stale;
-        m_is_safe_insets_stale = false;
+        are_insets_stale = m_are_insets_stale;
+        m_are_insets_stale = false;
     }
-    if (is_safe_insets_stale)
+    if (are_insets_stale)
     {
         RefreshSafeInsets();
+        RefreshOnScreenKeyboard();
     }
 }
 
@@ -396,7 +398,7 @@ void Rndr::AndroidApplication::SetUpJava()
     jclass activity_class = jni->GetObjectClass(jni.GetActivity());
     const JNINativeMethod natives[] = {
         {"nativeCommitText", "(Ljava/lang/String;)V", reinterpret_cast<void*>(&NativeCommitText)},
-        {"nativeWindowInsetsChanged", "()V", reinterpret_cast<void*>(&NativeWindowInsetsChanged)},
+        {"nativeWindowInsetsChanged", "(ZI)V", reinterpret_cast<void*>(&NativeWindowInsetsChanged)},
     };
     if (jni->RegisterNatives(activity_class, natives, static_cast<jint>(sizeof(natives) / sizeof(natives[0]))) != JNI_OK)
     {
@@ -552,15 +554,51 @@ void Rndr::AndroidApplication::QueueCommittedText(const Opal::StringUtf32& text)
     ALooper_wake(g_android_app->m_app->looper);
 }
 
-void Rndr::AndroidApplication::QueueSafeInsetsRefresh()
+void Rndr::AndroidApplication::QueueWindowInsetsChange(bool keyboard_visible, i32 keyboard_height)
 {
     const std::lock_guard<std::mutex> lock(g_text_input_mutex);
     if (g_android_app == nullptr)
     {
         return;
     }
-    g_android_app->m_is_safe_insets_stale = true;
+    g_android_app->m_are_insets_stale = true;
+    g_android_app->m_is_keyboard_visible = keyboard_visible;
+    g_android_app->m_keyboard_height = keyboard_height;
     ALooper_wake(g_android_app->m_app->looper);
+}
+
+void Rndr::AndroidApplication::RefreshOnScreenKeyboard()
+{
+    if (m_window == nullptr)
+    {
+        return;
+    }
+    OnScreenKeyboard keyboard;
+    i32 height = 0;
+    {
+        const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+        keyboard.is_visible = m_is_keyboard_visible;
+        height = m_keyboard_height;
+    }
+    // The inset is from the bottom edge, so where the keyboard starts moves with the window's height, which is why a
+    // resize comes through here as well. Android says nothing of its sides; the keyboard's window keeps clear of a
+    // cutout or a navigation bar on either side, as the safe insets do, so they bound it there.
+    const Vector2i window_size = m_window->GetSize();
+    const SafeInsets& safe = m_window->m_safe_insets;
+    height = height < 0 ? 0 : (height > window_size.y ? window_size.y : height);
+    const i32 width = window_size.x - safe.left - safe.right;
+    if (keyboard.is_visible && height > 0 && width > 0)
+    {
+        keyboard.position = Vector2i(safe.left, window_size.y - height);
+        keyboard.size = Vector2i(width, height);
+    }
+    if (keyboard == m_window->m_on_screen_keyboard)
+    {
+        return;
+    }
+    m_window->m_on_screen_keyboard = keyboard;
+    RNDR_LOG_INFO("On-screen keyboard: {}, position ({}, {}), size ({}, {})", keyboard.is_visible ? "up" : "down", keyboard.position.x,
+                  keyboard.position.y, keyboard.size.x, keyboard.size.y);
 }
 
 void Rndr::AndroidApplication::DeliverPendingCharacters()
@@ -887,6 +925,7 @@ void Rndr::AndroidApplication::HandleCommand(i32 command)
             const Vector2i new_size = QueryWindowSize(m_app->window);
             m_window->m_width = new_size.x;
             m_window->m_height = new_size.y;
+            RefreshOnScreenKeyboard();
             m_message_handler->OnWindowNativeHandleChanged(*m_window);
             if (m_window->GetSize() != old_size)
             {
@@ -964,6 +1003,7 @@ void Rndr::AndroidApplication::RefreshWindowSize()
     }
     m_window->m_width = width;
     m_window->m_height = height;
+    RefreshOnScreenKeyboard();
     m_message_handler->OnWindowSizeChanged(*m_window, width, height);
 }
 

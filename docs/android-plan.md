@@ -257,6 +257,24 @@ Input, all from `onInputEvent`:
   resize and no configuration change, and without that the cutout and the navigation bar stayed on the sides they
   had left. Under a plain NativeActivity only the resizes are followed.
   API 30 and later; below it they are zero, and no device that old has the Vulkan 1.3 Forge needs.
+- On-screen keyboard: `GenericWindow::GetOnScreenKeyboard` is whether it is up and the part of the window it covers.
+  The window stays the whole screen while the keyboard is up - the keyboard is an inset over it, not a resize - so
+  it comes from `RndrActivity`'s insets listener, which reads `WindowInsets.Type.ime()` from the insets the system
+  hands the decor view and passes it with `nativeWindowInsetsChanged`. `getCurrentWindowMetrics()` is not asked,
+  since those insets are the window's and not necessarily the keyboard's. Android gives only how far the keyboard
+  covers the window from the bottom edge, which is the area's height, the navigation bar included when it sits
+  under the keyboard. Its sides are the left and right safe insets: the keyboard's window keeps clear of a side
+  cutout and a side navigation bar, which the emulator's `ime` frame in `dumpsys window` showed as
+  `[136,394][2400,1080]` beside a 136-pixel cutout. A floating or split keyboard covers no edge and reports as up
+  with no area. Worked out again when the window is resized, before the resize is reported, since where the keyboard
+  starts depends on the window's height. The insets arrive once per show and hide, with the final height, not
+  frame by frame through the slide. Always down under a plain NativeActivity and below API 30.
+  A turn of the screen passes through states that are not the keyboard's, for up to about 300 ms, before settling
+  on the right one. Some are Android's: on the emulator a turn to portrait with the keyboard down sent `visible`
+  with a 1944-pixel inset for 170 ms, and a turn with it up sent `visible` with a zero inset, then hidden, then the
+  new height. One is this layer's: the resize and the insets come on different threads in either order, so whichever
+  lands first is combined with the other's old value. Checked against `dumpsys window` on the emulator in both
+  orientations; the final state matched the `ime` frame every time.
 - Clipboard: `ClipboardManager` through JNI (`src/platform/android-jni.hpp`), with the text crossing as
   UTF-16, since CheckJNI aborts a debuggable app that gives `NewStringUTF` real UTF-8. Android 10 and later
   hand the clip only to the app with the focus, so a read from the background is empty.

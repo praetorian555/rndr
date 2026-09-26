@@ -48,6 +48,24 @@ struct SafeInsets
 };
 
 /**
+ * The on-screen keyboard as it stands over a window. Pixels, in the window's own coordinates, like SafeInsets.
+ */
+struct OnScreenKeyboard
+{
+    /** The keyboard is up. */
+    bool is_visible = false;
+    /** Top-left corner of the part of the window the keyboard covers. */
+    Vector2i position = Vector2i(0);
+    /**
+     * Size of the part of the window the keyboard covers. Zero while it is hidden, and also while it is up but covers no
+     * edge of the window - a floating or split keyboard, which the system does not say the place of.
+     */
+    Vector2i size = Vector2i(0);
+
+    bool operator==(const OnScreenKeyboard& other) const = default;
+};
+
+/**
  * Represents how the window should modify cursor's position.
  */
 enum class CursorPositionMode : u8
@@ -286,6 +304,16 @@ public:
     [[nodiscard]] SafeInsets GetSafeInsets() const { return m_safe_insets; }
 
     /**
+     * Whether the on-screen keyboard is up, and which part of this window it covers - content the user is typing into
+     * goes above it. Never visible on the desktop. On Android it is what dev.rndr.RndrActivity hears from the system,
+     * read at the next ProcessSystemEvents, and follows resizes before they are reported. A docked keyboard covers the
+     * bottom of the window between the left and right safe insets, and the area includes the navigation bar when that
+     * sits under it. Around a turn of the screen it passes through states that are not the keyboard's before it
+     * settles, a few hundred milliseconds later. Always hidden under a plain NativeActivity and below API 30.
+     */
+    [[nodiscard]] OnScreenKeyboard GetOnScreenKeyboard() const { return m_on_screen_keyboard; }
+
+    /**
      * Ask for the display to refresh at this rate while the window is shown, in hertz; 0 for no preference. A hint:
      * on Android the system weighs it against the panel's modes, the user's settings, battery saver and heat, and
      * only switches when the switch is seamless. The rate it settles on is MonitorInfo::refresh_rate, and a change
@@ -345,6 +373,7 @@ protected:
     CursorShape m_cursor_shape = CursorShape::Arrow;
     ScreenOrientation m_orientation = ScreenOrientation::Any;
     SafeInsets m_safe_insets;
+    OnScreenKeyboard m_on_screen_keyboard;
     f32 m_preferred_refresh_rate = 0.0f;
     bool m_is_closed = false;
     f32 m_dpi_scale = 1.0f;

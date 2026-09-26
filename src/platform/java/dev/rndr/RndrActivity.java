@@ -2,11 +2,13 @@ package dev.rndr;
 
 import android.app.NativeActivity;
 import android.content.Context;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -31,19 +33,26 @@ public class RndrActivity extends NativeActivity {
         textInputView = new TextInputView(this);
         addContentView(textInputView, new ViewGroup.LayoutParams(1, 1));
         // A turn from one landscape to the other changes neither the size nor the configuration, so native code hears
-        // of nothing; the insets swap sides all the same, and this is where that shows.
+        // of nothing; the insets swap sides all the same, and this is where that shows. So does the on-screen keyboard,
+        // which changes no size either: the window stays the whole screen, and the keyboard is an inset over it.
         getWindow().getDecorView().setOnApplyWindowInsetsListener((view, insets) -> {
-            notifyWindowInsetsChanged();
+            notifyWindowInsetsChanged(insets);
             return view.onApplyWindowInsets(insets);
         });
     }
 
-    private static void notifyWindowInsetsChanged() {
+    private static void notifyWindowInsetsChanged(WindowInsets insets) {
+        boolean keyboardVisible = false;
+        int keyboardHeight = 0;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            keyboardVisible = insets.isVisible(WindowInsets.Type.ime());
+            keyboardHeight = insets.getInsets(WindowInsets.Type.ime()).bottom;
+        }
         try {
-            nativeWindowInsetsChanged();
+            nativeWindowInsetsChanged(keyboardVisible, keyboardHeight);
         } catch (UnsatisfiedLinkError e) {
             // The first insets can arrive before android_main has registered the method. The window reads its insets
-            // when it is created, so there is nothing to catch up on.
+            // when it is created, and the keyboard is down until text input starts, so there is nothing to catch up on.
         }
     }
 
@@ -72,8 +81,12 @@ public class RndrActivity extends NativeActivity {
     /** Text the keyboard committed. Registered by AndroidApplication; runs on the UI thread. */
     static native void nativeCommitText(String text);
 
-    /** The window's insets changed. Registered by AndroidApplication; runs on the UI thread. */
-    static native void nativeWindowInsetsChanged();
+    /**
+     * The window's insets changed. Carries the on-screen keyboard's, which native code cannot ask for itself: whether
+     * it is up, and how far it covers the window from the bottom edge. Registered by AndroidApplication; runs on the UI
+     * thread.
+     */
+    static native void nativeWindowInsetsChanged(boolean keyboardVisible, int keyboardHeight);
 
     /**
      * A view with nothing to draw, there to own the InputConnection. Focusable only while text input is active: a

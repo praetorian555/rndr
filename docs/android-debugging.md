@@ -137,6 +137,9 @@ What to look for:
 - `Safe insets: left L, top T, right R, bottom B` - whenever `GenericWindow::GetSafeInsets` changes: the status and
   navigation bars and the camera cutout, in window pixels. The system's own figures to compare against are the
   `statusBars`, `navigationBars` and `displayCutout` frames in `adb shell dumpsys window`.
+- `On-screen keyboard: up|down, position (x, y), size (w, h)` - whenever `GenericWindow::GetOnScreenKeyboard`
+  changes; F2 in the sample brings the keyboard up, Enter takes it down. The system's own figure is the `ime` source
+  frame in `adb shell dumpsys window`, under the activity's window's `InsetsState`.
 - `F libc : Fatal signal 6 (SIGABRT)` - an abort, usually a `Require` in the sample that failed. The `E Rndr`
   line just before it says which call.
 
