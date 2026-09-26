@@ -29,7 +29,9 @@ struct ShaderCacheKey : Opal::ClonableBase<ShaderCacheKey>
     /**
      * Which Slang produced it, from spGetBuildTagString. Upgrading the compiler invalidates every entry
      * rather than silently mixing output from two versions. A free function, so reading it costs nothing -
-     * a cache hit never creates a Slang session.
+     * a cache hit never creates a Slang session. For SPIR-V the version it targets, k_spirv_profile, follows after
+     * a slash: a RNDR_FORGE_VULKAN_1_1 build and a default one can share a cache directory, and neither can load
+     * what the other compiled.
      */
     Opal::StringUtf8 build_tag;
 

@@ -93,6 +93,11 @@ Rndr::ShaderCacheKey Rndr::ShaderCacheKey::Make(const Opal::StringUtf8& source, 
 #if RNDR_SHADER_COMPILER
     const char* build_tag = spGetBuildTagString();
     key.build_tag = build_tag != nullptr ? Opal::StringUtf8(build_tag) : Opal::StringUtf8();
+    if (format == ShaderOutputFormat::SpirV)
+    {
+        key.build_tag += "/";
+        key.build_tag += k_spirv_profile;
+    }
 #endif
     // Without a compiler the tag stays empty and matches no entry a compiler wrote, so every lookup misses.
     return key;

@@ -290,6 +290,35 @@ Vulkan keeps it in and chains those itself. A caller never sees `VkPhysicalDevic
 keeps a `pNext` chain alive, and never has to know that buffer device addresses arrived in 1.2 while
 descriptor indexing arrived in the same release by a different name.
 
+### Vulkan 1.3, or 1.1 and extensions
+
+Forge asks for Vulkan 1.3 and turns away a device that reports less. Configured with
+`-DRNDR_FORGE_VULKAN_1_1=ON`, it asks for 1.1 and takes what it relies on from 1.2 and 1.3 from the extensions
+those releases promoted: `VK_KHR_timeline_semaphore`, `VK_KHR_synchronization2`, `VK_KHR_dynamic_rendering` (with the
+`VK_KHR_depth_stencil_resolve` and `VK_KHR_create_renderpass2` it needs) and `VK_KHR_spirv_1_4` (with
+`VK_KHR_shader_float_controls`) always, `VK_KHR_format_feature_flags2` when the device has it, and for each
+`DeviceFeatures` field from 1.2 the extension that carries it, only when it is asked for. That is what MoltenVK
+offers, and what drivers that stopped at 1.1 offer when they are recent enough. `Forge::k_vulkan_api_version` says
+which build this is. The API and its behaviour are the same in both, and nothing in either depends on the other,
+so the one choice is made when rndr is configured:
+
+- `FeatureChain` in `src/forge/device.cpp` chains `VkPhysicalDeviceVulkan12Features` and its siblings on 1.3, and
+  on 1.1 the extension structures, copying between them and the version structures so that the checks and error
+  messages are written once.
+- The core 1.2 and 1.3 commands resolve to nothing on a 1.1 device, so after `volkLoadInstance` the 1.1 build
+  points volk's pointers for them at the extension commands (`AliasPromotedCommands` in
+  `src/forge/graphics-context.cpp`). The core names are aliases of the extension ones in the headers, so no call
+  site changes.
+- Shaders are compiled to SPIR-V 1.4 instead of 1.5; `ShaderCompiler` and `RNDR_SLANGC_OPTIONS` both follow the flag
+  through `k_spirv_profile`. 1.3 is what 1.1 takes without an extension, but Slang writes an 8-bit specialization
+  constant's conversion as an `OpSpecConstantOp UConvert`, which SPIR-V only allows from 1.4, and mesh shaders need
+  1.4 anyway. The profile is part of every SPIR-V shader cache key, so the two builds can share a cache directory.
+- `VK_KHR_format_feature_flags2` is what lets a shader read a storage image without naming its format, which is
+  what Slang emits for a `RWTexture`; 1.3 has it without asking.
+- `shader_output_layer` is never supported in the 1.1 build. `VK_EXT_shader_viewport_index_layer` would carry it,
+  but Slang (2026.10) writes `SV_RenderTargetArrayIndex` from a vertex stage with the `ShaderLayer` capability,
+  which SPIR-V only has from 1.5, whatever version it is asked for, so no module compiled for it would load.
+
 ### Image or texture
 
 Vulkan says image where Forge says texture, and one word for one thing is what keeps the API searchable:

@@ -29,6 +29,17 @@ enum class ShaderOutputFormat : u8
     Glsl,
 };
 
+/**
+ * The SPIR-V version ShaderCompiler emits, as a Slang profile name: 1.5, or 1.4 in a RNDR_FORGE_VULKAN_1_1 build,
+ * the newest Vulkan 1.1 takes through VK_KHR_spirv_1_4. 1.3 would need no extension, but Slang writes some
+ * specialization constant arithmetic in a form SPIR-V only allows from 1.4. RNDR_SLANGC_OPTIONS follows the same flag.
+ */
+#if defined(RNDR_FORGE_VULKAN_1_1)
+inline constexpr const char* k_spirv_profile = "spirv_1_4";
+#else
+inline constexpr const char* k_spirv_profile = "spirv_1_5";
+#endif
+
 /** Compute shader thread group size, extracted from shader reflection. */
 struct NumThreads
 {

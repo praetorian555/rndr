@@ -134,12 +134,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Both, because GCC only warns about some things with the optimizer on, and warnings are errors.
+        # Both, because GCC only warns about some things with the optimizer on, and warnings are errors. The third is
+        # the RNDR_FORGE_VULKAN_1_1 build, which runs the whole suite through the extensions instead of core 1.3.
         include:
           - config: Debug
             build-dir: build/ci-linux-debug
+            forge-vulkan-1-1: OFF
           - config: Release
             build-dir: build/ci-linux-release
+            forge-vulkan-1-1: OFF
+          - config: Debug
+            build-dir: build/ci-linux-vulkan-1-1
+            forge-vulkan-1-1: ON
 
     env:
       RNDR_TEST_REQUIRE_VULKAN: "1"
@@ -193,6 +199,7 @@ jobs:
           -DRNDR_HARDENING=OFF
           -DRNDR_FORGE=ON
           -DRNDR_FORGE_VALIDATION=ON
+          -DRNDR_FORGE_VULKAN_1_1=${{ matrix.forge-vulkan-1-1 }}
 
       - name: Build
         run: cmake --build ${{ matrix.build-dir }} --target rndr-test

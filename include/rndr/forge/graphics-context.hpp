@@ -17,6 +17,18 @@
 namespace Rndr::Forge
 {
 
+/**
+ * The Vulkan version Forge asks for, and the least a device must support. 1.3 by default. A build with
+ * RNDR_FORGE_VULKAN_1_1 asks for 1.1 and takes what Forge relies on from 1.2 and 1.3 - timeline semaphores,
+ * synchronization2, dynamic rendering, and the features DeviceFeatures names - from the extensions those versions
+ * promoted, which is what MoltenVK and older drivers offer. The API is the same in both.
+ */
+#if defined(RNDR_FORGE_VULKAN_1_1)
+inline constexpr u32 k_vulkan_api_version = VK_API_VERSION_1_1;
+#else
+inline constexpr u32 k_vulkan_api_version = VK_API_VERSION_1_3;
+#endif
+
 /** How bad the thing a debug message reports is. Mirrors VkDebugUtilsMessageSeverityFlagBitsEXT. */
 enum class DebugMessageSeverity : u8
 {

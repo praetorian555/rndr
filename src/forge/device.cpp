@@ -74,10 +74,25 @@ namespace
 {
 using namespace Rndr;
 
+#if defined(RNDR_FORGE_VULKAN_1_1)
+/**
+ * What a device on Vulkan 1.1 needs before it can do dynamic rendering: the extension, and the two it is built on.
+ * Those two are built on multiview and maintenance2, which 1.1 made core.
+ */
+constexpr const char* k_dynamic_rendering_extensions[] = {
+    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME};
+#endif
+
 /**
  * Every feature structure Vulkan keeps its features in, chained together once. It exists so that the mapping
  * from Forge's flat DeviceFeatures onto them is written in one place and used twice: to ask the device what
  * it supports, and to tell it what to enable.
+ *
+ * vk11, vk12 and vk13 hold the features by the version that made them core, and the rest of this file reads and
+ * writes them there in either build. On Vulkan 1.3 they are what gets chained. On Vulkan 1.1 (RNDR_FORGE_VULKAN_1_1)
+ * the device knows none of the three, so each feature travels in the structure of the extension it was promoted
+ * from, and Query and Fill copy between those and the three; a feature whose extension has no structure is
+ * supported exactly when the extension is there.
  *
  * The chain points at its own members, so an instance of this must not be copied or moved after it is built.
  */
@@ -91,45 +106,116 @@ struct FeatureChain
     VkPhysicalDeviceIndexTypeUint8Features index_type_uint8{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES};
     VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR local_read{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR};
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    VkPhysicalDeviceMultiviewFeatures multiview{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};
+    VkPhysicalDeviceTimelineSemaphoreFeatures timeline_semaphore{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES};
+    VkPhysicalDeviceSynchronization2Features synchronization2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES};
+    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES};
+    VkPhysicalDeviceDescriptorIndexingFeatures descriptor_indexing{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
+    VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES};
+    VkPhysicalDeviceScalarBlockLayoutFeatures scalar_block_layout{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES};
+    VkPhysicalDeviceHostQueryResetFeatures host_query_reset{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES};
+    VkPhysicalDeviceShaderFloat16Int8Features float16_int8{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES};
+    VkPhysicalDeviceShaderAtomicInt64Features atomic_int64{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES};
+
+    /** Which extensions the chain was built with, for the features they carry without a structure. */
+    bool has_descriptor_indexing = false;
+    bool has_sampler_mirror_clamp_to_edge = false;
+    bool has_sampler_filter_minmax = false;
+    bool has_draw_indirect_count = false;
+    bool has_dynamic_rendering = false;
+#endif
 
     /**
      * Chaining a structure that belongs to an extension the device does not have is not allowed, so each of
      * the extension backed ones goes in only once that extension is known to be there. The tail is walked
      * rather than each structure naming the next, so that which ones are in does not decide the order.
      *
-     * @param include_mesh Whether to chain the mesh shader structure.
-     * @param include_index_type_uint8 Whether to chain the 8-bit index structure.
-     * @param include_local_read Whether to chain the dynamic rendering local read structure.
+     * @param has_extension Called with an extension name, true when it is in: supported by the device when the chain
+     *                      asks what the device can do, enabled on it when the chain says what to turn on.
      */
-    explicit FeatureChain(bool include_mesh, bool include_index_type_uint8, bool include_local_read)
+    template <typename HasExtension>
+    explicit FeatureChain(const HasExtension& has_extension)
     {
-        features2.pNext = &vk11;
-        vk11.pNext = &vk12;
-        vk12.pNext = &vk13;
-        void** tail = &vk13.pNext;
-        *tail = nullptr;
-        if (include_mesh)
+        m_tail = reinterpret_cast<VkBaseOutStructure*>(&features2);
+        m_tail->pNext = nullptr;
+#if defined(RNDR_FORGE_VULKAN_1_1)
+        Append(&multiview);
+        AppendIf(has_extension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME), &timeline_semaphore);
+        AppendIf(has_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME), &synchronization2);
+        has_dynamic_rendering = true;
+        for (const char* name : k_dynamic_rendering_extensions)
         {
-            *tail = &mesh;
-            tail = &mesh.pNext;
-            *tail = nullptr;
+            has_dynamic_rendering = has_dynamic_rendering && has_extension(name);
         }
-        if (include_index_type_uint8)
-        {
-            *tail = &index_type_uint8;
-            tail = &index_type_uint8.pNext;
-            *tail = nullptr;
-        }
-        if (include_local_read)
-        {
-            *tail = &local_read;
-            tail = &local_read.pNext;
-            *tail = nullptr;
-        }
+        AppendIf(has_dynamic_rendering, &dynamic_rendering);
+        has_descriptor_indexing = has_extension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        AppendIf(has_descriptor_indexing, &descriptor_indexing);
+        AppendIf(has_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME), &buffer_device_address);
+        AppendIf(has_extension(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME), &scalar_block_layout);
+        AppendIf(has_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME), &host_query_reset);
+        AppendIf(has_extension(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME), &float16_int8);
+        AppendIf(has_extension(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME), &atomic_int64);
+        has_sampler_mirror_clamp_to_edge = has_extension(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+        has_sampler_filter_minmax = has_extension(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
+        has_draw_indirect_count = has_extension(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
+#else
+        Append(&vk11);
+        Append(&vk12);
+        Append(&vk13);
+#endif
+        AppendIf(has_extension(VK_EXT_MESH_SHADER_EXTENSION_NAME), &mesh);
+        AppendIf(has_extension(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME) || has_extension(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME),
+                 &index_type_uint8);
+        AppendIf(has_extension(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME), &local_read);
     }
 
     FeatureChain(const FeatureChain&) = delete;
     FeatureChain& operator=(const FeatureChain&) = delete;
+
+    /** Ask the device what it supports, into every structure in the chain and into vk11, vk12 and vk13. */
+    void Query(VkPhysicalDevice physical_device)
+    {
+        vkGetPhysicalDeviceFeatures2(physical_device, &features2);
+#if defined(RNDR_FORGE_VULKAN_1_1)
+        vk11.multiview = multiview.multiview;
+
+        vk12.descriptorIndexing = has_descriptor_indexing ? VK_TRUE : VK_FALSE;
+        vk12.runtimeDescriptorArray = descriptor_indexing.runtimeDescriptorArray;
+        vk12.descriptorBindingVariableDescriptorCount = descriptor_indexing.descriptorBindingVariableDescriptorCount;
+        vk12.descriptorBindingPartiallyBound = descriptor_indexing.descriptorBindingPartiallyBound;
+        vk12.descriptorBindingSampledImageUpdateAfterBind = descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind;
+        vk12.descriptorBindingStorageBufferUpdateAfterBind = descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind;
+        vk12.descriptorBindingStorageImageUpdateAfterBind = descriptor_indexing.descriptorBindingStorageImageUpdateAfterBind;
+        vk12.descriptorBindingUniformBufferUpdateAfterBind = descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind;
+        vk12.descriptorBindingUpdateUnusedWhilePending = descriptor_indexing.descriptorBindingUpdateUnusedWhilePending;
+        vk12.shaderSampledImageArrayNonUniformIndexing = descriptor_indexing.shaderSampledImageArrayNonUniformIndexing;
+        vk12.shaderStorageBufferArrayNonUniformIndexing = descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing;
+        vk12.shaderStorageImageArrayNonUniformIndexing = descriptor_indexing.shaderStorageImageArrayNonUniformIndexing;
+        vk12.shaderUniformBufferArrayNonUniformIndexing = descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing;
+        vk12.bufferDeviceAddress = buffer_device_address.bufferDeviceAddress;
+        vk12.scalarBlockLayout = scalar_block_layout.scalarBlockLayout;
+        vk12.hostQueryReset = host_query_reset.hostQueryReset;
+        vk12.samplerMirrorClampToEdge = has_sampler_mirror_clamp_to_edge ? VK_TRUE : VK_FALSE;
+        vk12.samplerFilterMinmax = has_sampler_filter_minmax ? VK_TRUE : VK_FALSE;
+        vk12.drawIndirectCount = has_draw_indirect_count ? VK_TRUE : VK_FALSE;
+        vk12.shaderInt8 = float16_int8.shaderInt8;
+        vk12.shaderFloat16 = float16_int8.shaderFloat16;
+        vk12.shaderBufferInt64Atomics = atomic_int64.shaderBufferInt64Atomics;
+        vk12.shaderSharedInt64Atomics = atomic_int64.shaderSharedInt64Atomics;
+        // VK_EXT_shader_viewport_index_layer would carry it, but Slang (2026.10) writes the layer from a vertex stage
+        // with the ShaderLayer capability, which SPIR-V only has from 1.5, whatever older version it targets. No
+        // module this build compiles for it would load, so no device is said to have it.
+        vk12.shaderOutputLayer = VK_FALSE;
+        vk12.timelineSemaphore = timeline_semaphore.timelineSemaphore;
+
+        vk13.synchronization2 = synchronization2.synchronization2;
+        // The extension structure is left out of the chain unless all three extensions are there, and then it
+        // reports the feature; without them the feature is not there however the device answers.
+        vk13.dynamicRendering = has_dynamic_rendering ? dynamic_rendering.dynamicRendering : VK_FALSE;
+#endif
+    }
 
     /** Set the Vulkan field behind every Forge field that was asked for. */
     void Fill(const Forge::DeviceFeatures& features)
@@ -186,6 +272,53 @@ struct FeatureChain
         mesh.taskShader = features.task_shader;
         index_type_uint8.indexTypeUint8 = features.index_type_uint8;
         local_read.dynamicRenderingLocalRead = features.dynamic_rendering_local_read;
+
+#if defined(RNDR_FORGE_VULKAN_1_1)
+        // The features whose extension has no structure are turned on by enabling it, which
+        // CollectDeviceExtensions has done; vk12.descriptorIndexing likewise stands for the extension.
+        multiview.multiview = vk11.multiview;
+        descriptor_indexing.runtimeDescriptorArray = vk12.runtimeDescriptorArray;
+        descriptor_indexing.descriptorBindingVariableDescriptorCount = vk12.descriptorBindingVariableDescriptorCount;
+        descriptor_indexing.descriptorBindingPartiallyBound = vk12.descriptorBindingPartiallyBound;
+        descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind = vk12.descriptorBindingSampledImageUpdateAfterBind;
+        descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind = vk12.descriptorBindingStorageBufferUpdateAfterBind;
+        descriptor_indexing.descriptorBindingStorageImageUpdateAfterBind = vk12.descriptorBindingStorageImageUpdateAfterBind;
+        descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind = vk12.descriptorBindingUniformBufferUpdateAfterBind;
+        descriptor_indexing.descriptorBindingUpdateUnusedWhilePending = vk12.descriptorBindingUpdateUnusedWhilePending;
+        descriptor_indexing.shaderSampledImageArrayNonUniformIndexing = vk12.shaderSampledImageArrayNonUniformIndexing;
+        descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing = vk12.shaderStorageBufferArrayNonUniformIndexing;
+        descriptor_indexing.shaderStorageImageArrayNonUniformIndexing = vk12.shaderStorageImageArrayNonUniformIndexing;
+        descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing = vk12.shaderUniformBufferArrayNonUniformIndexing;
+        buffer_device_address.bufferDeviceAddress = vk12.bufferDeviceAddress;
+        scalar_block_layout.scalarBlockLayout = vk12.scalarBlockLayout;
+        host_query_reset.hostQueryReset = vk12.hostQueryReset;
+        float16_int8.shaderInt8 = vk12.shaderInt8;
+        float16_int8.shaderFloat16 = vk12.shaderFloat16;
+        atomic_int64.shaderBufferInt64Atomics = vk12.shaderBufferInt64Atomics;
+        atomic_int64.shaderSharedInt64Atomics = vk12.shaderSharedInt64Atomics;
+        timeline_semaphore.timelineSemaphore = vk12.timelineSemaphore;
+        synchronization2.synchronization2 = vk13.synchronization2;
+        dynamic_rendering.dynamicRendering = vk13.dynamicRendering;
+#endif
+    }
+
+private:
+    VkBaseOutStructure* m_tail = nullptr;
+
+    void Append(void* structure)
+    {
+        auto* next = static_cast<VkBaseOutStructure*>(structure);
+        next->pNext = nullptr;
+        m_tail->pNext = next;
+        m_tail = next;
+    }
+
+    void AppendIf(bool condition, void* structure)
+    {
+        if (condition)
+        {
+            Append(structure);
+        }
     }
 };
 
@@ -245,6 +378,66 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
     {
         extensions.PushBack(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
     }
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    // What 1.2 and 1.3 made core, which a device asked for 1.1 only has as extensions: the three Forge is written on
+    // always, and each of the others once a feature it carries is asked for.
+    extensions.PushBack(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+    extensions.PushBack(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    // Shaders are SPIR-V 1.4 in this build (k_spirv_profile), which 1.2 made core and 1.1 has through this extension,
+    // built on the float controls one.
+    extensions.PushBack(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+    extensions.PushBack(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+    for (const char* name : k_dynamic_rendering_extensions)
+    {
+        extensions.PushBack(name);
+    }
+    // 1.3 lets a shader read or write a storage image without naming its format, which is what Slang emits for a
+    // RWTexture, wherever the format allows it; this is where 1.3 got that. Taken when it is there, not demanded,
+    // since only such a shader needs it.
+    if (physical_device.IsExtensionSupported(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME))
+    {
+        extensions.PushBack(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+    }
+    const Forge::DeviceFeatures& features = desc.features;
+    if (features.descriptor_indexing || features.runtime_descriptor_array || features.variable_descriptor_count ||
+        features.partially_bound_descriptors || features.update_after_bind_descriptors ||
+        features.update_unused_while_pending_descriptors || features.non_uniform_descriptor_indexing)
+    {
+        extensions.PushBack(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+    }
+    if (features.buffer_device_address)
+    {
+        extensions.PushBack(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+    }
+    if (features.scalar_block_layout)
+    {
+        extensions.PushBack(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
+    }
+    if (features.host_query_reset)
+    {
+        extensions.PushBack(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
+    }
+    if (features.sampler_mirror_clamp_to_edge)
+    {
+        extensions.PushBack(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+    }
+    if (features.sampler_filter_minmax)
+    {
+        extensions.PushBack(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
+    }
+    if (features.draw_indirect_count)
+    {
+        extensions.PushBack(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
+    }
+    if (features.shader_int8 || features.shader_float16)
+    {
+        extensions.PushBack(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+    }
+    if (features.shader_buffer_int64_atomics || features.shader_shared_int64_atomics)
+    {
+        extensions.PushBack(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
+    }
+#endif
     return extensions;
 }
 
@@ -257,8 +450,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     const bool has_mesh_extension = physical_device.IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     const char* index_type_uint8_extension = FindIndexTypeUint8Extension(physical_device);
     const bool has_local_read_extension = physical_device.IsExtensionSupported(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
-    FeatureChain supported(has_mesh_extension, index_type_uint8_extension != nullptr, has_local_read_extension);
-    vkGetPhysicalDeviceFeatures2(physical_device.GetNativePhysicalDevice(), &supported.features2);
+    FeatureChain supported([&physical_device](const char* name) { return physical_device.IsExtensionSupported(name); });
+    supported.Query(physical_device.GetNativePhysicalDevice());
 
     const char* missing = nullptr;
     auto require = [&missing](bool is_requested, VkBool32 is_supported, const char* name)
@@ -363,6 +556,15 @@ Opal::StringUtf8 Reason(const char* what, const char* detail)
  */
 Opal::StringUtf8 FindUnmetRequirement(const Forge::PhysicalDevice& physical_device, const Forge::DeviceDesc& desc)
 {
+    // Before anything else, since the features are asked for in structures an older device does not know.
+    const u32 api_version = physical_device.GetProperties().apiVersion;
+    if (api_version < Forge::k_vulkan_api_version)
+    {
+        char buffer[64] = {};
+        snprintf(buffer, sizeof(buffer), "supports only Vulkan %u.%u", VK_API_VERSION_MAJOR(api_version),
+                 VK_API_VERSION_MINOR(api_version));
+        return Opal::StringUtf8(buffer);
+    }
     for (const char* extension_name : CollectDeviceExtensions(physical_device, desc))
     {
         if (!physical_device.IsExtensionSupported(extension_name))
@@ -506,6 +708,14 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
         RNDR_LOG_ERROR("Forge: Device::Create was given an empty physical device");
         return Result(ErrorCode::InvalidArgument);
     }
+    const u32 api_version = device.m_physical_device.GetProperties().apiVersion;
+    if (api_version < k_vulkan_api_version)
+    {
+        RNDR_LOG_ERROR("Forge: this device supports only Vulkan {}.{}, and Forge needs {}.{}", VK_API_VERSION_MAJOR(api_version),
+                       VK_API_VERSION_MINOR(api_version), VK_API_VERSION_MAJOR(k_vulkan_api_version),
+                       VK_API_VERSION_MINOR(k_vulkan_api_version));
+        return Result(ErrorCode::FeatureNotSupported);
+    }
 
     Opal::DynamicArray<VkDeviceQueueCreateInfo> queue_create_infos;
     const ErrorCode queue_status = device.CollectQueueFamilies(queue_create_infos);
@@ -533,8 +743,18 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
         return Result(feature_status);
     }
 
-    FeatureChain enabled_features(device.m_desc.features.mesh_shader || device.m_desc.features.task_shader,
-                                  device.m_desc.features.index_type_uint8, device.m_desc.features.dynamic_rendering_local_read);
+    FeatureChain enabled_features(
+        [&device_extensions](const char* name)
+        {
+            for (const char* enabled_name : device_extensions)
+            {
+                if (strcmp(enabled_name, name) == 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        });
     enabled_features.Fill(device.m_desc.features);
 
     VkDeviceCreateInfo create_info{};

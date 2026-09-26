@@ -464,7 +464,7 @@ Rndr::ErrorCode Rndr::ShaderCompiler::LoadModule(const Opal::StringUtf8& source,
     else
     {
         target_desc.format = SLANG_SPIRV;
-        target_desc.profile = global_session.findProfile("spirv_1_5");
+        target_desc.profile = global_session.findProfile(k_spirv_profile);
         target_desc.flags = SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
         session_desc.compilerOptionEntries = session_options;
         session_desc.compilerOptionEntryCount = sizeof(session_options) / sizeof(session_options[0]);

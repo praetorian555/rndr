@@ -6797,6 +6797,22 @@ TEST_CASE("Forge shader cache", "[forge]")
         Rndr::ShaderCache reopened{directory};
         REQUIRE(reopened.Find(wrong_tag).IsEmpty());
     }
+    SECTION("A SPIR-V key names the SPIR-V version, so a 1.1 build and a 1.3 one never share a blob")
+    {
+        Opal::StringUtf8 suffix("/");
+        suffix += Rndr::k_spirv_profile;
+        REQUIRE(key.build_tag.GetSize() > suffix.GetSize());
+        const u64 slang_tag_size = key.build_tag.GetSize() - suffix.GetSize();
+        REQUIRE(Opal::StringUtf8(key.build_tag.GetData() + slang_tag_size) == suffix);
+
+        // The same source compiled by the same Slang for another version is a different key, and misses.
+        compile(k_cache_source, "main_first");
+        Rndr::ShaderCacheKey other_version = key.Clone();
+        other_version.build_tag = Opal::StringUtf8(key.build_tag.GetData(), static_cast<i64>(slang_tag_size));
+        other_version.build_tag += "/spirv_1_0";
+        Rndr::ShaderCache reopened{directory};
+        REQUIRE(reopened.Find(other_version).IsEmpty());
+    }
     SECTION("A corrupt blob is recompiled over rather than trusted")
     {
         const Opal::DynamicArray<u8> written = compile(k_cache_source, "main_first");

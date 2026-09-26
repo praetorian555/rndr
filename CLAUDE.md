@@ -47,6 +47,11 @@ build cleanly while being skipped entirely:
 Always configure with `RNDR_ASSIMP=ON` and `RNDR_FORGE_VALIDATION=ON`. Without assimp the Forge sample dies
 at mesh loading; without the validation layer a run proves nothing about correctness.
 
+`RNDR_FORGE_VULKAN_1_1=ON` builds Forge on Vulkan 1.1 and the extensions 1.2 and 1.3 promoted, for MoltenVK -
+see the Vulkan 1.1 section of [docs/forge.md](docs/forge.md). It lives in its own directory, `build/msvc-vk11`,
+configured as above plus the flag. A change to device creation, the commands Forge calls or the shader compiler
+is only checked once the `[forge]` suite passes in both.
+
 `RNDR_HARDENING` defaults to ON and instruments the build with AddressSanitizer. CI configures with it
 OFF, and hardened builds refuse to install.
 

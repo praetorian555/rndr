@@ -310,6 +310,10 @@ if (${RNDR_FORGE})
     if (${RNDR_FORGE_VALIDATION})
         target_compile_definitions(rndr PUBLIC RNDR_FORGE_VALIDATION)
     endif ()
+    # Public, because it changes the SPIR-V version ShaderCompiler emits, and what Forge::k_vulkan_api_version says.
+    if (${RNDR_FORGE_VULKAN_1_1})
+        target_compile_definitions(rndr PUBLIC RNDR_FORGE_VULKAN_1_1)
+    endif ()
 endif ()
 
 # @formatter:off

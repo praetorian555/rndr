@@ -63,6 +63,35 @@ void ReleaseVolk()
     }
 }
 
+#if defined(RNDR_FORGE_VULKAN_1_1)
+/**
+ * Points volk's pointers for the 1.2 and 1.3 commands Forge calls at the extension commands they were promoted from.
+ * An instance and a device that ask for 1.1 have no core 1.2 or 1.3 commands - the pointers volk loaded for them
+ * dispatch to nothing - while the promoted command takes the same arguments in the same types, the core names being
+ * aliases of the extension ones. So every call site in Forge stays as it is and reaches the extension. One whose
+ * extension the device does not enable stays unusable, as the core command would be on a device without the feature.
+ */
+void AliasPromotedCommands()
+{
+    // Timeline semaphores (VK_KHR_timeline_semaphore).
+    vkWaitSemaphores = vkWaitSemaphoresKHR;
+    vkSignalSemaphore = vkSignalSemaphoreKHR;
+    vkGetSemaphoreCounterValue = vkGetSemaphoreCounterValueKHR;
+    // Synchronization2 (VK_KHR_synchronization2).
+    vkCmdPipelineBarrier2 = vkCmdPipelineBarrier2KHR;
+    vkQueueSubmit2 = vkQueueSubmit2KHR;
+    vkCmdWriteTimestamp2 = vkCmdWriteTimestamp2KHR;
+    // Dynamic rendering (VK_KHR_dynamic_rendering).
+    vkCmdBeginRendering = vkCmdBeginRenderingKHR;
+    vkCmdEndRendering = vkCmdEndRenderingKHR;
+    // The optional features DeviceFeatures names.
+    vkGetBufferDeviceAddress = vkGetBufferDeviceAddressKHR;
+    vkResetQueryPool = vkResetQueryPoolEXT;
+    vkCmdDrawIndirectCount = vkCmdDrawIndirectCountKHR;
+    vkCmdDrawIndexedIndirectCount = vkCmdDrawIndexedIndirectCountKHR;
+}
+#endif
+
 /**
  * Holds the count for the length of Create. A context that gives up part way through never reaches its
  * destructor, so without this the count it took would never be given back.
@@ -270,7 +299,7 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.pEngineName = "RNDR";
     app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.apiVersion = VK_API_VERSION_1_3;
+    app_info.apiVersion = k_vulkan_api_version;
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
@@ -310,6 +339,9 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
         return Result(VkResultToErrorCode(result));
     }
     volkLoadInstance(context.m_instance);
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    AliasPromotedCommands();
+#endif
 
     // Creation of debug messanger
     if (collect_debug_messages)
