@@ -28,16 +28,28 @@ Opal::Expected<Rndr::Forge::FrameContext, Rndr::ErrorCode> Rndr::Forge::FrameCon
 
     // Starting at the number of frames in flight is what replaces a fence per slot created signaled: the
     // first frames_in_flight frames wait for a value at or below it, so none of them waits for work that was
-    // never submitted.
-    Opal::Expected<Semaphore, ErrorCode> timeline =
-        Semaphore::Create(device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(desc.frames_in_flight)});
-    if (!timeline.HasValue())
+    // never submitted. A device without timelines gets exactly those fences instead.
+    if (device.HasTimelineSemaphores())
     {
-        return Result(timeline.GetError());
+        Opal::Expected<Semaphore, ErrorCode> timeline =
+            Semaphore::Create(device, {.type = SemaphoreType::Timeline, .initial_value = static_cast<u64>(desc.frames_in_flight)});
+        if (!timeline.HasValue())
+        {
+            return Result(timeline.GetError());
+        }
+        frame_context.m_frame_timeline = std::move(timeline.GetValue());
     }
-    frame_context.m_frame_timeline = std::move(timeline.GetValue());
     for (i32 frame = 0; frame < desc.frames_in_flight; ++frame)
     {
+        if (!device.HasTimelineSemaphores())
+        {
+            Opal::Expected<Fence, ErrorCode> fence = Fence::Create(device, true);
+            if (!fence.HasValue())
+            {
+                return Result(fence.GetError());
+            }
+            frame_context.m_frame_fences.EmplaceBack(std::move(fence.GetValue()));
+        }
         Opal::Expected<Semaphore, ErrorCode> texture_ready = Semaphore::Create(device);
         if (!texture_ready.HasValue())
         {
@@ -67,6 +79,7 @@ Rndr::Forge::FrameContext::FrameContext(FrameContext&& other) noexcept
       m_graphics_queue(std::move(other.m_graphics_queue)),
       m_present_queue(std::move(other.m_present_queue)),
       m_frame_timeline(std::move(other.m_frame_timeline)),
+      m_frame_fences(std::move(other.m_frame_fences)),
       m_texture_ready_semaphores(std::move(other.m_texture_ready_semaphores)),
       m_command_buffers(std::move(other.m_command_buffers)),
       m_render_finished_semaphores(std::move(other.m_render_finished_semaphores)),
@@ -78,6 +91,7 @@ Rndr::Forge::FrameContext::FrameContext(FrameContext&& other) noexcept
     other.m_graphics_queue = nullptr;
     other.m_present_queue = nullptr;
     // A moved-from Semaphore is already empty, so m_frame_timeline needs nothing here.
+    other.m_frame_fences.Clear();
     other.m_texture_ready_semaphores.Clear();
     other.m_command_buffers.Clear();
     other.m_render_finished_semaphores.Clear();
@@ -96,6 +110,7 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
         m_graphics_queue = std::move(other.m_graphics_queue);
         m_present_queue = std::move(other.m_present_queue);
         m_frame_timeline = std::move(other.m_frame_timeline);
+        m_frame_fences = std::move(other.m_frame_fences);
         m_texture_ready_semaphores = std::move(other.m_texture_ready_semaphores);
         m_command_buffers = std::move(other.m_command_buffers);
         m_render_finished_semaphores = std::move(other.m_render_finished_semaphores);
@@ -105,6 +120,7 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
         other.m_swap_chain = nullptr;
         other.m_graphics_queue = nullptr;
         other.m_present_queue = nullptr;
+        other.m_frame_fences.Clear();
         other.m_texture_ready_semaphores.Clear();
         other.m_command_buffers.Clear();
         other.m_render_finished_semaphores.Clear();
@@ -116,7 +132,7 @@ Rndr::Forge::FrameContext& Rndr::Forge::FrameContext::operator=(FrameContext&& o
 
 void Rndr::Forge::FrameContext::Destroy()
 {
-    if (m_device.IsValid() && m_frame_timeline.IsValid())
+    if (m_device.IsValid() && (m_frame_timeline.IsValid() || !m_frame_fences.IsEmpty()))
     {
         // Frames may still be in flight, and every object below is one the device could still be reading.
         // A wait that fails has already logged why, and there is nothing else teardown can do about it.
@@ -126,6 +142,7 @@ void Rndr::Forge::FrameContext::Destroy()
     m_render_finished_semaphores.Clear();
     m_texture_ready_semaphores.Clear();
     m_frame_timeline.Destroy();
+    m_frame_fences.Clear();
     m_device = nullptr;
     m_swap_chain = nullptr;
     m_graphics_queue = nullptr;
@@ -166,9 +183,17 @@ Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::Frame
     // Frame k waits for k + 1, which is what frame k - frames_in_flight signalled - the frame whose slot,
     // command buffer and texture-ready semaphore this one is about to reuse. Nothing to reset afterwards, so
     // there is no ordering question about where the reset goes either.
-    RNDR_FORGE_CHECK_EXPECTED(m_frame_timeline.Wait(m_frames_submitted + 1), Result);
-
     const u32 frame_index = GetFrameIndex();
+    if (m_frame_fences.IsEmpty())
+    {
+        RNDR_FORGE_CHECK_EXPECTED(m_frame_timeline.Wait(m_frames_submitted + 1), Result);
+    }
+    else
+    {
+        // Reset only as the frame is submitted, in EndFrame: a BeginFrame that acquires nothing submits nothing, and a
+        // fence reset here would then never be signalled again.
+        RNDR_FORGE_CHECK_EXPECTED(m_frame_fences[static_cast<i32>(frame_index)].Wait(), Result);
+    }
     Opal::Expected<AcquiredTexture, ErrorCode> acquired_texture = m_swap_chain->AcquireTexture(m_texture_ready_semaphores[frame_index]);
     if (!acquired_texture.HasValue())
     {
@@ -239,13 +264,29 @@ Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::Frame
     // while work behind that stage is still reading it.
     const Opal::Ref<const CommandBuffer> command_buffer_ref(command_buffer);
     const SemaphoreSubmit wait{.semaphore = image_ready, .stages = PipelineStageBits::ColorAttachmentOutput};
-    const SemaphoreSubmit signals[2] = {
-        {.semaphore = render_finished},
-        {.semaphore = m_frame_timeline, .value = m_frames_submitted + 1 + static_cast<u64>(m_desc.frames_in_flight)}};
-    RNDR_FORGE_CHECK_EXPECTED(
-        m_graphics_queue->Submit(
-            {.command_buffers = {&command_buffer_ref, 1}, .wait_semaphores = {&wait, 1}, .signal_semaphores = {signals, 2}}),
-        Result);
+    if (m_frame_fences.IsEmpty())
+    {
+        const SemaphoreSubmit signals[2] = {
+            {.semaphore = render_finished},
+            {.semaphore = m_frame_timeline, .value = m_frames_submitted + 1 + static_cast<u64>(m_desc.frames_in_flight)}};
+        RNDR_FORGE_CHECK_EXPECTED(
+            m_graphics_queue->Submit(
+                {.command_buffers = {&command_buffer_ref, 1}, .wait_semaphores = {&wait, 1}, .signal_semaphores = {signals, 2}}),
+            Result);
+    }
+    else
+    {
+        // The fence does what the timeline signal does: it is signalled once this command buffer has finished, which
+        // is what the frame reusing the slot waits for.
+        const Fence& fence = m_frame_fences[static_cast<i32>(frame_index)];
+        RNDR_FORGE_CHECK_EXPECTED(fence.Reset(), Result);
+        const SemaphoreSubmit signal{.semaphore = render_finished};
+        RNDR_FORGE_CHECK_EXPECTED(m_graphics_queue->Submit({.command_buffers = {&command_buffer_ref, 1},
+                                                            .wait_semaphores = {&wait, 1},
+                                                            .signal_semaphores = {&signal, 1},
+                                                            .fence = fence}),
+                                  Result);
+    }
 
     // Advanced before the present, so that a present that comes back out of date still leaves the next frame on
     // the following slot - the work of this one was submitted either way.

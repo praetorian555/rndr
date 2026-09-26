@@ -139,14 +139,15 @@ VkResult Rndr::Forge::QueueSubmit2(const Device& device, VkQueue queue, const Vk
     {
         command_buffers[static_cast<i32>(i)] = submit_info.pCommandBufferInfos[i].commandBuffer;
     }
-    // Read for the timeline semaphores and ignored for the binary ones, so every semaphore gets a slot either way.
+    // Read for the timeline semaphores and ignored for the binary ones, so every semaphore gets a slot either way. Only
+    // chained on a device that has timelines: the structure belongs to their extension.
     const VkTimelineSemaphoreSubmitInfo timeline_info{.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
                                                       .waitSemaphoreValueCount = static_cast<u32>(wait_values.GetSize()),
                                                       .pWaitSemaphoreValues = wait_values.GetData(),
                                                       .signalSemaphoreValueCount = static_cast<u32>(signal_values.GetSize()),
                                                       .pSignalSemaphoreValues = signal_values.GetData()};
     const VkSubmitInfo original{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                                .pNext = &timeline_info,
+                                .pNext = device.HasTimelineSemaphores() ? &timeline_info : nullptr,
                                 .waitSemaphoreCount = static_cast<u32>(wait_semaphores.GetSize()),
                                 .pWaitSemaphores = wait_semaphores.GetData(),
                                 .pWaitDstStageMask = wait_stages.GetData(),

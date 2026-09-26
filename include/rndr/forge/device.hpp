@@ -389,6 +389,14 @@ public:
     [[nodiscard]] bool HasSynchronization2() const { return m_has_synchronization2; }
 
     /**
+     * Whether this device can make timeline semaphores. Always on 1.3; a RNDR_FORGE_VULKAN_1_1 build takes a device
+     * without VK_KHR_timeline_semaphore too, and on it Semaphore::Create refuses SemaphoreType::Timeline with
+     * ErrorCode::FeatureNotSupported. FrameContext paces its frames with fences there instead, so a frame loop works
+     * the same either way.
+     */
+    [[nodiscard]] bool HasTimelineSemaphores() const { return m_has_timeline_semaphores; }
+
+    /**
      * The render pass this device records a pass of this shape with, made the first time it is asked for and kept
      * until the device goes. Only on a device that UsesRenderPasses; Forge's own, for CommandBuffer and Pipeline.
      * @return The render pass, ErrorCode::InvalidArgument on a device that renders dynamically, or whatever the failing
@@ -443,6 +451,7 @@ private:
     /** Set only on a device without dynamic rendering; see UsesRenderPasses. */
     Opal::ScopePtr<RenderPassCache> m_render_pass_cache;
     bool m_has_synchronization2 = true;
+    bool m_has_timeline_semaphores = true;
 };
 
 }  // namespace Rndr::Forge

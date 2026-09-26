@@ -926,9 +926,11 @@ TEST_CASE("Forge context and device", "[forge]")
 #if defined(RNDR_FORGE_VULKAN_1_1)
     REQUIRE(device.UsesRenderPasses() == !device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
     REQUIRE(device.HasSynchronization2() == device.IsExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME));
+    REQUIRE(device.HasTimelineSemaphores() == device.IsExtensionEnabled(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME));
 #else
     REQUIRE_FALSE(device.UsesRenderPasses());
     REQUIRE(device.HasSynchronization2());
+    REQUIRE(device.HasTimelineSemaphores());
 #endif
     // The runs meant to cover a fallback - under a layer hiding the extension - say so, so that one where the layer did
     // not load fails here instead of passing on the extension.
@@ -939,6 +941,10 @@ TEST_CASE("Forge context and device", "[forge]")
     if (ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_EXPECT_NO_SYNCHRONIZATION2"))
     {
         REQUIRE_FALSE(device.HasSynchronization2());
+    }
+    if (ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_EXPECT_NO_TIMELINE_SEMAPHORES"))
+    {
+        REQUIRE_FALSE(device.HasTimelineSemaphores());
     }
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
@@ -1903,6 +1909,14 @@ TEST_CASE("Forge timeline semaphores", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
     ForgeFixture fixture;
+    if (!fixture.device.HasTimelineSemaphores())
+    {
+        // A 1.1 build takes such a device, and refuses the timeline by name rather than making a binary semaphore.
+        REQUIRE(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::FeatureNotSupported);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+        SKIP("This device has no timeline semaphores.");
+    }
     // The same split copy the batched submit case drives, submitted here against the value side of a timeline.
     const SplitCopy copy(fixture);
 
@@ -7280,20 +7294,33 @@ TEST_CASE("Forge empty state and moves of the command and synchronization object
                               REQUIRE_FALSE(ForgeTest::Unwrap(fence.TryWait(0)));
                           });
 
-    CheckLifetimeContract("Semaphore",
-                          [&] {
-                              return ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device,
-                                                      {.type = Forge::SemaphoreType::Timeline, .initial_value = 3}));
-                          },
-                          [](const Forge::Semaphore& semaphore)
-                          {
-                              // The type is a member of its own, and every host side call reports on a binary
-                              // semaphore, so a move that dropped it would fail here rather than answer wrong.
-                              REQUIRE(semaphore.IsTimeline());
-                              REQUIRE(ForgeTest::Unwrap(semaphore.GetValue()) == 3);
-                              REQUIRE(semaphore.Signal(7) == ErrorCode::Success);
-                              REQUIRE(ForgeTest::Unwrap(semaphore.GetValue()) == 7);
-                          });
+    // A timeline, since its value is what a move could lose. A device without them makes only the binary kind, which
+    // carries nothing a move could drop but the handle and the type.
+    if (fixture.device.HasTimelineSemaphores())
+    {
+        CheckLifetimeContract(
+            "Semaphore",
+            [&]
+            {
+                return ForgeTest::Unwrap(
+                    Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline, .initial_value = 3}));
+            },
+            [](const Forge::Semaphore& semaphore)
+            {
+                // The type is a member of its own, and every host side call reports on a binary
+                // semaphore, so a move that dropped it would fail here rather than answer wrong.
+                REQUIRE(semaphore.IsTimeline());
+                REQUIRE(ForgeTest::Unwrap(semaphore.GetValue()) == 3);
+                REQUIRE(semaphore.Signal(7) == ErrorCode::Success);
+                REQUIRE(ForgeTest::Unwrap(semaphore.GetValue()) == 7);
+            });
+    }
+    else
+    {
+        CheckLifetimeContract(
+            "Semaphore", [&] { return ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device)); },
+            [](const Forge::Semaphore& semaphore) { REQUIRE_FALSE(semaphore.IsTimeline()); });
+    }
 
     // Four rather than the two TimestampQueryPoolDesc defaults to: a check that asks for the default value
     // cannot tell a desc that came through the move from one that was never assigned.

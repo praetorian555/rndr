@@ -81,7 +81,8 @@ public:
     /** Releases the semaphores and command buffers. Waits for the device first, since they may be in use. */
     void Destroy();
 
-    [[nodiscard]] bool IsValid() const { return m_frame_timeline.IsValid(); }
+    /** Whichever paces the frames is there: the timeline, or the fences on a device without timelines. */
+    [[nodiscard]] bool IsValid() const { return m_frame_timeline.IsValid() || !m_frame_fences.IsEmpty(); }
     [[nodiscard]] const FrameContextDesc& GetDesc() const { return m_desc; }
 
     /**
@@ -150,6 +151,11 @@ private:
      * frames_in_flight, so the first frames in flight wait for a value that has already been reached.
      */
     Semaphore m_frame_timeline;
+    /**
+     * One per frame in flight, created signalled, on a device without timeline semaphores - where they stand in for
+     * the timeline, the way frame loops did before there were timelines. Empty on every other device.
+     */
+    Opal::DynamicArray<Fence> m_frame_fences;
 
     /** Per frame in flight. */
     Opal::DynamicArray<Semaphore> m_texture_ready_semaphores;

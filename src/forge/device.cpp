@@ -390,7 +390,11 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
 #if defined(RNDR_FORGE_VULKAN_1_1)
     // What 1.2 and 1.3 made core, which a device asked for 1.1 only has as extensions: the three Forge is written on
     // always, and each of the others once a feature it carries is asked for.
-    extensions.PushBack(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+    // Taken when the device has it; without it a timeline semaphore is refused (Device::HasTimelineSemaphores).
+    if (physical_device.IsExtensionSupported(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))
+    {
+        extensions.PushBack(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+    }
     // Taken when the device has it; without it the commands it replaced are recorded instead
     // (Device::HasSynchronization2).
     if (physical_device.IsExtensionSupported(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME))
@@ -552,7 +556,10 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.shader_output_layer, supported.vk12.shaderOutputLayer, "shader_output_layer");
 
     // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
+#if !defined(RNDR_FORGE_VULKAN_1_1)
+    // On 1.1 a device without them makes no timelines, and FrameContext uses fences there instead.
     require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");
+#endif
 #if !defined(RNDR_FORGE_VULKAN_1_1)
     // On 1.1 a device without it has its barriers and submits recorded the way synchronization2 replaced.
     require(true, supported.vk13.synchronization2, "synchronization2, which Forge requires");
@@ -863,6 +870,7 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
 
 #if defined(RNDR_FORGE_VULKAN_1_1)
     device.m_has_synchronization2 = device.IsExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    device.m_has_timeline_semaphores = device.IsExtensionEnabled(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
     if (!device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
     {
         device.m_render_pass_cache = Opal::MakeScoped<RenderPassCache>(nullptr);
@@ -1049,7 +1057,8 @@ Rndr::Forge::Device::Device(Device&& other) noexcept
       m_gpu_allocator(other.m_gpu_allocator),
       m_debug_utils_enabled(other.m_debug_utils_enabled),
       m_render_pass_cache(std::move(other.m_render_pass_cache)),
-      m_has_synchronization2(other.m_has_synchronization2)
+      m_has_synchronization2(other.m_has_synchronization2),
+      m_has_timeline_semaphores(other.m_has_timeline_semaphores)
 {
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();
@@ -1080,6 +1089,7 @@ Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
     m_debug_utils_enabled = other.m_debug_utils_enabled;
     m_render_pass_cache = std::move(other.m_render_pass_cache);
     m_has_synchronization2 = other.m_has_synchronization2;
+    m_has_timeline_semaphores = other.m_has_timeline_semaphores;
 
     other.m_device = VK_NULL_HANDLE;
     other.m_queue_family_to_queue.Clear();

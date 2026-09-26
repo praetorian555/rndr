@@ -419,11 +419,14 @@ TEST_CASE("Forge swap chain matches the window it was built over", "[forge-windo
         REQUIRE_FALSE(swap_chain.Present(fixture.GetPresentQueue(), render_finished).HasValue());
 
         // A timeline cannot take part in presentation either way round, and both calls say so rather than
-        // handing the driver a semaphore it will reject.
-        const Forge::Semaphore timeline =
-            ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
-        REQUIRE_FALSE(swap_chain.AcquireTexture(timeline).HasValue());
-        REQUIRE_FALSE(swap_chain.Present(fixture.GetPresentQueue(), timeline).HasValue());
+        // handing the driver a semaphore it will reject. A device without timelines has none to try.
+        if (fixture.device.HasTimelineSemaphores())
+        {
+            const Forge::Semaphore timeline =
+                ForgeTest::Unwrap(Forge::Semaphore::Create(fixture.device, {.type = Forge::SemaphoreType::Timeline}));
+            REQUIRE_FALSE(swap_chain.AcquireTexture(timeline).HasValue());
+            REQUIRE_FALSE(swap_chain.Present(fixture.GetPresentQueue(), timeline).HasValue());
+        }
     }
     SECTION("A moved swap chain leaves the source empty")
     {

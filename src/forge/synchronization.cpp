@@ -377,6 +377,13 @@ Opal::Expected<Rndr::Forge::Semaphore, Rndr::ErrorCode> Rndr::Forge::Semaphore::
 {
     using Result = Opal::Expected<Semaphore, ErrorCode>;
 
+    if (desc.type == SemaphoreType::Timeline && !device.HasTimelineSemaphores())
+    {
+        RNDR_LOG_ERROR(
+            "Forge: this device has no timeline semaphores (VK_KHR_timeline_semaphore); Device::HasTimelineSemaphores says "
+            "so before asking");
+        return Result(ErrorCode::FeatureNotSupported);
+    }
     // The type lives in a chained structure rather than in the create info, so a binary semaphore is the one
     // that chains nothing - which is also why it is what a defaulted desc asks for.
     const VkSemaphoreTypeCreateInfo type_create_info = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,

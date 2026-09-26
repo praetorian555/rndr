@@ -294,8 +294,8 @@ descriptor indexing arrived in the same release by a different name.
 
 Forge asks for Vulkan 1.3 and turns away a device that reports less. Configured with
 `-DRNDR_FORGE_VULKAN_1_1=ON`, it asks for 1.1 and takes what it relies on from 1.2 and 1.3 from the extensions
-those releases promoted: `VK_KHR_timeline_semaphore` and `VK_KHR_spirv_1_4` (with `VK_KHR_shader_float_controls`)
-always, `VK_KHR_dynamic_rendering` (with the `VK_KHR_depth_stencil_resolve` and `VK_KHR_create_renderpass2` it needs)
+those releases promoted: `VK_KHR_spirv_1_4` (with `VK_KHR_shader_float_controls`) always,
+`VK_KHR_timeline_semaphore` when the device has it (below), `VK_KHR_dynamic_rendering` (with the `VK_KHR_depth_stencil_resolve` and `VK_KHR_create_renderpass2` it needs)
 or else render passes, `VK_KHR_synchronization2` or else the commands it replaced (both below),
 `VK_KHR_format_feature_flags2` when the device
 has it, and for each
@@ -343,11 +343,18 @@ so the one choice is made when rndr is configured:
   - A submit becomes `vkQueueSubmit`, the timeline values in a `VkTimelineSemaphoreSubmitInfo`. Its signals happen
     once the batch is done rather than at the stages the submit named: later, never wrong.
   - A timestamp is written at the latest original stage its stage folds into.
-- Both fallbacks are tested by running the suite under the SDK's profiles layer with the extensions hidden,
-  `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_profiles` and
-  `VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS=VK_KHR_dynamic_rendering,VK_KHR_synchronization2`, with
-  `RNDR_TEST_EXPECT_RENDER_PASSES=1` and `RNDR_TEST_EXPECT_NO_SYNCHRONIZATION2=1` so that a run where the layer did not
-  take fails instead of passing on the extensions. The validation layer Forge enables sits above the profiles one, so
+- A device without `VK_KHR_timeline_semaphore` (about 10% of those Android devices) is taken as well, and
+  `Device::HasTimelineSemaphores` says so. Timelines are part of the API rather than of how Forge records, so there is
+  nothing to translate them into: `Semaphore::Create` refuses `SemaphoreType::Timeline` there with
+  `ErrorCode::FeatureNotSupported`, and every host side call needs such a semaphore to begin with. `FrameContext`,
+  which paces its frames with a timeline, takes a fence per frame in flight instead - waited on as a frame begins,
+  reset and signalled with the submit as it ends - so a frame loop behaves the same on either device.
+- The fallbacks are tested by running the suite under the SDK's profiles layer with the extensions hidden,
+  `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_profiles` and `VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS=` any of
+  `VK_KHR_dynamic_rendering`, `VK_KHR_synchronization2` and `VK_KHR_timeline_semaphore`, with
+  `RNDR_TEST_EXPECT_RENDER_PASSES=1`, `RNDR_TEST_EXPECT_NO_SYNCHRONIZATION2=1` and
+  `RNDR_TEST_EXPECT_NO_TIMELINE_SEMAPHORES=1` for the ones hidden, so that a run where the layer did not take fails
+  instead of passing on the extensions. The validation layer Forge enables sits above the profiles one, so
   it checks what is recorded against the device as the layer shows it. The Linux 1.1 CI job does this.
 - `shader_output_layer` is never supported in the 1.1 build. `VK_EXT_shader_viewport_index_layer` would carry it,
   but Slang (2026.10) writes `SV_RenderTargetArrayIndex` from a vertex stage with the `ShaderLayer` capability,
