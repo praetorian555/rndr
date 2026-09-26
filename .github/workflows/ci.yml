@@ -209,15 +209,17 @@ jobs:
       - name: Run tests
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -noreset" ${{ matrix.build-dir }}/rndr-test
 
-      # The same suite on a device without dynamic rendering, which the 1.1 build records as render passes: the SDK's
-      # profiles layer hides the extension from lavapipe, and RNDR_TEST_EXPECT_RENDER_PASSES fails the run if it did
-      # not. The layer comes first in VK_INSTANCE_LAYERS' list, the validation layer Forge enables sits above it.
-      - name: Run Forge tests through render passes
+      # The same suite on a device without dynamic rendering or synchronization2, which the 1.1 build records as
+      # render passes and original barriers and submits: the SDK's profiles layer hides both extensions from lavapipe,
+      # and the two RNDR_TEST_EXPECT_ variables fail the run if it did not. The validation layer Forge enables sits
+      # above the one named here, so it checks what is recorded against the device with the extensions hidden.
+      - name: Run Forge tests through the fallbacks
         if: matrix.forge-vulkan-1-1 == 'ON'
         env:
           VK_INSTANCE_LAYERS: VK_LAYER_KHRONOS_profiles
-          VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS: VK_KHR_dynamic_rendering
+          VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS: VK_KHR_dynamic_rendering,VK_KHR_synchronization2
           RNDR_TEST_EXPECT_RENDER_PASSES: "1"
+          RNDR_TEST_EXPECT_NO_SYNCHRONIZATION2: "1"
         run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -noreset" ${{ matrix.build-dir }}/rndr-test "[forge],[forge-window]"
 
   linux-clang:

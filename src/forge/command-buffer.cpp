@@ -11,6 +11,7 @@
 #include "rndr/log.hpp"
 
 #include "render-pass.hpp"
+#include "synchronization2.hpp"
 
 Opal::Expected<Rndr::Forge::CommandBuffer, Rndr::ErrorCode> Rndr::Forge::CommandBuffer::Create(const Device& device, DeviceQueue& queue)
 {
@@ -245,7 +246,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers
                                            .pBufferMemoryBarriers = buffer_barriers.GetData(),
                                            .imageMemoryBarrierCount = image_barriers.GetCount(),
                                            .pImageMemoryBarriers = image_barriers.GetData()};
-    vkCmdPipelineBarrier2(m_native_command_buffer, &dependency_info);
+    CmdPipelineBarrier2(*m_device, m_native_command_buffer, dependency_info);
 
     // Vulkan keeps no record of what layout a texture ended up in, so this is where Forge's own is kept up to
     // date. Recorded rather than executed, which is what makes it the caller's job to record in order.
@@ -2033,7 +2034,8 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdWriteTimestamp(const TimestampQue
         RNDR_LOG_ERROR("Forge: a timestamp has to name exactly one pipeline stage");
         return ErrorCode::InvalidArgument;
     }
-    vkCmdWriteTimestamp2(m_native_command_buffer, static_cast<VkPipelineStageFlags2>(stage), query_pool.GetNativeQueryPool(), query_index);
+    CmdWriteTimestamp2(*m_device, m_native_command_buffer, static_cast<VkPipelineStageFlags2>(stage), query_pool.GetNativeQueryPool(),
+                       query_index);
     return ErrorCode::Success;
 }
 

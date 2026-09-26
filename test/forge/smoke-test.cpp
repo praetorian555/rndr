@@ -922,16 +922,23 @@ TEST_CASE("Forge context and device", "[forge]")
 
     // Dynamic rendering wherever the device has it. On 1.1 a device without it records its passes as render passes,
     // and the rest of the suite then runs through those; on 1.3 it would not have been chosen.
+    // Synchronization2 the same way: its barriers and submits where the device has it, the ones it replaced where not.
 #if defined(RNDR_FORGE_VULKAN_1_1)
     REQUIRE(device.UsesRenderPasses() == !device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
+    REQUIRE(device.HasSynchronization2() == device.IsExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME));
 #else
     REQUIRE_FALSE(device.UsesRenderPasses());
+    REQUIRE(device.HasSynchronization2());
 #endif
-    // The run meant to cover the render passes - under a layer hiding the extension - says so, so that one where the
-    // layer did not load fails here instead of passing on dynamic rendering.
+    // The runs meant to cover a fallback - under a layer hiding the extension - say so, so that one where the layer did
+    // not load fails here instead of passing on the extension.
     if (ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_EXPECT_RENDER_PASSES"))
     {
         REQUIRE(device.UsesRenderPasses());
+    }
+    if (ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_EXPECT_NO_SYNCHRONIZATION2"))
+    {
+        REQUIRE_FALSE(device.HasSynchronization2());
     }
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }

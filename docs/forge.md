@@ -294,9 +294,10 @@ descriptor indexing arrived in the same release by a different name.
 
 Forge asks for Vulkan 1.3 and turns away a device that reports less. Configured with
 `-DRNDR_FORGE_VULKAN_1_1=ON`, it asks for 1.1 and takes what it relies on from 1.2 and 1.3 from the extensions
-those releases promoted: `VK_KHR_timeline_semaphore`, `VK_KHR_synchronization2` and `VK_KHR_spirv_1_4` (with
-`VK_KHR_shader_float_controls`) always, `VK_KHR_dynamic_rendering` (with the `VK_KHR_depth_stencil_resolve` and
-`VK_KHR_create_renderpass2` it needs) or else render passes (below), `VK_KHR_format_feature_flags2` when the device
+those releases promoted: `VK_KHR_timeline_semaphore` and `VK_KHR_spirv_1_4` (with `VK_KHR_shader_float_controls`)
+always, `VK_KHR_dynamic_rendering` (with the `VK_KHR_depth_stencil_resolve` and `VK_KHR_create_renderpass2` it needs)
+or else render passes, `VK_KHR_synchronization2` or else the commands it replaced (both below),
+`VK_KHR_format_feature_flags2` when the device
 has it, and for each
 `DeviceFeatures` field from 1.2 the extension that carries it, only when it is asked for. That is what MoltenVK
 offers, and what drivers that stopped at 1.1 offer when they are recent enough. `Forge::k_vulkan_api_version` says
@@ -330,9 +331,24 @@ so the one choice is made when rndr is configured:
   - Depth and stencil resolve needs `VK_KHR_depth_stencil_resolve`; without it the device reports no resolve modes
     and such a pass is refused, as it would be on a device that cannot resolve. Depth and stencil in two layouts are
     refused too, since a render pass on 1.1 takes one for both. `dynamic_rendering_local_read` is never supported.
-  - Tested by running the suite under the SDK's profiles layer with the extension hidden:
-    `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_profiles VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS=VK_KHR_dynamic_rendering`,
-    with `RNDR_TEST_EXPECT_RENDER_PASSES=1` so the run fails if the layer did not take. The Linux 1.1 CI job does both.
+- A device without `VK_KHR_synchronization2` (about 10% of those Android devices) is taken too, and
+  `Device::HasSynchronization2` says so. Forge builds the synchronization2 structures either way, and three wrappers
+  in `src/forge/synchronization2.cpp` record them as what synchronization2 replaced:
+  - A dependency becomes one `vkCmdPipelineBarrier` per barrier, since the original takes one pair of stage masks for
+    the whole call and a barrier each keeps every barrier's stages rather than widening them all to the union.
+  - The stages synchronization2 added fold into the ones they are parts of - Copy, Blit, Resolve and Clear into
+    Transfer, IndexInput and VertexAttributeInput into VertexInput, PreRasterizationShaders into the shader stages
+    before rasterization the device enabled - and no stage at all becomes the top of the pipe as a source and the
+    bottom as a destination. The split shader reads and writes fold back into ShaderRead and ShaderWrite.
+  - A submit becomes `vkQueueSubmit`, the timeline values in a `VkTimelineSemaphoreSubmitInfo`. Its signals happen
+    once the batch is done rather than at the stages the submit named: later, never wrong.
+  - A timestamp is written at the latest original stage its stage folds into.
+- Both fallbacks are tested by running the suite under the SDK's profiles layer with the extensions hidden,
+  `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_profiles` and
+  `VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS=VK_KHR_dynamic_rendering,VK_KHR_synchronization2`, with
+  `RNDR_TEST_EXPECT_RENDER_PASSES=1` and `RNDR_TEST_EXPECT_NO_SYNCHRONIZATION2=1` so that a run where the layer did not
+  take fails instead of passing on the extensions. The validation layer Forge enables sits above the profiles one, so
+  it checks what is recorded against the device as the layer shows it. The Linux 1.1 CI job does this.
 - `shader_output_layer` is never supported in the 1.1 build. `VK_EXT_shader_viewport_index_layer` would carry it,
   but Slang (2026.10) writes `SV_RenderTargetArrayIndex` from a vertex stage with the `ShaderLayer` capability,
   which SPIR-V only has from 1.5, whatever version it is asked for, so no module compiled for it would load.

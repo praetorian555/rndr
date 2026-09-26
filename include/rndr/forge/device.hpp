@@ -382,6 +382,13 @@ public:
     [[nodiscard]] bool UsesRenderPasses() const { return m_render_pass_cache.IsValid(); }
 
     /**
+     * Whether this device has synchronization2. Always on 1.3; a RNDR_FORGE_VULKAN_1_1 build takes a device without
+     * VK_KHR_synchronization2 too, and records its barriers, submits and timestamps with the commands synchronization2
+     * replaced (src/forge/synchronization2.cpp). Nothing a caller writes changes; it is here to be asked.
+     */
+    [[nodiscard]] bool HasSynchronization2() const { return m_has_synchronization2; }
+
+    /**
      * The render pass this device records a pass of this shape with, made the first time it is asked for and kept
      * until the device goes. Only on a device that UsesRenderPasses; Forge's own, for CommandBuffer and Pipeline.
      * @return The render pass, ErrorCode::InvalidArgument on a device that renders dynamically, or whatever the failing
@@ -435,6 +442,7 @@ private:
     bool m_debug_utils_enabled = false;
     /** Set only on a device without dynamic rendering; see UsesRenderPasses. */
     Opal::ScopePtr<RenderPassCache> m_render_pass_cache;
+    bool m_has_synchronization2 = true;
 };
 
 }  // namespace Rndr::Forge
