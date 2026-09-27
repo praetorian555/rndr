@@ -2,6 +2,7 @@
 
 #include "volk.h"
 
+#include "opal/clonable-base.h"
 #include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/expected.h"
@@ -26,7 +27,7 @@ namespace Rndr::Forge
  * A specialization constant a shader declares, as reflection found it. What a caller needs to know before
  * supplying a value: what it is called, what may go in it, and what it holds when nothing does.
  */
-struct SpecializationConstantInfo
+struct SpecializationConstantInfo : Opal::ClonableBase<SpecializationConstantInfo>
 {
     Opal::StringUtf8 name;
     /** The numeric id Vulkan keys on. Forge matches by name, so this is here to be read, not to be used. */
@@ -41,6 +42,8 @@ struct SpecializationConstantInfo
     u32 byte_size = 4;
     /** What the shader falls back to when the pipeline supplies nothing. */
     SpecializationValue default_value;
+
+    OPAL_CLONE_FIELDS(name, constant_id, type, byte_size, default_value);
 };
 
 /**

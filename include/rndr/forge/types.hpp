@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "opal/clonable-base.h"
 #include "opal/container/string.h"
 #include "opal/enum-flags.h"
 
@@ -229,11 +230,16 @@ private:
     }
 };
 
-/** A constant a shader declares, named, and the value to build a pipeline with. */
-struct SpecializationConstant
+/**
+ * A constant a shader declares, named, and the value to build a pipeline with. Clonable rather than copyable,
+ * the way every Forge type holding a string is, which is also what lets a desc take a list of them in braces.
+ */
+struct SpecializationConstant : Opal::ClonableBase<SpecializationConstant>
 {
     Opal::StringUtf8 name;
     SpecializationValue value;
+
+    OPAL_CLONE_FIELDS(name, value);
 };
 
 /**
