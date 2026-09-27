@@ -247,7 +247,6 @@ struct FeatureChain
 
         vk11.multiview = features.multiview;
 
-        vk12.descriptorIndexing = features.descriptor_indexing;
         vk12.runtimeDescriptorArray = features.runtime_descriptor_array;
         vk12.descriptorBindingVariableDescriptorCount = features.variable_descriptor_count;
         vk12.descriptorBindingPartiallyBound = features.partially_bound_descriptors;
@@ -437,7 +436,7 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
         extensions.PushBack(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
     }
     const Forge::DeviceFeatures& features = desc.features;
-    if (features.descriptor_indexing || features.runtime_descriptor_array || features.variable_descriptor_count ||
+    if (features.runtime_descriptor_array || features.variable_descriptor_count ||
         features.partially_bound_descriptors || features.update_after_bind_descriptors ||
         features.update_unused_while_pending_descriptors || features.non_uniform_descriptor_indexing)
     {
@@ -518,7 +517,6 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
 
     require(requested.multiview, supported.vk11.multiview, "multiview");
 
-    require(requested.descriptor_indexing, supported.vk12.descriptorIndexing, "descriptor_indexing");
     require(requested.runtime_descriptor_array, supported.vk12.runtimeDescriptorArray, "runtime_descriptor_array");
     require(requested.variable_descriptor_count, supported.vk12.descriptorBindingVariableDescriptorCount, "variable_descriptor_count");
     require(requested.partially_bound_descriptors, supported.vk12.descriptorBindingPartiallyBound, "partially_bound_descriptors");

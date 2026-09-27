@@ -47,8 +47,8 @@ with pairing code, then `adb pair <ip>:<pair-port>` and `adb connect <ip>:<port>
 ## The emulator
 
 The Android emulator runs the sample well enough to test without a phone: with the host GPU it offers Vulkan
-1.3 with dynamic rendering, synchronization2, buffer device address and descriptor indexing, which is all Forge
-asks for. It is set up on this machine as the AVD `rndr-api36` (Android 16, x86_64, Pixel 7 profile), kept on F:
+1.3 with dynamic rendering, synchronization2 and buffer device address, which is all Forge asks for by default,
+and descriptor indexing beside them for the bindless cases. It is set up on this machine as the AVD `rndr-api36` (Android 16, x86_64, Pixel 7 profile), kept on F:
 because the emulator wants 12 GB free where the AVD lives and C: has less.
 
 ```bash

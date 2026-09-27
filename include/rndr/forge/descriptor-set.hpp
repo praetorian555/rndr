@@ -32,7 +32,7 @@ enum class DescriptorBindingFlagBits : u8
     None = 0,
     /** Descriptors may be written while the set is bound, even while the device is using it. */
     UpdateAfterBind = 1,
-    /** Descriptors may be written while the set is bound to a command buffer that has not been submitted. */
+    /** Descriptors no pending command buffer uses may be written while the set is bound and that work is pending. */
     UpdateUnusedWhilePending = 2,
     /** Not every descriptor has to be written. The shader is only allowed to read the ones that were. */
     PartiallyBound = 4,

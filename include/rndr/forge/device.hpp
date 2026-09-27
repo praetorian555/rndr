@@ -129,23 +129,50 @@ struct DeviceFeatures
     /** 64-bit atomics on groupshared memory, which a workgroup reducing into one u64 before writing it out wants. */
     bool shader_shared_int64_atomics = false;
 
-    // Descriptors.
-    /** Indexing into arrays of descriptors. The rest of the descriptor fields build on this one. */
-    bool descriptor_indexing = true;
-    /** Arrays of descriptors whose length the shader does not have to know. */
-    bool runtime_descriptor_array = true;
-    /** The variable_descriptor_count argument of DescriptorSet. */
-    bool variable_descriptor_count = true;
-    /** Bindings whose descriptors need not all be written, which bindless allocation depends on. */
+    // Descriptors. All off by default: a renderer that binds a fixed set of resources per draw needs none of
+    // them. Bindless - one large array of every texture or buffer, indexed by a number the draw pushes - wants
+    // most of them together, which BindlessFeatures() below hands out. On a Vulkan 1.1 build any of them pulls
+    // in VK_EXT_descriptor_indexing.
+    /**
+     * Descriptor arrays the shader declares without a length, the form a bindless table takes:
+     * `Texture2D textures[];` or `RWStructuredBuffer<uint> buffers[];`. The length comes from the layout, or from
+     * the set with variable_descriptor_count. Without it a shader with such an array is refused by the layer.
+     */
+    bool runtime_descriptor_array = false;
+    /**
+     * DescriptorBindingFlagBits::VariableDescriptorCount: a set picks the length of its last binding when it is
+     * allocated - the variable_descriptor_count argument of DescriptorSet::Create - up to the count the layout
+     * declares. One layout then serves a table of 16 textures and one of 10,000, and the pool only pays for what
+     * each set asked for.
+     */
+    bool variable_descriptor_count = false;
+    /**
+     * DescriptorBindingFlagBits::PartiallyBound: descriptors of the binding may be left unwritten, or keep a
+     * resource that has since been destroyed, as long as no shader reads them. Without it every descriptor a
+     * pipeline could statically reach has to be valid at draw time, which a table with free slots never is.
+     */
     bool partially_bound_descriptors = false;
-    /** DescriptorPoolDesc::use_update_after_bind. */
+    /**
+     * DescriptorBindingFlagBits::UpdateAfterBind and DescriptorPoolDesc::use_update_after_bind: descriptors may
+     * be written after the set is bound in a command buffer and while that work runs on the device, as long as
+     * no shader invocation reads them. A bindless table then takes new textures while frames are in flight,
+     * rather than waiting for the device or keeping one table per frame. Such bindings also get the higher
+     * maxDescriptorSetUpdateAfterBind* limits, which is how a table grows past the ordinary per-stage ones.
+     */
     bool update_after_bind_descriptors = false;
     /**
-     * DescriptorBindingFlagBits::UpdateUnusedWhilePending, which lets a descriptor no recorded command reads
-     * be written while the set is bound to a command buffer that has not been submitted.
+     * DescriptorBindingFlagBits::UpdateUnusedWhilePending: descriptors that no pending command buffer uses may be
+     * written after the set is bound and while those command buffers are pending execution. Beside
+     * UpdateAfterBind, "uses" means read by a shader invocation; alone, it means reachable by the pipeline at
+     * all. Lets slots nobody is drawing with be refilled without waiting for the frame to finish.
      */
     bool update_unused_while_pending_descriptors = false;
-    /** Indexing descriptor arrays with a value that differs between invocations. */
+    /**
+     * Indexing a descriptor array with a value that differs between invocations of one draw or dispatch - a
+     * material index read per pixel, per instance or per thread. The index has to be wrapped as
+     * `textures[NonUniformResourceIndex(index)]` as well; without both, only an index that is the same across
+     * the whole draw, such as one from a push constant, is defined.
+     */
     bool non_uniform_descriptor_indexing = false;
 
     // Memory and synchronization.
@@ -168,6 +195,22 @@ struct DeviceFeatures
      */
     bool index_type_uint8 = false;
 };
+
+/**
+ * The features a bindless table needs: unsized descriptor arrays, a length chosen per set, slots left empty,
+ * an index that differs per invocation, and writes to the table while frames that read it are in flight. Start
+ * from this and add what else the renderer needs; a device that lacks one of them still reports that field by
+ * name, and a caller who can do without one - update_after_bind_descriptors is the one mobile devices limit -
+ * turns it back off.
+ */
+[[nodiscard]] constexpr DeviceFeatures BindlessFeatures()
+{
+    return {.runtime_descriptor_array = true,
+            .variable_descriptor_count = true,
+            .partially_bound_descriptors = true,
+            .update_after_bind_descriptors = true,
+            .non_uniform_descriptor_indexing = true};
+}
 
 struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
 {

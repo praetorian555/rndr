@@ -303,6 +303,11 @@ Vulkan keeps it in and chains those itself. A caller never sees `VkPhysicalDevic
 keeps a `pNext` chain alive, and never has to know that buffer device addresses arrived in 1.2 while
 descriptor indexing arrived in the same release by a different name.
 
+Every field is off by default but `buffer_device_address` and `sampler_anisotropy`, which nearly every program
+uses, and each names one capability, so a device that lacks it is reported by that name. Where a design wants several together, a preset builds them out of the same fields:
+`BindlessFeatures()` turns on the descriptor features a bindless table needs, and a caller adds to it or turns
+one back off.
+
 ### Vulkan 1.3, or 1.1 and extensions
 
 Forge asks for Vulkan 1.3 and turns away a device that reports less. Configured with
