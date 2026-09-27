@@ -6,6 +6,7 @@
 
 #include "rndr/forge/descriptor-set.hpp"
 #include "rndr/forge/device.hpp"
+#include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/shader.hpp"
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
@@ -473,9 +474,44 @@ Rndr::ErrorCode Rndr::Forge::Pipeline::CreatePipelineLayout(
         native_layouts.PushBack(layout->GetNativeDescriptorSetLayout());
     }
 
-    Opal::DynamicArray<VkPushConstantRange> native_push_constants;
+    // What vkCreatePipelineLayout requires of the ranges, refused here rather than left for the layer: without it a
+    // range past the device's limit is undefined behaviour, not an error.
+    const u32 limit = m_device->GetPhysicalDevice().GetProperties().limits.maxPushConstantsSize;
+    VkShaderStageFlags stages_seen = 0;
     for (const auto& range : push_constant_ranges)
     {
+        const VkShaderStageFlags stages = ToVkShaderStageFlags(range.shader_stages);
+        if (stages == 0)
+        {
+            RNDR_LOG_ERROR("Forge: a push constant range at offset {} names no shader stage", range.offset);
+            return ErrorCode::InvalidArgument;
+        }
+        if (range.size == 0 || range.offset % 4 != 0 || range.size % 4 != 0)
+        {
+            RNDR_LOG_ERROR("Forge: a push constant range needs an offset and a non-zero size that are multiples of 4, and has {} and {}",
+                           range.offset, range.size);
+            return ErrorCode::InvalidArgument;
+        }
+        // Written this way around so that a huge offset cannot overflow the sum and pass the check.
+        if (range.offset >= limit || range.size > limit - range.offset)
+        {
+            RNDR_LOG_ERROR("Forge: a push constant range of {} bytes at offset {} reaches past the {} bytes this device allows",
+                           range.size, range.offset, limit);
+            return ErrorCode::InvalidArgument;
+        }
+        if ((stages_seen & stages) != 0)
+        {
+            RNDR_LOG_ERROR("Forge: two push constant ranges name the same shader stage, and a stage may appear in one range only");
+            return ErrorCode::InvalidArgument;
+        }
+        stages_seen |= stages;
+    }
+
+    Opal::DynamicArray<VkPushConstantRange> native_push_constants;
+    m_push_constant_ranges.Clear();
+    for (const auto& range : push_constant_ranges)
+    {
+        m_push_constant_ranges.PushBack(range);
         native_push_constants.PushBack(VkPushConstantRange{
             .stageFlags = ToVkShaderStageFlags(range.shader_stages),
             .offset = range.offset,
@@ -1142,7 +1178,8 @@ Rndr::Forge::Pipeline::Pipeline(Pipeline&& other) noexcept
     : m_device(std::move(other.m_device)),
       m_pipeline(other.m_pipeline),
       m_pipeline_layout(other.m_pipeline_layout),
-      m_bind_point(other.m_bind_point)
+      m_bind_point(other.m_bind_point),
+      m_push_constant_ranges(std::move(other.m_push_constant_ranges))
 {
     other.m_pipeline = VK_NULL_HANDLE;
     other.m_pipeline_layout = VK_NULL_HANDLE;
@@ -1158,6 +1195,7 @@ Rndr::Forge::Pipeline& Rndr::Forge::Pipeline::operator=(Pipeline&& other) noexce
         m_pipeline = other.m_pipeline;
         m_pipeline_layout = other.m_pipeline_layout;
         m_bind_point = other.m_bind_point;
+        m_push_constant_ranges = std::move(other.m_push_constant_ranges);
         other.m_pipeline = VK_NULL_HANDLE;
         other.m_pipeline_layout = VK_NULL_HANDLE;
         other.m_device = nullptr;
@@ -1177,5 +1215,6 @@ void Rndr::Forge::Pipeline::Destroy()
         vkDestroyPipelineLayout(m_device->GetNativeDevice(), m_pipeline_layout, nullptr);
         m_pipeline_layout = VK_NULL_HANDLE;
     }
+    m_push_constant_ranges.Clear();
     m_device = nullptr;
 }

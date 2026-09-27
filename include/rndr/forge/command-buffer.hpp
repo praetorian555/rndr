@@ -589,6 +589,10 @@ public:
      * @param shader_stages Shader stages that will access the push constant data.
      * @param data Data to push as byte array.
      * @param offset Byte offset into the push constant range.
+     * @return ErrorCode::Success, or ErrorCode::InvalidArgument for an empty pipeline, empty data, an offset or
+     *         size that is not a multiple of 4, or a push the pipeline's ranges do not allow: every byte pushed
+     *         has to lie in a range for each of the stages named, and the stages named have to include every
+     *         stage of each range the push touches.
      */
     [[nodiscard]] ErrorCode CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages, Opal::ArrayView<const u8> data,
                                              u32 offset = 0);

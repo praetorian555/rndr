@@ -298,8 +298,10 @@ public:
 
     /**
      * @param desc Shaders, vertex input, fixed function state and the attachment formats.
-     * @return The pipeline, ErrorCode::InvalidArgument when the desc disagrees with the shaders or asks for a
-     *         feature this device was not created with, ErrorCode::FeatureNotSupported for a sample count
+     * @return The pipeline, ErrorCode::InvalidArgument when the desc disagrees with the shaders, asks for a
+     *         feature this device was not created with or has a push constant range Vulkan does not allow - no
+     *         stage, an offset or size that is not a multiple of 4, past the device's maxPushConstantsSize, or a
+     *         stage already named by another range - ErrorCode::FeatureNotSupported for a sample count
      *         this device cannot carry, or whatever the failing creation maps to.
      */
     [[nodiscard]] static Opal::Expected<Pipeline, ErrorCode> Create(const Device& device, const GraphicsPipelineDesc& desc);
@@ -307,7 +309,8 @@ public:
     /**
      * @param desc The compute shader, its layouts and its specialization values.
      * @return The pipeline, ErrorCode::InvalidArgument when a specialization value names no constant of the
-     *         shader or is of the wrong type, or whatever the failing creation maps to.
+     *         shader or is of the wrong type or a push constant range is refused as for a graphics pipeline, or
+     *         whatever the failing creation maps to.
      */
     [[nodiscard]] static Opal::Expected<Pipeline, ErrorCode> Create(const Device& device, const ComputePipelineDesc& desc);
 
@@ -322,6 +325,11 @@ public:
     [[nodiscard]] VkPipeline GetNativePipeline() const { return m_pipeline; }
     [[nodiscard]] VkPipelineLayout GetNativePipelineLayout() const { return m_pipeline_layout; }
     [[nodiscard]] VkPipelineBindPoint GetBindPoint() const { return m_bind_point; }
+    /** The push constant ranges the pipeline's layout was built with, which CmdPushConstants checks a push against. */
+    [[nodiscard]] Opal::ArrayView<const PushConstantRange> GetPushConstantRanges() const
+    {
+        return {m_push_constant_ranges.GetData(), m_push_constant_ranges.GetSize()};
+    }
 
 private:
     [[nodiscard]] ErrorCode CreatePipelineLayout(Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
@@ -331,6 +339,7 @@ private:
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
     VkPipelineBindPoint m_bind_point = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    Opal::DynamicArray<PushConstantRange> m_push_constant_ranges;
 };
 
 }  // namespace Rndr::Forge

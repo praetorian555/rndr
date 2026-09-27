@@ -1731,6 +1731,49 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindDescriptorSets(const Pipeline
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdPushConstants(const Pipeline& pipeline, ShaderTypeBits shader_stages,
                                                              Opal::ArrayView<const u8> data, u32 offset)
 {
+    if (!pipeline.IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: push constants need a pipeline, and this one is empty");
+        return ErrorCode::InvalidArgument;
+    }
+    const u64 size = data.GetSize();
+    if (size == 0 || offset % 4 != 0 || size % 4 != 0)
+    {
+        RNDR_LOG_ERROR("Forge: push constants need an offset and a non-zero size that are multiples of 4, and have {} and {}", offset,
+                       size);
+        return ErrorCode::InvalidArgument;
+    }
+    // The two rules of vkCmdPushConstants on the layout's ranges, checked a word at a time since every boundary
+    // involved is a multiple of 4: each word pushed lies in a range for every stage named, and a range the push
+    // touches has all of its stages named. A push past every range fails the first, which covers the device limit
+    // too, since the ranges were checked against it when the pipeline was built.
+    const VkShaderStageFlags stages = ToVkShaderStageFlags(shader_stages);
+    const Opal::ArrayView<const PushConstantRange> ranges = pipeline.GetPushConstantRanges();
+    for (u64 word = offset; word < offset + size; word += 4)
+    {
+        VkShaderStageFlags covered = 0;
+        for (const PushConstantRange& range : ranges)
+        {
+            if (word < range.offset || word >= static_cast<u64>(range.offset) + range.size)
+            {
+                continue;
+            }
+            const VkShaderStageFlags range_stages = ToVkShaderStageFlags(range.shader_stages);
+            if ((stages & range_stages) != range_stages)
+            {
+                RNDR_LOG_ERROR("Forge: a push to bytes {} to {} touches a push constant range at offset {} without naming every stage of it",
+                               offset, offset + size, range.offset);
+                return ErrorCode::InvalidArgument;
+            }
+            covered |= range_stages;
+        }
+        if (stages == 0 || (covered & stages) != stages)
+        {
+            RNDR_LOG_ERROR("Forge: byte {} of a push to bytes {} to {} lies in no push constant range of the pipeline for every stage named",
+                           word, offset, offset + size);
+            return ErrorCode::InvalidArgument;
+        }
+    }
     vkCmdPushConstants(m_native_command_buffer, pipeline.GetNativePipelineLayout(), ToVkShaderStageFlags(shader_stages), offset,
                        static_cast<u32>(data.GetSize()), data.GetData());
     return ErrorCode::Success;
