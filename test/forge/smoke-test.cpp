@@ -2413,7 +2413,7 @@ TEST_CASE("Forge device features", "[forge]")
     {
         const Forge::Device device = ForgeTest::Unwrap(make_device({}));
         REQUIRE(device.GetFeatures().buffer_device_address);
-        REQUIRE(device.GetFeatures().descriptor_indexing);
+        REQUIRE_FALSE(device.GetFeatures().runtime_descriptor_array);
         REQUIRE(device.GetFeatures().sampler_anisotropy);
         REQUIRE_FALSE(device.GetFeatures().mesh_shader);
         REQUIRE_FALSE(device.GetFeatures().geometry_shader);
@@ -2578,15 +2578,32 @@ void main_bindless(uint3 thread_id : SV_DispatchThreadID)
 }
 )";
 
+TEST_CASE("Forge an update after bind pool needs its feature", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    // On a Vulkan 1.3 device the pool flag is core and the layer would let it through; on a Vulkan 1.1 build
+    // it needs VK_EXT_descriptor_indexing, which only a descriptor feature pulls in. Forge refuses it the same
+    // way on both, so a program does not pass on one build and fail on the other.
+    ForgeFixture fixture;
+    REQUIRE_FALSE(Forge::DescriptorPoolDesc{}.use_update_after_bind);
+    Forge::DescriptorPoolDesc pool_desc;
+    REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+    REQUIRE(Forge::DescriptorPool::Create(fixture.device, pool_desc).HasValue());
+    pool_desc.use_update_after_bind = true;
+    REQUIRE(Forge::DescriptorPool::Create(fixture.device, pool_desc).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge bindless descriptor bindings", "[forge]")
 {
     if (!IsForgeAvailable())
     {
         SKIP("No Vulkan device on this machine.");
     }
-    constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
-                                                        .update_after_bind_descriptors = true,
-                                                        .non_uniform_descriptor_indexing = true};
+    constexpr Forge::DeviceFeatures k_bindless_features = Forge::BindlessFeatures();
     if (!CanCreateDevice(k_bindless_features))
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
@@ -2701,9 +2718,7 @@ TEST_CASE("Forge bindless texture array", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
-                                                        .update_after_bind_descriptors = true,
-                                                        .non_uniform_descriptor_indexing = true};
+    constexpr Forge::DeviceFeatures k_bindless_features = Forge::BindlessFeatures();
     if (!CanCreateDevice(k_bindless_features))
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
@@ -2898,9 +2913,7 @@ TEST_CASE("Forge bindless constant buffer array", "[forge]")
     {
         SKIP("No Vulkan device on this machine.");
     }
-    constexpr Forge::DeviceFeatures k_bindless_features{.partially_bound_descriptors = true,
-                                                        .update_after_bind_descriptors = true,
-                                                        .non_uniform_descriptor_indexing = true};
+    constexpr Forge::DeviceFeatures k_bindless_features = Forge::BindlessFeatures();
     if (!CanCreateDevice(k_bindless_features))
     {
         SKIP("This device does not support the descriptor indexing features bindless needs.");
@@ -17234,25 +17247,28 @@ TEST_CASE("Forge runtime descriptor arrays", "[forge]")
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     };
 
-    SECTION("On by default, a shader with an unsized descriptor array builds and runs")
+    SECTION("Asked for with the rest of the bindless set, a shader with an unsized descriptor array builds and runs")
     {
-        REQUIRE(Forge::DeviceFeatures{}.runtime_descriptor_array);
-        run_on({});
+        if (!CanCreateDevice(Forge::BindlessFeatures()))
+        {
+            SKIP("This device does not support the descriptor features bindless needs.");
+        }
+        run_on(Forge::BindlessFeatures());
     }
     SECTION("Asked for alone, without the rest of descriptor indexing, it is still enough")
     {
-        // The question the defaults hide: descriptor_indexing and variable_descriptor_count are on beside it
-        // everywhere else, so nothing had shown this field carries the capability by itself.
-        constexpr Forge::DeviceFeatures k_alone{.descriptor_indexing = false, .variable_descriptor_count = false};
+        // Every other descriptor field stays off, so this shows the field carries the capability by itself.
+        constexpr Forge::DeviceFeatures k_alone{.runtime_descriptor_array = true};
         if (!CanCreateDevice(k_alone))
         {
-            SKIP("This device cannot be created with descriptor indexing turned off.");
+            SKIP("This device does not support runtime descriptor arrays.");
         }
         run_on(k_alone);
     }
-    SECTION("Turned off on its own, the layer refuses the same shader")
+    SECTION("Off by default, the layer refuses the same shader")
     {
-        ForgeFixture fixture(Forge::DeviceFeatures{.runtime_descriptor_array = false});
+        REQUIRE_FALSE(Forge::DeviceFeatures{}.runtime_descriptor_array);
+        ForgeFixture fixture;
         REQUIRE(fixture.status == ErrorCode::Success);
         const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_runtime_array_source, {.entry_point = "main_runtime_array", .cache = GetShaderCache()}));
@@ -17268,12 +17284,18 @@ TEST_CASE("Forge variable descriptor count", "[forge]")
         SKIP("No Vulkan device on this machine.");
     }
 
-    SECTION("On by default, a variable count binding with no other descriptor indexing flag passes the layer")
+    SECTION("Asked for, a variable count binding with no other descriptor indexing flag passes the layer")
     {
         // The bindless cases only ever use it beside partially bound and update after bind, which want
-        // features of their own; this is the flag alone, on the device every other case gets. One of the
-        // four descriptors the layout allows is allocated, and it is the one written and read.
-        ForgeFixture fixture;
+        // features of their own; this is the flag without them. The shader's array is unsized, so runtime
+        // arrays come along. One of the four descriptors the layout allows is allocated, and it is the one
+        // written and read.
+        constexpr Forge::DeviceFeatures k_variable{.runtime_descriptor_array = true, .variable_descriptor_count = true};
+        if (!CanCreateDevice(k_variable))
+        {
+            SKIP("This device does not support variable descriptor counts.");
+        }
+        ForgeFixture fixture(k_variable);
         REQUIRE(fixture.device.GetFeatures().variable_descriptor_count);
         const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_runtime_array_source, {.entry_point = "main_runtime_array", .cache = GetShaderCache()}));
@@ -17284,9 +17306,9 @@ TEST_CASE("Forge variable descriptor count", "[forge]")
         REQUIRE(words[0] == 4321u);
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
-    SECTION("On a device without it, a variable count binding is refused")
+    SECTION("Off by default, a variable count binding is refused")
     {
-        ForgeFixture fixture(Forge::DeviceFeatures{.variable_descriptor_count = false});
+        ForgeFixture fixture;
         REQUIRE(fixture.status == ErrorCode::Success);
         REQUIRE(
             Forge::DescriptorSetLayout::Create(fixture.device, MakeStorageLayoutDesc(4, Forge::DescriptorBindingFlagBits::VariableDescriptorCount))
