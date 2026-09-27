@@ -48,7 +48,13 @@ struct DescriptorPoolDesc : Opal::ClonableBase<DescriptorPoolDesc>
 {
     Opal::DynamicArray<Opal::Pair<DescriptorType, u32>> descriptor_types;
     u32 max_sets = 1;
-    bool use_update_after_bind = true;
+    /**
+     * A pool that sets with DescriptorBindingFlagBits::UpdateAfterBind bindings can be allocated from. Needs the
+     * device created with DeviceFeatures::update_after_bind_descriptors, and is refused without it. Off by
+     * default: such a pool counts against the separate update after bind limits, which a pool holding
+     * ordinary sets has no use for.
+     */
+    bool use_update_after_bind = false;
     /**
      * Allow individual sets to be returned to the pool when they are destroyed. Off by default, since a pool that is
      * reset or destroyed as a whole is both cheaper and the common case.
@@ -153,8 +159,9 @@ public:
 
     /**
      * @param desc How many descriptors of each kind the pool holds, and how many sets it hands out.
-     * @return The pool, ErrorCode::InvalidArgument for a desc naming no descriptors, or whatever the failing
-     *         creation maps to.
+     * @return The pool, ErrorCode::InvalidArgument for a desc naming no descriptors or asking for update after bind
+     *         on a device without DeviceFeatures::update_after_bind_descriptors, or whatever the failing creation
+     *         maps to.
      */
     [[nodiscard]] static Opal::Expected<DescriptorPool, ErrorCode> Create(const Device& device, const DescriptorPoolDesc& desc = {});
 

@@ -172,6 +172,12 @@ Opal::Expected<Rndr::Forge::DescriptorPool, Rndr::ErrorCode> Rndr::Forge::Descri
         return Result(ErrorCode::InvalidArgument);
     }
 
+    if (desc.use_update_after_bind && !device.GetFeatures().update_after_bind_descriptors)
+    {
+        RNDR_LOG_ERROR("Forge: an update after bind pool needs the device created with DeviceFeatures::update_after_bind_descriptors");
+        return Result(ErrorCode::InvalidArgument);
+    }
+
     DescriptorPool pool;
     pool.m_device = device;
     pool.m_desc = desc.Clone();
