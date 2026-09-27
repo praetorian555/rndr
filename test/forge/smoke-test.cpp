@@ -5989,6 +5989,109 @@ const Forge::SpecializationConstantInfo& SpecializationConstantNamed(const Forge
 
 }  // namespace
 
+/**
+ * Writes each thread's index within its workgroup, so what comes back says how wide the workgroups were: element i
+ * holds i modulo the size the pipeline was built with.
+ */
+constexpr const char* k_workgroup_size_source = R"(
+[SpecializationConstant]
+const int GROUP_SIZE = 64;
+
+[shader("compute")]
+[numthreads(GROUP_SIZE, 1, 1)]
+void main_group_size(uint3 thread_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThreadID, uniform uint32_t* output)
+{
+    output[thread_id.x] = local_id.x;
+}
+)";
+
+TEST_CASE("Forge workgroup size from a specialization constant", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr i32 k_element_count = 256;
+
+    // Slang turns a numthreads over a specialization constant into the LocalSizeId execution mode.
+    auto make_pipeline = [](const Forge::Device& device, const Forge::Shader& shader, i32 group_size)
+    {
+        Forge::ComputePipelineDesc desc;
+        desc.shader = shader;
+        desc.push_constant_ranges.PushBack({.shader_stages = ShaderTypeBits::Compute, .offset = 0, .size = sizeof(VkDeviceAddress)});
+        desc.specialization = {Forge::SpecializationConstant{.name = "GROUP_SIZE", .value = group_size}};
+        return Forge::Pipeline::Create(device, desc);
+    };
+
+    SECTION("With maintenance4, the pipeline's value is the workgroup size")
+    {
+        constexpr Forge::DeviceFeatures k_features{.maintenance4 = true};
+        if (!CanCreateDevice(k_features))
+        {
+            SKIP("This device does not support maintenance4.");
+        }
+        ForgeFixture fixture(k_features);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_workgroup_size_source, {.entry_point = "main_group_size", .cache = GetShaderCache()}));
+        for (const i32 group_size : {32, 128})
+        {
+            INFO("group size " << group_size);
+            const Forge::Pipeline pipeline = ForgeTest::Unwrap(make_pipeline(fixture.device, shader, group_size));
+            const Forge::Buffer output = MakeWipedOutput(fixture.device, k_element_count);
+            const u64 address = output.GetNativeDeviceAddress();
+            REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                           [&](Forge::CommandBuffer& command_buffer)
+                                           {
+                                               command_buffer.CmdBindPipeline(pipeline);
+                                               command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Compute, Opal::AsBytes(address));
+                                               command_buffer.CmdDispatch(k_element_count / group_size);
+                                           }) == ErrorCode::Success);
+            u32 values[k_element_count] = {};
+            REQUIRE(output.Read({reinterpret_cast<u8*>(values), sizeof(values)}) == ErrorCode::Success);
+            for (i32 i = 0; i < k_element_count; ++i)
+            {
+                INFO("element " << i);
+                REQUIRE(values[i] == static_cast<u32>(i % group_size));
+            }
+        }
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Without it, the layer refuses the shader")
+    {
+        ForgeFixture fixture;
+        REQUIRE_FALSE(fixture.device.GetFeatures().maintenance4);
+        const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+            fixture.device, k_workgroup_size_source, {.entry_point = "main_group_size", .cache = GetShaderCache()}));
+        const Opal::Expected<Forge::Pipeline, ErrorCode> pipeline = make_pipeline(fixture.device, shader, 128);
+        INFO(*fixture.GetValidationErrors());
+        REQUIRE(fixture.GetValidationErrorCount() > 0);
+    }
+}
+
+TEST_CASE("Forge specialization constants are cloned rather than copied", "[forge]")
+{
+    // A string makes them clonable rather than copyable, which is also what a list in braces is built through.
+    Forge::ComputePipelineDesc desc;
+    desc.specialization = {Forge::SpecializationConstant{.name = "GROUP_SIZE", .value = 128u},
+                           Forge::SpecializationConstant{.name = "SCALE", .value = 0.5f}};
+    REQUIRE(desc.specialization.GetSize() == 2);
+
+    const Forge::SpecializationConstant copy = desc.specialization[1].Clone();
+    REQUIRE(copy.name == desc.specialization[1].name);
+    REQUIRE(copy.value.type == Forge::SpecializationType::Float32);
+    REQUIRE(copy.value.bits == desc.specialization[1].value.bits);
+
+    Forge::SpecializationConstantInfo info;
+    info.name = "GROUP_SIZE";
+    info.constant_id = 3;
+    info.byte_size = 4;
+    info.default_value = 64;
+    const Forge::SpecializationConstantInfo info_copy = info.Clone();
+    REQUIRE(info_copy.name == info.name);
+    REQUIRE(info_copy.constant_id == 3);
+    REQUIRE(info_copy.default_value.bits == info.default_value.bits);
+}
+
 TEST_CASE("Forge specialization constants that are not a word wide", "[forge]")
 {
     if (!IsForgeAvailable())
