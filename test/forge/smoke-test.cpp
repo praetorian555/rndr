@@ -1743,6 +1743,66 @@ TEST_CASE("Forge buffer memory info", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * require_device_local turns the allocator's preference into a requirement. Whether the device can meet it is worked
+ * out here from Vulkan directly: the memory types a buffer of this usage may live in, against the flags each has.
+ * Host access adds host visible to what is required, so a mapped kind needs the BAR window - a discrete GPU without
+ * one takes the refusal branch, and anything with it or with unified memory the other.
+ */
+TEST_CASE("Forge buffer that requires device local memory", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const VkPhysicalDeviceMemoryProperties& memory = fixture.device.GetPhysicalDevice().GetMemoryProperties();
+    constexpr Forge::BufferUsageBits k_usage = Forge::BufferUsageBits::StorageBuffer;
+
+    struct Case
+    {
+        const char* name;
+        Forge::HostAccess host_access;
+        VkMemoryPropertyFlags needed;
+    };
+    constexpr Case k_cases[] = {
+        {"SequentialWrite", Forge::HostAccess::SequentialWrite, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT},
+        {"Random", Forge::HostAccess::Random, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT},
+        {"None", Forge::HostAccess::None, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT},
+    };
+    for (const Case& c : k_cases)
+    {
+        INFO("host access " << c.name);
+        // The types a buffer of this usage may use, read off one made without the requirement.
+        const Forge::Buffer probe =
+            ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = 256, .usage = k_usage, .host_access = c.host_access}));
+        VkMemoryRequirements requirements{};
+        vkGetBufferMemoryRequirements(fixture.device.GetNativeDevice(), probe.GetNativeBuffer(), &requirements);
+        bool device_has_it = false;
+        for (u32 i = 0; i < memory.memoryTypeCount; ++i)
+        {
+            const bool allowed = (requirements.memoryTypeBits & (1u << i)) != 0;
+            device_has_it = device_has_it || (allowed && (memory.memoryTypes[i].propertyFlags & c.needed) == c.needed);
+        }
+        INFO("the device " << (device_has_it ? "has" : "has no") << " memory of the kind this buffer requires");
+
+        Opal::Expected<Forge::Buffer, ErrorCode> required = Forge::Buffer::Create(
+            fixture.device, {.size = 256, .usage = k_usage, .host_access = c.host_access, .require_device_local = true});
+        if (device_has_it)
+        {
+            REQUIRE(required.HasValue());
+            const Opal::Optional<Forge::MemoryInfo> info = required.GetValue().GetMemoryInfo();
+            REQUIRE(info.HasValue());
+            REQUIRE((static_cast<VkMemoryPropertyFlags>(info->properties) & c.needed) == c.needed);
+        }
+        else
+        {
+            REQUIRE(required.GetErrorOr(ErrorCode::Success) == ErrorCode::FeatureNotSupported);
+        }
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge debug names reach the validation layer", "[forge]")
 {
     if (!IsForgeAvailable())
