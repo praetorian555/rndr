@@ -1906,6 +1906,110 @@ TEST_CASE("Forge debug names on every headless object", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR(fixture);
 }
 
+/**
+ * The push constant rules Vulkan states on vkCreatePipelineLayout and vkCmdPushConstants, refused by Forge rather than
+ * left for the layer, since without the layer breaking them is undefined behaviour. The pipelines are compute ones
+ * over k_compute_source, which reads an 8-byte address at offset 0, so every range here covers what the shader
+ * needs and only the rule under test is broken.
+ */
+TEST_CASE("Forge push constant ranges and pushes are checked", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const Forge::Shader shader = ForgeTest::Unwrap(
+        Forge::Shader::FromSourceInMemory(fixture.device, k_compute_source, {.entry_point = "main_compute", .cache = GetShaderCache()}));
+    const u32 limit = fixture.device.GetPhysicalDevice().GetProperties().limits.maxPushConstantsSize;
+    auto make_pipeline = [&](std::initializer_list<Forge::PushConstantRange> ranges)
+    {
+        Forge::ComputePipelineDesc desc;
+        desc.shader = shader;
+        for (const Forge::PushConstantRange& range : ranges)
+        {
+            desc.push_constant_ranges.PushBack(range);
+        }
+        return Forge::Pipeline::Create(fixture.device, desc);
+    };
+    constexpr ShaderTypeBits k_compute = ShaderTypeBits::Compute;
+
+    SECTION("A range Vulkan does not allow is refused when the pipeline is built")
+    {
+        INFO("the device allows " << limit << " bytes of push constants");
+        REQUIRE(make_pipeline({{.shader_stages = k_compute, .offset = 0, .size = limit + 4}}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE(make_pipeline({{.shader_stages = k_compute, .offset = 0, .size = 10}}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE(make_pipeline({{.shader_stages = k_compute, .offset = 0, .size = 0}}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE(make_pipeline({{.shader_stages = static_cast<ShaderTypeBits>(0), .offset = 0, .size = 8}}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        // A range starting at the limit, beside a valid one for another stage.
+        REQUIRE(make_pipeline({{.shader_stages = k_compute, .offset = 0, .size = 8}, {.shader_stages = ShaderTypeBits::Vertex, .offset = limit, .size = 4}})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        // A stage may be named by one range only.
+        REQUIRE(make_pipeline({{.shader_stages = k_compute, .offset = 0, .size = 8}, {.shader_stages = k_compute, .offset = 8, .size = 8}})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        // The whole of what the device allows is fine.
+        REQUIRE(make_pipeline({{.shader_stages = k_compute, .offset = 0, .size = limit}}).HasValue());
+    }
+    SECTION("A push outside the pipeline's ranges is refused, and one inside still reaches the shader")
+    {
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(make_pipeline({{.shader_stages = k_compute, .offset = 0, .size = 16}}));
+        constexpr i32 k_element_count = 64;
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(fixture.device, {.size = k_element_count * sizeof(u32),
+                                                                                                .usage = Forge::BufferUsageBits::StorageBuffer,
+                                                                                                .host_access = Forge::HostAccess::Random,
+                                                                                                .use_device_address = true}));
+        const u64 address = output.GetNativeDeviceAddress();
+        const u8 bytes[24] = {};
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, fixture.GetQueue(),
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        // Misaligned offset, size not a multiple of 4, nothing at all.
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute, {bytes, 4}, 2) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute, {bytes, 6}) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute, {bytes, 0}) == ErrorCode::InvalidArgument);
+                        // Running off the end of the range, and past everything the device allows.
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute, {bytes, 8}, 12) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute, {bytes, 4}, limit) == ErrorCode::InvalidArgument);
+                        // A stage the range is not for, alone or beside the one it is.
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, ShaderTypeBits::Vertex, {bytes, 8}) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute | ShaderTypeBits::Vertex, {bytes, 8}) ==
+                                ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdPushConstants(Forge::Pipeline{}, k_compute, {bytes, 8}) == ErrorCode::InvalidArgument);
+
+                        REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute, Opal::AsBytes(address)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        u32 values[k_element_count] = {};
+        REQUIRE(output.Read({reinterpret_cast<u8*>(values), sizeof(values)}) == ErrorCode::Success);
+        for (i32 i = 0; i < k_element_count; ++i)
+        {
+            INFO("element " << i);
+            REQUIRE(values[i] == static_cast<u32>(i) + 1000);
+        }
+    }
+    SECTION("A push touching a range has to name every stage of it")
+    {
+        const Forge::Pipeline pipeline =
+            ForgeTest::Unwrap(make_pipeline({{.shader_stages = k_compute | ShaderTypeBits::Vertex, .offset = 0, .size = 16}}));
+        const u8 bytes[8] = {};
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute, {bytes, 8}) ==
+                                                   ErrorCode::InvalidArgument);
+                                           REQUIRE(command_buffer.CmdPushConstants(pipeline, k_compute | ShaderTypeBits::Vertex, {bytes, 8}) ==
+                                                   ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+    }
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge command buffer reset and repeated Begin", "[forge]")
 {
     if (!IsForgeAvailable())
