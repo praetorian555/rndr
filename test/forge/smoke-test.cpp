@@ -1692,6 +1692,57 @@ TEST_CASE("Forge device-only buffer", "[forge]")
 }
 
 
+/**
+ * Where a buffer's memory landed, checked against the physical device rather than against anything else Forge
+ * reports: the memory type GetMemoryInfo names is looked up in VkPhysicalDeviceMemoryProperties, and the flags, heap
+ * and heap size handed back have to be that type's. Beyond that only what the allocator is made to honour is
+ * asserted - host visible for the two mapped kinds, and device local for a buffer the host never touches, which the
+ * allocator prefers and every device has - since which type it picks among the rest differs by device.
+ */
+TEST_CASE("Forge buffer memory info", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    ForgeFixture fixture;
+    const VkPhysicalDeviceMemoryProperties& memory = fixture.device.GetPhysicalDevice().GetMemoryProperties();
+    constexpr VkMemoryPropertyFlags k_named = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+                                              VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT | VK_MEMORY_PROPERTY_PROTECTED_BIT;
+
+    struct Case
+    {
+        const char* name;
+        Forge::HostAccess host_access;
+        Forge::MemoryPropertyBits required;
+    };
+    constexpr Case k_cases[] = {
+        {"SequentialWrite", Forge::HostAccess::SequentialWrite, Forge::MemoryPropertyBits::HostVisible},
+        {"Random", Forge::HostAccess::Random, Forge::MemoryPropertyBits::HostVisible},
+        {"None", Forge::HostAccess::None, Forge::MemoryPropertyBits::DeviceLocal},
+    };
+    for (const Case& c : k_cases)
+    {
+        INFO("host access " << c.name);
+        const Forge::Buffer buffer = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = 256, .usage = Forge::BufferUsageBits::StorageBuffer, .host_access = c.host_access}));
+        const Opal::Optional<Forge::MemoryInfo> info = buffer.GetMemoryInfo();
+        REQUIRE(info.HasValue());
+        REQUIRE(info->memory_type_index < memory.memoryTypeCount);
+        const VkMemoryType& type = memory.memoryTypes[info->memory_type_index];
+        INFO("memory type " << info->memory_type_index << " flags " << type.propertyFlags);
+        REQUIRE(static_cast<VkMemoryPropertyFlags>(info->properties) == (type.propertyFlags & k_named));
+        REQUIRE(info->heap_index == type.heapIndex);
+        REQUIRE(info->heap_size == memory.memoryHeaps[type.heapIndex].size);
+        REQUIRE((info->properties & c.required) == c.required);
+    }
+
+    // An empty buffer has nothing to describe.
+    REQUIRE_FALSE(Forge::Buffer{}.GetMemoryInfo().HasValue());
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 TEST_CASE("Forge debug names reach the validation layer", "[forge]")
 {
     if (!IsForgeAvailable())
@@ -17300,17 +17351,21 @@ TEST_CASE("Forge a transient attachment", "[forge]")
                                                                                VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT));
         }
         INFO("the device " << (device_has_lazy_memory ? "has" : "has no") << " lazily allocated memory this image can use");
-        const VkMemoryPropertyFlags transient_properties = transient.GetMemoryProperties();
-        REQUIRE(transient_properties != 0);
-        REQUIRE(!!(transient_properties & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) == device_has_lazy_memory);
+        const Opal::Optional<Forge::MemoryInfo> transient_memory = transient.GetMemoryInfo();
+        REQUIRE(transient_memory.HasValue());
+        REQUIRE(!!(transient_memory->properties & Forge::MemoryPropertyBits::LazilyAllocated) == device_has_lazy_memory);
 
         // An ordinary texture is never put there, whatever the device has, and is in device local memory.
         const Forge::Texture ordinary = ForgeTest::Unwrap(Forge::Texture::Create(
             fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = k_side, .height = k_side, .usage = Forge::TextureUsageBits::Sampled}));
-        REQUIRE_FALSE(!!(ordinary.GetMemoryProperties() & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT));
-        REQUIRE(!!(ordinary.GetMemoryProperties() & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
-        // And a texture with no image has no memory to describe.
-        REQUIRE(Forge::Texture{}.GetMemoryProperties() == 0);
+        const Opal::Optional<Forge::MemoryInfo> ordinary_memory = ordinary.GetMemoryInfo();
+        REQUIRE(ordinary_memory.HasValue());
+        REQUIRE_FALSE(!!(ordinary_memory->properties & Forge::MemoryPropertyBits::LazilyAllocated));
+        REQUIRE(!!(ordinary_memory->properties & Forge::MemoryPropertyBits::DeviceLocal));
+        // And a texture with no image, or with an image Forge did not allocate, has no memory to describe.
+        REQUIRE_FALSE(Forge::Texture{}.GetMemoryInfo().HasValue());
+        const Forge::Texture wrapped = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, ordinary.GetNativeImage(), ordinary.GetDesc()));
+        REQUIRE_FALSE(wrapped.GetMemoryInfo().HasValue());
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
     SECTION("Transient with no attachment usage at all is refused")
