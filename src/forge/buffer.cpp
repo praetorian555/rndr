@@ -54,7 +54,22 @@ Opal::Expected<Rndr::Forge::Buffer, Rndr::ErrorCode> Rndr::Forge::Buffer::Create
             RNDR_LOG_ERROR("Forge: BufferDesc::host_access is not one of the three: {}", static_cast<u32>(desc.host_access));
             return Result(ErrorCode::InvalidArgument);
     }
-    const VmaAllocationCreateInfo allocation_create_info{.flags = allocation_flags, .usage = VMA_MEMORY_USAGE_AUTO};
+    VmaAllocationCreateInfo allocation_create_info{.flags = allocation_flags, .usage = VMA_MEMORY_USAGE_AUTO};
+    if (desc.require_device_local)
+    {
+        // The preference the allocator would fall back from becomes a requirement it cannot. A device with no such
+        // memory at all is asked about first, so that it reads as that rather than as a failed vmaCreateBuffer;
+        // a heap that is full is left for the allocation below to report.
+        allocation_create_info.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        u32 memory_type_index = 0;
+        if (vmaFindMemoryTypeIndexForBufferInfo(device.GetGPUAllocator(), &create_info, &allocation_create_info, &memory_type_index) ==
+            VK_ERROR_FEATURE_NOT_PRESENT)
+        {
+            RNDR_LOG_ERROR("Forge: the device has no device local memory {}that a buffer with this usage can use",
+                           desc.host_access == HostAccess::None ? "" : "the host can map ");
+            return Result(ErrorCode::FeatureNotSupported);
+        }
+    }
     RNDR_FORGE_VK_CHECK_EXPECTED(
         vmaCreateBuffer(device.GetGPUAllocator(), &create_info, &allocation_create_info, &buffer.m_buffer, &buffer.m_allocation, nullptr),
         "vmaCreateBuffer", Result);

@@ -231,6 +231,12 @@ allocation actually landed - the `MemoryPropertyBits` of its memory type, the ty
 of the heap, which is what tells a 256 MB BAR window from resizable BAR. Both are empty for an object with no
 allocation of its own, such as a texture wrapping a swap chain image.
 
+Where the fallback is not acceptable, `BufferDesc::require_device_local` makes device local memory a requirement:
+creation fails with `ErrorCode::FeatureNotSupported` on a device that has none the buffer can use, and with
+`ErrorCode::OutOfMemory` when the heap is full, rather than landing in system memory. Combined with host access it
+asks for the BAR window, which is how a caller finds out whether writing straight into VRAM is possible here or
+the staging path is needed.
+
 `UploadToBuffer`, `ReadBackBuffer` and `ReadBackTexture` in `rndr/forge/transfer.hpp` do the staging buffer,
 the copy, the submit and the wait. They block, which is what setup code wants and what a frame does not.
 

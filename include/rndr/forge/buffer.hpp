@@ -26,6 +26,15 @@ struct BufferDesc
     HostAccess host_access = HostAccess::SequentialWrite;
     bool keep_memory_mapped = true;
     bool use_device_address = false;
+    /**
+     * Refuse to fall back from device local memory. The allocator already prefers it for a buffer the device
+     * uses, and takes system memory when there is none it can use or the heap is full; with this set, creation
+     * fails instead. With host access it asks for memory that is both device local and host visible - the BAR
+     * window on a discrete GPU - which not every device has. Buffer::Create then reports
+     * ErrorCode::FeatureNotSupported when the device has no such memory and ErrorCode::OutOfMemory when it has
+     * and the heap is full.
+     */
+    bool require_device_local = false;
 };
 
 class Buffer
