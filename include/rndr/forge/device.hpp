@@ -256,8 +256,8 @@ struct SubmitDesc
  *         none of them qualifies. The log names the requirement the last one failed, since "no suitable
  *         device" on its own tells nobody anything.
  */
-[[nodiscard]] Opal::Expected<PhysicalDevice, ErrorCode> SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices,
-                                                                             const DeviceDesc& desc = {}, bool prefer_discrete = true);
+Opal::Expected<PhysicalDevice, ErrorCode> SelectPhysicalDevice(Opal::ArrayView<PhysicalDevice> devices,
+                                                               const DeviceDesc& desc = {}, bool prefer_discrete = true);
 
 class DeviceQueue
 {
@@ -302,17 +302,17 @@ public:
      *         empty semaphore, or gives a value to a semaphore that has no counter, or whatever the failing
      *         submit maps to.
      */
-    [[nodiscard]] ErrorCode Submit(const SubmitDesc& desc);
+    ErrorCode Submit(const SubmitDesc& desc);
 
     /** One command buffer, one fence, nothing to synchronize against on the device. */
-    [[nodiscard]] ErrorCode Submit(const CommandBuffer& command_buffer, const Fence& fence);
+    ErrorCode Submit(const CommandBuffer& command_buffer, const Fence& fence);
 
     /**
      * Block until everything submitted to this queue has finished. Coarser than a fence and meant for
      * shutdown and for one-off setup work, not for the frame loop.
      * @return ErrorCode::Success, or whatever the failing wait maps to.
      */
-    [[nodiscard]] ErrorCode WaitIdle() const;
+    ErrorCode WaitIdle() const;
 
 private:
     friend class Device;
@@ -441,10 +441,10 @@ public:
      * Block until everything submitted to any of this device's queues has finished.
      * @return ErrorCode::Success, or whatever the failing wait maps to.
      */
-    [[nodiscard]] ErrorCode WaitForAll() const;
+    ErrorCode WaitForAll() const;
 
 private:
-    [[nodiscard]] ErrorCode CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);
+    ErrorCode CollectQueueFamilies(Opal::DynamicArray<VkDeviceQueueCreateInfo>& queue_create_infos);
 
     /** Point every queue back at this device, which a move has to do since the queues hold a reference to it. */
     void RepointQueues();

@@ -27,7 +27,7 @@ namespace Rndr::Forge
  * @return ErrorCode::Success, or the first code any of the steps around the recording reported.
  */
 template <typename Recorder>
-[[nodiscard]] ErrorCode ImmediateSubmit(const Device& device, DeviceQueue& queue, Recorder&& recorder)
+ErrorCode ImmediateSubmit(const Device& device, DeviceQueue& queue, Recorder&& recorder)
 {
     Opal::Expected<CommandBuffer, ErrorCode> command_buffer = CommandBuffer::Create(device, queue);
     if (!command_buffer.HasValue())
@@ -54,8 +54,8 @@ template <typename Recorder>
  * @param offset Byte offset into the destination.
  * @return ErrorCode::Success, or the first code the staging buffer, the copy or the submit reported.
  */
-[[nodiscard]] ErrorCode UploadToBuffer(const Device& device, DeviceQueue& queue, const Buffer& destination, Opal::ArrayView<const u8> data,
-                                       u64 offset = 0);
+ErrorCode UploadToBuffer(const Device& device, DeviceQueue& queue, const Buffer& destination, Opal::ArrayView<const u8> data,
+                         u64 offset = 0);
 
 /**
  * Copy a range of a buffer back into host memory through a temporary staging buffer, filling the whole view.
@@ -65,8 +65,8 @@ template <typename Recorder>
  * @param offset Byte offset into the source.
  * @return ErrorCode::Success, or the first code the staging buffer, the copy, the submit or the read reported.
  */
-[[nodiscard]] ErrorCode ReadBackBuffer(const Device& device, DeviceQueue& queue, const Buffer& source, Opal::ArrayView<u8> out,
-                                       u64 offset = 0);
+ErrorCode ReadBackBuffer(const Device& device, DeviceQueue& queue, const Buffer& source, Opal::ArrayView<u8> out,
+                         u64 offset = 0);
 
 /**
  * Copy one mip level of a texture back into host memory, tightly packed. Blocks until the copy is done, and
@@ -79,8 +79,8 @@ template <typename Recorder>
  * @return ErrorCode::Success, ErrorCode::InvalidArgument for a view that is not the size of the mip level, or
  *         the first code the staging buffer, the copy, the submit or the read reported.
  */
-[[nodiscard]] ErrorCode ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, Opal::ArrayView<u8> out,
-                                        u32 mip_level = 0, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
+ErrorCode ReadBackTexture(const Device& device, DeviceQueue& queue, Texture& source, Opal::ArrayView<u8> out,
+                          u32 mip_level = 0, ImageLayout final_layout = ImageLayout::ShaderReadOnly);
 
 /**
  * The size in bytes of one tightly packed mip level of a texture, every array layer included.

@@ -126,7 +126,7 @@ private:
     friend class TextureView;
 
     /** Write a layout over every subresource a range covers, resolving the k_all_* counts against the desc. */
-    [[nodiscard]] ErrorCode SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout);
+    ErrorCode SetCurrentLayout(const ImageSubresourceRange& range, ImageLayout layout);
 
     /**
      * Whether a range names only subresources this texture has, which is what SetCurrentLayout checks and what
@@ -135,7 +135,7 @@ private:
      */
     [[nodiscard]] ErrorCode CheckRange(const ImageSubresourceRange& range) const;
 
-    [[nodiscard]] ErrorCode Init(const Device& device, const TextureDesc& desc);
+    ErrorCode Init(const Device& device, const TextureDesc& desc);
 
     TextureDesc m_desc;
     /** One entry per subresource, mip level major: mip_level * array_layer_count + array_layer. */

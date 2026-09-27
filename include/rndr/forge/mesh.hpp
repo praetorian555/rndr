@@ -39,6 +39,6 @@ struct Mesh
  *         ErrorCode::FileNotFound when the file holds no mesh, or ErrorCode::UnsupportedFormat when the mesh
  *         is missing an attribute this needs.
  */
-[[nodiscard]] ErrorCode LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh);
+ErrorCode LoadMesh(const Opal::StringUtf8& file_path, Mesh& out_mesh);
 
 }  // namespace Rndr::Forge

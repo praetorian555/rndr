@@ -92,7 +92,7 @@ public:
      *         came free within SwapChainDesc::acquire_timeout, skipped the same way, or the code the wait, the
      *         acquire or the command buffer reported.
      */
-    [[nodiscard]] Opal::Expected<SwapChainStatus, ErrorCode> BeginFrame();
+    Opal::Expected<SwapChainStatus, ErrorCode> BeginFrame();
 
     /**
      * End the command buffer, submit it, and present the texture it rendered into. The transition to Present
@@ -101,7 +101,7 @@ public:
      *         or the code the recording, the submit or the present reported. ErrorCode::InvalidArgument when
      *         there is no frame being recorded.
      */
-    [[nodiscard]] Opal::Expected<SwapChainStatus, ErrorCode> EndFrame();
+    Opal::Expected<SwapChainStatus, ErrorCode> EndFrame();
 
     /**
      * The command buffer of the frame in flight.
@@ -137,7 +137,7 @@ private:
     friend void SetDebugName(const Device& device, const FrameContext& frame_context, const Opal::StringUtf8& name);
 
     /** One semaphore per swap chain texture, rebuilt whenever the swap chain is. */
-    [[nodiscard]] ErrorCode MatchRenderSemaphoresToSwapChain();
+    ErrorCode MatchRenderSemaphoresToSwapChain();
 
     FrameContextDesc m_desc;
     Opal::Ref<const Device> m_device;

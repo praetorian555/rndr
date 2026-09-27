@@ -47,7 +47,7 @@ struct VertexInputDesc : Opal::ClonableBase<VertexInputDesc>
     OPAL_CLONE_FIELDS(bindings);
 
     Binding& AddBinding(u32 binding, u32 stride, DataRepetition input_rate = DataRepetition::PerVertex);
-    [[nodiscard]] ErrorCode AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset);
+    ErrorCode AddAttribute(u32 binding, u32 location, PixelFormat format, u32 offset);
 
     /**
      * One binding holding every attribute the vertex shader reads, in location order.
@@ -332,8 +332,8 @@ public:
     }
 
 private:
-    [[nodiscard]] ErrorCode CreatePipelineLayout(Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
-                                                 Opal::ArrayView<const PushConstantRange> push_constant_ranges);
+    ErrorCode CreatePipelineLayout(Opal::ArrayView<const Opal::Ref<const DescriptorSetLayout>> descriptor_set_layouts,
+                                   Opal::ArrayView<const PushConstantRange> push_constant_ranges);
 
     Opal::Ref<const Device> m_device;
     VkPipeline m_pipeline = VK_NULL_HANDLE;

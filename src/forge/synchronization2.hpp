@@ -26,7 +26,7 @@ void CmdPipelineBarrier2(const Device& device, VkCommandBuffer command_buffer, c
  * VkTimelineSemaphoreSubmitInfo. A signal there happens once the whole batch is done rather than at the stages the
  * synchronization2 info names, which is later and never wrong.
  */
-[[nodiscard]] VkResult QueueSubmit2(const Device& device, VkQueue queue, const VkSubmitInfo2& submit_info, VkFence fence);
+VkResult QueueSubmit2(const Device& device, VkQueue queue, const VkSubmitInfo2& submit_info, VkFence fence);
 
 /**
  * vkCmdWriteTimestamp2, or vkCmdWriteTimestamp at the original stage the given one maps to - the latest of them when

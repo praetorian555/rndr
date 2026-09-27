@@ -63,7 +63,7 @@ struct DescriptorPoolDesc : Opal::ClonableBase<DescriptorPoolDesc>
     //
     OPAL_CLONE_FIELDS(descriptor_types, max_sets, use_update_after_bind, free_individual_sets);
 
-    [[nodiscard]] ErrorCode Add(DescriptorType descriptor_type, u32 max_size);
+    ErrorCode Add(DescriptorType descriptor_type, u32 max_size);
 };
 
 struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
@@ -110,9 +110,9 @@ struct DescriptorSetLayoutDesc : Opal::ClonableBase<DescriptorSetLayoutDesc>
 
     OPAL_CLONE_FIELDS(bindings, shaders, set_index);
 
-    [[nodiscard]] ErrorCode AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types,
-                                       Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {},
-                                       DescriptorBindingFlagBits flags = DescriptorBindingFlagBits::None);
+    ErrorCode AddBinding(u32 binding, DescriptorType descriptor_type, u32 descriptor_count, ShaderTypeBits shader_types,
+                         Opal::ArrayView<const Opal::Ref<const Sampler>> immutable_samplers = {},
+                         DescriptorBindingFlagBits flags = DescriptorBindingFlagBits::None);
 };
 
 struct DescriptorSetUpdateBinding
@@ -170,7 +170,7 @@ public:
      * DescriptorSet that came out of this pool is invalid afterwards and must not be destroyed or bound, which makes
      * this the recycle-per-frame counterpart to allocating and freeing sets one by one.
      */
-    [[nodiscard]] ErrorCode Reset();
+    ErrorCode Reset();
 
     [[nodiscard]] bool IsValid() const { return m_pool != VK_NULL_HANDLE; }
     [[nodiscard]] VkDescriptorPool GetNativeDescriptorPool() const { return m_pool; }
@@ -252,7 +252,7 @@ public:
      * the single-resource overloads below are one vkUpdateDescriptorSets each.
      * @param updates What to write. Each names its own binding and descriptor type.
      */
-    [[nodiscard]] ErrorCode Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
+    ErrorCode Update(Opal::ArrayView<const DescriptorSetUpdateBinding> updates);
 
     /**
      * Write one texture into a binding. The descriptor type comes from the layout the set was allocated from,
@@ -263,15 +263,15 @@ public:
      * @param texture_layout Layout the texture will be in when the shader reads it.
      * @param array_element Which descriptor of the binding to write, for a binding that is an array.
      */
-    [[nodiscard]] ErrorCode Update(u32 binding, const Texture& texture, const Sampler& sampler,
-                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+    ErrorCode Update(u32 binding, const Texture& texture, const Sampler& sampler, ImageLayout texture_layout = ImageLayout::ShaderReadOnly,
+                     u32 array_element = 0);
 
     /**
      * Write a view of a texture into a binding, the way the overload above writes the texture's own view.
      * @param texture_layout Layout the range the view covers will be in when the shader reads it.
      */
-    [[nodiscard]] ErrorCode Update(u32 binding, const TextureView& view, const Sampler& sampler,
-                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+    ErrorCode Update(u32 binding, const TextureView& view, const Sampler& sampler, ImageLayout texture_layout = ImageLayout::ShaderReadOnly,
+                     u32 array_element = 0);
 
     /**
      * Write one buffer into a binding. The descriptor type - constant or storage - comes from the layout, as
@@ -282,7 +282,7 @@ public:
      * @param size Bytes visible from offset on. k_whole_buffer is the rest of the buffer.
      * @param array_element Which descriptor of the binding to write, for a binding that is an array.
      */
-    [[nodiscard]] ErrorCode Update(u32 binding, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
+    ErrorCode Update(u32 binding, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
 
     /**
      * Write one texture into the binding the shader calls `name`, which is the same call as above with the
@@ -291,16 +291,15 @@ public:
      * @param name What the shader calls the binding. A name it does not use is refused, as is any name at all
      *             when the layout was built without `shaders` and so carries none.
      */
-    [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
-                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+    ErrorCode Update(const Opal::StringUtf8& name, const Texture& texture, const Sampler& sampler,
+                     ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /** Write a view of a texture into the binding the shader calls `name`, as above. */
-    [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const TextureView& view, const Sampler& sampler,
-                                   ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
+    ErrorCode Update(const Opal::StringUtf8& name, const TextureView& view, const Sampler& sampler,
+                     ImageLayout texture_layout = ImageLayout::ShaderReadOnly, u32 array_element = 0);
 
     /** Write one buffer into the binding the shader calls `name`, as above. */
-    [[nodiscard]] ErrorCode Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer,
-                                   u32 array_element = 0);
+    ErrorCode Update(const Opal::StringUtf8& name, const Buffer& buffer, u64 offset = 0, u64 size = k_whole_buffer, u32 array_element = 0);
 
     /**
      * The index of the binding the shader calls `name`, which is what the two overloads above look up.

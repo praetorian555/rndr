@@ -175,13 +175,13 @@ while (!window->IsClosed())
     CommandBuffer& command_buffer = frame_context.GetCommandBuffer().GetValue();
     Texture& color_texture = frame_context.GetColorTexture().GetValue();
     // The preset reads the layout off the texture, so what that reported rides through the command.
-    (void)command_buffer.CmdTextureBarrier(TextureBarrier::ToColorAttachment(color_texture));
-    (void)command_buffer.CmdBeginRendering({.render_area_extent = frame_context.GetRenderSize(),
-                                           .color_attachments = {{.texture = color_texture, ...}}});
+    command_buffer.CmdTextureBarrier(TextureBarrier::ToColorAttachment(color_texture));
+    command_buffer.CmdBeginRendering({.render_area_extent = frame_context.GetRenderSize(),
+                                     .color_attachments = {{.texture = color_texture, ...}}});
     ...
-    (void)command_buffer.CmdEndRendering();
+    command_buffer.CmdEndRendering();
 
-    (void)frame_context.EndFrame();
+    frame_context.EndFrame();
 }
 ```
 
@@ -189,9 +189,8 @@ while (!window->IsClosed())
 buffer, so what comes back is already recording. `EndFrame` transitions the texture to `Present`, ends the
 command buffer, submits it against the right semaphores, and presents.
 
-The `(void)` casts above are the frame loop being explicit: every recorded command reports, and a loop that
-means to render regardless says so rather than dropping the codes by accident. A loop that acts on them
-keeps the first one instead.
+Every recorded command reports, and a refused one has already said why in the log, so a loop that means to
+render regardless leaves the codes alone. A loop that acts on them keeps the first one instead.
 
 Resizing and minimizing are ordinary outcomes rather than errors. `BeginFrame` answering `OutOfDate` means
 the swap chain has already been rebuilt, nothing was recorded, the fence of that slot was not reset and the
@@ -418,8 +417,13 @@ Nothing in Forge throws. Three rules, in the order they are applied.
 
 Anything that went wrong comes back as a `Rndr::ErrorCode`, and the detail goes to the log at error level.
 A call that produces something hands back `Opal::Expected<T, ErrorCode>`; a call that produces nothing hands
-back the code itself, `ErrorCode::Success` when it worked. Both are `[[nodiscard]]`, so a code cannot be
-dropped by accident - `(void)` is how a caller says it means to.
+back the code itself, `ErrorCode::Success` when it worked. Checking it is the caller's choice: a call that
+does something - creates, records, submits, waits, uploads, updates - is not `[[nodiscard]]`, since the log
+already names what failed and why, and a caller with nothing to fall back on should not have to say so on
+every line. `[[nodiscard]]` is kept where the returned value is the only thing the call is for, so dropping
+it is always a mistake: getters and pure queries - `Get*`, `Is*`, `Find*`, the barrier presets - every `Create`
+and `Shader::From*`, whose object is gone the moment it is dropped, and `TryWait`, whose answer is the point of
+the timeout.
 
 A failing `VkResult` becomes the code `VkResultToErrorCode` maps it to, and the log line carries the result
 and the name of the Vulkan function it came from - so the code stays small enough to switch on while nothing
@@ -510,7 +514,7 @@ writes one helper that unwraps or stops, and uses it throughout - `modern-vulkan
 check per line, and the log already says which call failed and why.
 
 The frame loop needs no error handling beyond the `SwapChainStatus` it already has to react to. Every
-recorded command reports, and a loop that means to render regardless says so with `(void)`.
+recorded command reports, and a loop that means to render regardless simply does not look.
 
 ---
 

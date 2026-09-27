@@ -48,7 +48,7 @@ public:
      * Block until the fence is signalled.
      * @return ErrorCode::Success, or whatever the failing wait maps to.
      */
-    [[nodiscard]] ErrorCode Wait() const;
+    ErrorCode Wait() const;
 
     /**
      * The same wait, given up on after the timeout in nanoseconds.
@@ -57,14 +57,14 @@ public:
      */
     [[nodiscard]] Opal::Expected<bool, ErrorCode> TryWait(u64 timeout) const;
 
-    [[nodiscard]] ErrorCode Reset() const;
+    ErrorCode Reset() const;
 
     /**
      * One wait over many fences, which returns once every one of them is signalled.
      * @return ErrorCode::Success, ErrorCode::InvalidArgument when a fence is empty or they do not all belong
      *         to one device, or whatever the failing wait maps to.
      */
-    [[nodiscard]] static ErrorCode WaitForAll(Opal::ArrayView<const Fence> fences);
+    static ErrorCode WaitForAll(Opal::ArrayView<const Fence> fences);
 
     /** WaitForAll with a timeout, answering the way TryWait does. */
     [[nodiscard]] static Opal::Expected<bool, ErrorCode> TryWaitForAll(Opal::ArrayView<const Fence> fences, u64 timeout);
@@ -128,7 +128,7 @@ public:
      */
 
     /** Block until the count reaches the given value. A value already reached returns at once. */
-    [[nodiscard]] ErrorCode Wait(u64 value) const;
+    ErrorCode Wait(u64 value) const;
 
     /**
      * The same wait, given up on after the timeout in nanoseconds.
@@ -142,7 +142,7 @@ public:
      * @return ErrorCode::Success, or ErrorCode::InvalidArgument when the value is not above the count it
      *         already holds, which no signal can reach.
      */
-    [[nodiscard]] ErrorCode Signal(u64 value) const;
+    ErrorCode Signal(u64 value) const;
 
     /** The count as it stands. A device signal may have raised it again by the time this returns. */
     [[nodiscard]] Opal::Expected<u64, ErrorCode> GetValue() const;
@@ -153,7 +153,7 @@ public:
      * @return ErrorCode::Success, ErrorCode::InvalidArgument when one of them is empty or binary or they do
      *         not all belong to one device, or whatever the failing wait maps to.
      */
-    [[nodiscard]] static ErrorCode WaitForAll(Opal::ArrayView<const SemaphoreWait> waits);
+    static ErrorCode WaitForAll(Opal::ArrayView<const SemaphoreWait> waits);
 
     /** WaitForAll with a timeout, answering the way TryWait does. */
     [[nodiscard]] static Opal::Expected<bool, ErrorCode> TryWaitForAll(Opal::ArrayView<const SemaphoreWait> waits, u64 timeout);

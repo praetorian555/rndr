@@ -84,7 +84,7 @@ public:
      * @return ErrorCode::Success, ErrorCode::OutOfBounds when the write does not fit, ErrorCode::InvalidArgument
      *         when the memory is not one the host can write, or whatever the failing map maps to.
      */
-    [[nodiscard]] ErrorCode Update(Opal::ArrayView<const u8> data, size_t offset = 0) const;
+    ErrorCode Update(Opal::ArrayView<const u8> data, size_t offset = 0) const;
 
     /**
      * Read data out of the buffer at the given offset, filling the whole view. Non-coherent memory is
@@ -93,14 +93,14 @@ public:
      *         when the buffer was not created with HostAccess::Random - reading write-combined memory works
      *         and is slow enough to be a bug - or whatever the failing map maps to.
      */
-    [[nodiscard]] ErrorCode Read(Opal::ArrayView<u8> data, size_t offset = 0) const;
+    ErrorCode Read(Opal::ArrayView<u8> data, size_t offset = 0) const;
 
 private:
     /** Make a host write to the given range visible to the device. Does nothing on coherent memory. */
-    [[nodiscard]] ErrorCode Flush(size_t offset, size_t size) const;
+    ErrorCode Flush(size_t offset, size_t size) const;
 
     /** Make a device write to the given range visible to the host. Does nothing on coherent memory. */
-    [[nodiscard]] ErrorCode Invalidate(size_t offset, size_t size) const;
+    ErrorCode Invalidate(size_t offset, size_t size) const;
 
     BufferDesc m_desc;
     Opal::Ref<const Device> m_device;

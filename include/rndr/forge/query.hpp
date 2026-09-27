@@ -96,7 +96,7 @@ public:
      * @return ErrorCode::Success, ErrorCode::OutOfBounds when the range does not fit, or
      *         ErrorCode::InvalidArgument without the feature.
      */
-    [[nodiscard]] ErrorCode Reset(u32 first_query = 0, u32 query_count = k_all_queries) const;
+    ErrorCode Reset(u32 first_query = 0, u32 query_count = k_all_queries) const;
 
     /**
      * Read raw ticks, blocking until the device has written every one of them. A query that was never
