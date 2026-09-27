@@ -4,6 +4,7 @@
 
 #include "opal/container/dynamic-array.h"
 #include "opal/container/expected.h"
+#include "opal/container/optional.h"
 #include "opal/container/ref.h"
 
 #include "rndr/bitmap.hpp"
@@ -86,12 +87,11 @@ public:
     [[nodiscard]] const TextureDesc& GetDesc() const { return m_desc; }
 
     /**
-     * The properties of the memory type the image was allocated from. A transient attachment lands in
-     * VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT memory when the device has a type the image can use, which is
-     * the only way to tell whether it did. Zero for an empty texture and for one wrapping an image Forge
-     * did not allocate.
+     * Where the image's memory landed. A transient attachment lands in LazilyAllocated memory when the device
+     * has a type the image can use, which is the only way to tell whether it did. Empty for an empty texture
+     * and for one wrapping an image Forge did not allocate, such as a swap chain's.
      */
-    [[nodiscard]] VkMemoryPropertyFlags GetMemoryProperties() const;
+    [[nodiscard]] Opal::Optional<MemoryInfo> GetMemoryInfo() const;
 
     /**
      * The layout every subresource of the texture is in, which is what a barrier transitions out of. Vulkan

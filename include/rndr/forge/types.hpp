@@ -64,6 +64,47 @@ enum class HostAccess : u8
     None
 };
 
+/**
+ * What the memory an allocation landed in can do. Mirrors VkMemoryPropertyFlagBits, less the vendor bits,
+ * which Forge never asks for.
+ *
+ * A desc says how the memory is going to be used and the allocator picks the type, so this is how a caller
+ * finds out what it got. HostVisible and DeviceLocal together is VRAM the host can map: the BAR window on a
+ * discrete GPU, or all of it with resizable BAR, and every type on an integrated one.
+ */
+enum class MemoryPropertyBits : u32
+{
+    None = 0,
+    /** Fastest for the device to reach. VRAM on a discrete GPU. */
+    DeviceLocal = 0x00000001,
+    /** The host can map it. */
+    HostVisible = 0x00000002,
+    /** Host and device writes reach each other without a flush or an invalidate. */
+    HostCoherent = 0x00000004,
+    /** Cached on the host, which is what makes a host read fast. */
+    HostCached = 0x00000008,
+    /** Backed only once the device touches it, which is where a transient attachment lands on a tiled GPU. */
+    LazilyAllocated = 0x00000010,
+    /** Reachable only from protected queues. */
+    Protected = 0x00000020
+};
+OPAL_ENUM_CLASS_FLAGS(MemoryPropertyBits);
+
+/** Where an allocation landed: the memory type and the heap it came from, and what that memory can do. */
+struct MemoryInfo
+{
+    MemoryPropertyBits properties = MemoryPropertyBits::None;
+    /** Index into VkPhysicalDeviceMemoryProperties::memoryTypes. */
+    u32 memory_type_index = 0;
+    /** Index into VkPhysicalDeviceMemoryProperties::memoryHeaps. */
+    u32 heap_index = 0;
+    /**
+     * Size of the whole heap in bytes, not of the allocation. Tells a 256 MB BAR window apart from resizable
+     * BAR, which the properties alone cannot.
+     */
+    u64 heap_size = 0;
+};
+
 /** How a texture is allowed to be used. Mirrors VkImageUsageFlagBits. */
 enum class TextureUsageBits : u32
 {

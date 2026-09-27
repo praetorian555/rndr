@@ -11,6 +11,8 @@
 #include "rndr/graphics-types.hpp"
 #include "rndr/log.hpp"
 
+#include "memory-info.hpp"
+
 static VkFilter ToVkFilter(Rndr::ImageFilter filter)
 {
     switch (filter)
@@ -453,15 +455,13 @@ void Rndr::Forge::Texture::Destroy()
     m_layouts.Clear();
 }
 
-VkMemoryPropertyFlags Rndr::Forge::Texture::GetMemoryProperties() const
+Opal::Optional<Rndr::Forge::MemoryInfo> Rndr::Forge::Texture::GetMemoryInfo() const
 {
     if (m_image_allocation == VK_NULL_HANDLE)
     {
-        return 0;
+        return {};
     }
-    VkMemoryPropertyFlags properties = 0;
-    vmaGetAllocationMemoryProperties(m_device->GetGPUAllocator(), m_image_allocation, &properties);
-    return properties;
+    return DescribeAllocation(*m_device, m_image_allocation);
 }
 
 /**

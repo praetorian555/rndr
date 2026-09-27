@@ -223,6 +223,14 @@ the buffer works:
 - `HostAccess::None` may land in memory the host cannot map at all, which is the fastest for the device.
   `Update` and `Read` both refuse it, and the buffer is filled and read through the staging helpers instead.
 
+`host_access` is a request, not a placement. The allocator weighs it against the buffer's usage and what the
+device has: `SequentialWrite` on a buffer the device also reads prefers device local memory the host can map,
+which is the BAR window on a discrete GPU, and falls back to system memory when there is none or it is full;
+`Random` prefers cached system memory. `Buffer::GetMemoryInfo` and `Texture::GetMemoryInfo` say where an
+allocation actually landed - the `MemoryPropertyBits` of its memory type, the type and heap index, and the size
+of the heap, which is what tells a 256 MB BAR window from resizable BAR. Both are empty for an object with no
+allocation of its own, such as a texture wrapping a swap chain image.
+
 `UploadToBuffer`, `ReadBackBuffer` and `ReadBackTexture` in `rndr/forge/transfer.hpp` do the staging buffer,
 the copy, the submit and the wait. They block, which is what setup code wants and what a frame does not.
 

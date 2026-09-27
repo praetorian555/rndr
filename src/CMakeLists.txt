@@ -191,6 +191,8 @@ if (${RNDR_FORGE})
             "${PROJECT_SOURCE_DIR}/src/forge/swap-chain.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/texture.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/buffer.cpp"
+            "${PROJECT_SOURCE_DIR}/src/forge/memory-info.hpp"
+            "${PROJECT_SOURCE_DIR}/src/forge/memory-info.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/synchronization.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/command-buffer.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/render-pass.hpp"

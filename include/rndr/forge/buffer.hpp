@@ -4,6 +4,7 @@
 
 #include "opal/container/array-view.h"
 #include "opal/container/expected.h"
+#include "opal/container/optional.h"
 #include "opal/container/ref.h"
 
 #include "rndr/error-codes.hpp"
@@ -60,6 +61,13 @@ public:
     [[nodiscard]] VkDeviceAddress GetNativeDeviceAddress() const { return m_device_address; }
     [[nodiscard]] size_t GetSize() const { return m_desc.size; }
     [[nodiscard]] const BufferDesc& GetDesc() const { return m_desc; }
+
+    /**
+     * Where the memory landed. BufferDesc::host_access is a request the allocator weighs against what the
+     * device has: SequentialWrite may land in VRAM the host can map or in system memory, and this is how to
+     * tell which. Empty for an empty buffer.
+     */
+    [[nodiscard]] Opal::Optional<MemoryInfo> GetMemoryInfo() const;
 
     /**
      * Write data into the buffer at the given offset. Non-coherent memory is flushed, so the write is visible

@@ -9,6 +9,8 @@
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
 
+#include "memory-info.hpp"
+
 Opal::Expected<Rndr::Forge::Buffer, Rndr::ErrorCode> Rndr::Forge::Buffer::Create(const Device& device, const BufferDesc& desc,
                                                                                  Opal::ArrayView<const u8> initial_data)
 {
@@ -199,6 +201,15 @@ Rndr::ErrorCode Rndr::Forge::Buffer::Update(Opal::ArrayView<const u8> data, size
     memcpy(static_cast<u8*>(gpu_data) + offset, data.GetData(), data.GetSize());
     vmaUnmapMemory(m_device->GetGPUAllocator(), m_allocation);
     return Flush(offset, data.GetSize());
+}
+
+Opal::Optional<Rndr::Forge::MemoryInfo> Rndr::Forge::Buffer::GetMemoryInfo() const
+{
+    if (m_allocation == VK_NULL_HANDLE)
+    {
+        return {};
+    }
+    return DescribeAllocation(*m_device, m_allocation);
 }
 
 Rndr::ErrorCode Rndr::Forge::Buffer::Read(Opal::ArrayView<u8> data, size_t offset) const
