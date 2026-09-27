@@ -1,0 +1,22 @@
+/**
+ * 11 - Deferred shading (Multi-pass, windowed)
+ *
+ * Fill a G-buffer (albedo, normal, material) with several colour targets, then light it with many point lights
+ * as stencil-marked light volumes reading the depth through a depth-aspect view.
+ *
+ * Exercises: color_attachments (several), independent_blend, ColorBlendDesc per target, depth-aspect
+ *            TextureView, stencil light volumes, additive blend.
+ *
+ * Done when: A hundred moving lights at interactive frame rate, each lighting only what its volume touches.
+ * Stretch:   Read the G-buffer as input attachments inside one pass
+ *            (DeviceFeatures::dynamic_rendering_local_read, General layout).
+ * Watch out: Enable independent_blend before giving targets different blend states.
+ */
+
+#include "practice.hpp"
+
+int main()
+{
+    // Application and window, context, surface, device, swap chain and frame context, then the frame loop.
+    return 0;
+}

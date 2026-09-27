@@ -16,6 +16,7 @@ option(RNDR_FORGE_VULKAN_1_1 "Build Forge on Vulkan 1.1 and the extensions that 
 option(RNDR_HARDENING "Enable hardened mode" ON)
 option(RNDR_BUILD_TESTS "Build tests" ON)
 option(RNDR_BUILD_SAMPLES "Builds sample executables" ON)
+option(RNDR_FORGE_PRACTICE "Build the Forge practice samples in samples/forge-practice, one executable per step" OFF)
 option(RNDR_ASSIMP "Enable Assimp dependency for mesh/model loading" ON)
 option(RNDR_KTX "Enable KTX-Software dependency for KTX texture loading" ON)
 option(RNDR_SHARED_LIBS "Build rndr (and opal) as shared libraries" OFF)
@@ -216,6 +217,20 @@ if (${RNDR_BUILD_SAMPLES})
         endif ()
         target_link_libraries(modern-vulkan shared imgui)
         rndr_deploy_runtime(modern-vulkan)
+
+        # Exercises, work in progress by design, so off unless asked for and never on Android.
+        if (${RNDR_FORGE_PRACTICE} AND NOT ANDROID)
+            file(GLOB RNDR_FORGE_PRACTICE_SOURCES CONFIGURE_DEPENDS samples/forge-practice/*.cpp)
+            foreach (source ${RNDR_FORGE_PRACTICE_SOURCES})
+                get_filename_component(name ${source} NAME_WE)
+                add_executable(practice-${name} ${source})
+                target_link_libraries(practice-${name} shared imgui)
+                target_compile_definitions(practice-${name} PRIVATE
+                        RNDR_PRACTICE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/samples/forge-practice")
+                set_target_properties(practice-${name} PROPERTIES FOLDER forge-practice)
+                rndr_deploy_runtime(practice-${name})
+            endforeach ()
+        endif ()
     endif ()
 
     if (${RNDR_AUDIO})
