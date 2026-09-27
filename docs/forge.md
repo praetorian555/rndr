@@ -639,6 +639,11 @@ A constant left unnamed keeps the default the shader gave it. A value whose type
 one is refused rather than coerced, an integer into a float included. So is one name given a value twice,
 which would become two map entries sharing a `constantID` - not allowed within one `VkSpecializationInfo`.
 
+A compute shader's workgroup size can be one too: `[numthreads(GROUP_SIZE, 1, 1)]` over a
+`[SpecializationConstant]` compiles to the `LocalSizeId` execution mode, which needs the device created with
+`DeviceFeatures::maintenance4`; without it the layer refuses the shader module. The dispatch that follows has
+to divide by the same size, so read both from one value on the CPU side.
+
 `Shader::GetSpecializationConstants()` says what a module declares - name, id, type, default and the bytes it
 occupies - so what can be specialized is answerable without reading the shader source. A constant narrower
 than 32 bits is reported as `Int32` or `UInt32`, so a caller writes a plain integer for it; `byte_size` keeps

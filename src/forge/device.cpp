@@ -121,6 +121,7 @@ struct FeatureChain
     VkPhysicalDeviceHostQueryResetFeatures host_query_reset{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES};
     VkPhysicalDeviceShaderFloat16Int8Features float16_int8{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES};
     VkPhysicalDeviceShaderAtomicInt64Features atomic_int64{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES};
+    VkPhysicalDeviceMaintenance4Features maintenance4{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES};
 
     /** Which extensions the chain was built with, for the features they carry without a structure. */
     bool has_descriptor_indexing = false;
@@ -160,6 +161,7 @@ struct FeatureChain
         AppendIf(has_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME), &host_query_reset);
         AppendIf(has_extension(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME), &float16_int8);
         AppendIf(has_extension(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME), &atomic_int64);
+        AppendIf(has_extension(VK_KHR_MAINTENANCE_4_EXTENSION_NAME), &maintenance4);
         has_sampler_mirror_clamp_to_edge = has_extension(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
         has_sampler_filter_minmax = has_extension(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
         has_draw_indirect_count = has_extension(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
@@ -214,6 +216,7 @@ struct FeatureChain
         vk12.timelineSemaphore = timeline_semaphore.timelineSemaphore;
 
         vk13.synchronization2 = synchronization2.synchronization2;
+        vk13.maintenance4 = maintenance4.maintenance4;
         // The extension structure is left out of the chain unless all three extensions are there, and then it
         // reports the feature; without them the feature is not there however the device answers.
         vk13.dynamicRendering = has_dynamic_rendering ? dynamic_rendering.dynamicRendering : VK_FALSE;
@@ -271,6 +274,8 @@ struct FeatureChain
         vk12.shaderSharedInt64Atomics = features.shader_shared_int64_atomics;
         vk12.shaderOutputLayer = features.shader_output_layer;
 
+        vk13.maintenance4 = features.maintenance4;
+
         // Forge is written on all of these, so they are not the caller's to turn off.
         vk12.timelineSemaphore = VK_TRUE;
         vk13.synchronization2 = VK_TRUE;
@@ -307,6 +312,7 @@ struct FeatureChain
         timeline_semaphore.timelineSemaphore = vk12.timelineSemaphore;
         synchronization2.synchronization2 = vk13.synchronization2;
         dynamic_rendering.dynamicRendering = vk13.dynamicRendering;
+        maintenance4.maintenance4 = vk13.maintenance4;
 #endif
     }
 
@@ -474,6 +480,10 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
     {
         extensions.PushBack(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
     }
+    if (features.maintenance4)
+    {
+        extensions.PushBack(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+    }
 #endif
     return extensions;
 }
@@ -552,6 +562,7 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.shader_buffer_int64_atomics, supported.vk12.shaderBufferInt64Atomics, "shader_buffer_int64_atomics");
     require(requested.shader_shared_int64_atomics, supported.vk12.shaderSharedInt64Atomics, "shader_shared_int64_atomics");
     require(requested.shader_output_layer, supported.vk12.shaderOutputLayer, "shader_output_layer");
+    require(requested.maintenance4, supported.vk13.maintenance4, "maintenance4");
 
     // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
 #if !defined(RNDR_FORGE_VULKAN_1_1)

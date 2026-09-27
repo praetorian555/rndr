@@ -128,6 +128,14 @@ struct DeviceFeatures
     bool shader_buffer_int64_atomics = false;
     /** 64-bit atomics on groupshared memory, which a workgroup reducing into one u64 before writing it out wants. */
     bool shader_shared_int64_atomics = false;
+    /**
+     * Vulkan 1.3's maintenance4, asked for for what it lets a shader do: take its workgroup size from
+     * specialization constants. Slang compiles `[numthreads(GROUP_SIZE, 1, 1)]` over a [SpecializationConstant]
+     * to the LocalSizeId execution mode, which the layer refuses without this - so one compute shader can be
+     * built as pipelines of different workgroup sizes, set through ComputePipelineDesc::specialization like any
+     * other constant. On a Vulkan 1.1 build it pulls in VK_KHR_maintenance4.
+     */
+    bool maintenance4 = false;
 
     // Descriptors. All off by default: a renderer that binds a fixed set of resources per draw needs none of
     // them. Bindless - one large array of every texture or buffer, indexed by a number the draw pushes - wants
