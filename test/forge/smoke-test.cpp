@@ -2423,11 +2423,11 @@ TEST_CASE("Forge device features", "[forge]")
         // off leaves the device with exactly what was required: mesh and geometry shaders stay off on a machine
         // that has them.
         const Forge::Device device = ForgeTest::Unwrap(make_device({}));
-        REQUIRE(device.GetFeatures().buffer_device_address);
-        REQUIRE_FALSE(device.GetFeatures().runtime_descriptor_array);
-        REQUIRE(device.GetFeatures().sampler_anisotropy);
-        REQUIRE_FALSE(device.GetFeatures().mesh_shader);
-        REQUIRE_FALSE(device.GetFeatures().geometry_shader);
+        REQUIRE(device.GetEnabledFeatures().buffer_device_address);
+        REQUIRE_FALSE(device.GetEnabledFeatures().runtime_descriptor_array);
+        REQUIRE(device.GetEnabledFeatures().sampler_anisotropy);
+        REQUIRE_FALSE(device.GetEnabledFeatures().mesh_shader);
+        REQUIRE_FALSE(device.GetEnabledFeatures().geometry_shader);
     }
     SECTION("Asking for mesh shaders succeeds exactly when this device has them")
     {
@@ -2476,7 +2476,7 @@ TEST_CASE("Forge device features", "[forge]")
 
 /**
  * DeviceDesc::enable_supported_features, which every other case turns off through MakeHeadlessDeviceDesc. With it
- * on, a device turns on whatever it supports beside what was required, GetFeatures says so while the desc keeps the
+ * on, a device turns on whatever it supports beside what was required, GetEnabledFeatures says so while the desc keeps the
  * ask, an extension-backed feature brings its extension, and the bit reaches vkCreateDevice rather than only the
  * struct Forge's guards read. The last is shown with wide lines, which the layer checks at record time, from both
  * sides: accepted with the flag on, and objected to with it off once Forge's own guard is stepped round.
@@ -2503,7 +2503,7 @@ TEST_CASE("Forge a device takes every feature it supports", "[forge]")
     {
         const Forge::Device device = make_device(true);
         const VkPhysicalDeviceFeatures& reported = device.GetPhysicalDevice().GetFeatures();
-        const Forge::DeviceFeatures& enabled = device.GetFeatures();
+        const Forge::DeviceFeatures& enabled = device.GetEnabledFeatures();
         REQUIRE(enabled.fill_mode_non_solid == (reported.fillModeNonSolid == VK_TRUE));
         REQUIRE(enabled.wide_lines == (reported.wideLines == VK_TRUE));
         REQUIRE(enabled.independent_blend == (reported.independentBlend == VK_TRUE));
@@ -2523,7 +2523,7 @@ TEST_CASE("Forge a device takes every feature it supports", "[forge]")
     SECTION("A feature nobody required is accepted by the layer")
     {
         Forge::Device device = make_device(true);
-        if (!device.GetFeatures().wide_lines)
+        if (!device.GetEnabledFeatures().wide_lines)
         {
             SKIP("This device does not draw wide lines.");
         }
@@ -2540,7 +2540,7 @@ TEST_CASE("Forge a device takes every feature it supports", "[forge]")
         {
             SKIP("This device does not draw wide lines.");
         }
-        REQUIRE_FALSE(device.GetFeatures().wide_lines);
+        REQUIRE_FALSE(device.GetEnabledFeatures().wide_lines);
         Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, queue));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
@@ -2562,11 +2562,11 @@ TEST_CASE("Forge a device takes every feature it supports", "[forge]")
                 SKIP("This device does not have VK_KHR_draw_indirect_count.");
             }
             // The extension carries the feature without a structure of its own, so having it is supporting it.
-            REQUIRE(device.GetFeatures().draw_indirect_count);
+            REQUIRE(device.GetEnabledFeatures().draw_indirect_count);
             REQUIRE(device.IsExtensionEnabled(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME));
         }
         const Forge::Device device = make_device(false);
-        REQUIRE_FALSE(device.GetFeatures().draw_indirect_count);
+        REQUIRE_FALSE(device.GetEnabledFeatures().draw_indirect_count);
         REQUIRE_FALSE(device.IsExtensionEnabled(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME));
     }
 #endif
@@ -4595,7 +4595,7 @@ TEST_CASE("Forge an 8-bit index buffer on a device without the feature is refuse
     // The index type is a plain enum value in a core call, so nothing but this check stands between a device
     // that never enabled the extension and an index type it does not accept.
     ForgeFixture fixture;
-    REQUIRE_FALSE(fixture.device.GetFeatures().index_type_uint8);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().index_type_uint8);
     const Opal::DynamicArray<u8> index_bytes = ToIndexBytes(k_half_indices, static_cast<i32>(std::size(k_half_indices)), IndexSize::uint8);
     const Forge::Buffer indices = ForgeTest::Unwrap(Forge::Buffer::Create(
         fixture.device, {.size = index_bytes.GetSize(), .usage = Forge::BufferUsageBits::IndexBuffer}, index_bytes));
@@ -4901,7 +4901,7 @@ TEST_CASE("Forge an indirect count draw on a device without the feature is refus
     // The count draws are core Vulkan 1.2 commands with a trampoline behind them either way, so nothing but
     // this check stands between a device that never enabled drawIndirectCount and a draw it may not record.
     ForgeFixture fixture;
-    REQUIRE_FALSE(fixture.device.GetFeatures().draw_indirect_count);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().draw_indirect_count);
     const Forge::Buffer commands = ForgeTest::Unwrap(Forge::Buffer::Create(
         fixture.device, {.size = sizeof(Forge::DrawIndexedIndirectCommand), .usage = Forge::BufferUsageBits::IndirectBuffer}));
     const Forge::Buffer count =
@@ -5140,8 +5140,8 @@ TEST_CASE("Forge pipeline sample count and dynamic state", "[forge]")
         Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
         REQUIRE(command_buffer.Begin() == ErrorCode::Success);
         // The fixture device asks for neither, so both of these are the guard rather than the driver.
-        REQUIRE_FALSE(fixture.device.GetFeatures().wide_lines);
-        REQUIRE_FALSE(fixture.device.GetFeatures().depth_bias_clamp);
+        REQUIRE_FALSE(fixture.device.GetEnabledFeatures().wide_lines);
+        REQUIRE_FALSE(fixture.device.GetEnabledFeatures().depth_bias_clamp);
         REQUIRE(command_buffer.CmdSetLineWidth(4.0f) == ErrorCode::InvalidArgument);
         REQUIRE(command_buffer.CmdSetDepthBias(1.0f, 0.5f) == ErrorCode::InvalidArgument);
         // The value every device draws, and a bias with no clamp, need no feature.
@@ -6170,7 +6170,7 @@ TEST_CASE("Forge workgroup size from a specialization constant", "[forge]")
     SECTION("Without it, the layer refuses the shader")
     {
         ForgeFixture fixture;
-        REQUIRE_FALSE(fixture.device.GetFeatures().maintenance4);
+        REQUIRE_FALSE(fixture.device.GetEnabledFeatures().maintenance4);
         const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_workgroup_size_source, {.entry_point = "main_group_size", .cache = GetShaderCache()}));
         const Opal::Expected<Forge::Pipeline, ErrorCode> pipeline = make_pipeline(fixture.device, shader, 128);
@@ -9115,8 +9115,8 @@ TEST_CASE("Forge a late update binding on a device without the feature is refuse
     // The fixture of every other case here: a device that asked for no descriptor features beyond the
     // defaults, which is where both of these flags are a mistake rather than a capability.
     ForgeFixture fixture;
-    REQUIRE_FALSE(fixture.device.GetFeatures().update_after_bind_descriptors);
-    REQUIRE_FALSE(fixture.device.GetFeatures().update_unused_while_pending_descriptors);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().update_after_bind_descriptors);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().update_unused_while_pending_descriptors);
 
     Forge::DescriptorSetLayoutDesc after_bind_desc;
     REQUIRE(after_bind_desc.AddBinding(0, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute, {},
@@ -10873,7 +10873,7 @@ TEST_CASE("Forge depth bias", "[forge]")
     {
         // The static counterpart of the CmdSetDepthBias guard: the fixture asked for no features, and a
         // non-zero clamp is one.
-        REQUIRE_FALSE(fixture.device.GetFeatures().depth_bias_clamp);
+        REQUIRE_FALSE(fixture.device.GetEnabledFeatures().depth_bias_clamp);
         REQUIRE(make_pipeline({.depth_bias_enabled = true,
                                      .depth_bias_constant_factor = k_bias_constant_factor,
                                      .depth_bias_clamp = 0.001f},
@@ -12917,7 +12917,7 @@ TEST_CASE("Forge views of one texture", "[forge]")
         REQUIRE(refused(cube, {.subresource_range = layer(4)}) == ErrorCode::Success);
         REQUIRE(refused(cube, {.view_type = Forge::TextureViewType::Cube,
                                .subresource_range = {.first_array_layer = 3, .array_layer_count = 3}}) == ErrorCode::InvalidArgument);
-        REQUIRE_FALSE(fixture.device.GetFeatures().image_cube_array);
+        REQUIRE_FALSE(fixture.device.GetEnabledFeatures().image_cube_array);
         REQUIRE(refused(cube, {.view_type = Forge::TextureViewType::CubeArray}) == ErrorCode::InvalidArgument);
 
         const Forge::Texture transfer_only = ForgeTest::Unwrap(Forge::Texture::Create(
@@ -14883,7 +14883,7 @@ TEST_CASE("Forge MirrorOnce on a device without the feature is refused rather th
     // MIRROR_CLAMP_TO_EDGE is core in Vulkan 1.2 but still a feature, and a sampler naming it on a device that
     // did not enable it is undefined. Forge refused nothing here until the mode had a test.
     ForgeFixture fixture;
-    REQUIRE_FALSE(fixture.device.GetFeatures().sampler_mirror_clamp_to_edge);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().sampler_mirror_clamp_to_edge);
     REQUIRE(Forge::Sampler::Create(fixture.device, {.address_mode_u = ImageAddressMode::MirrorOnce}).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
     REQUIRE(Forge::Sampler::Create(fixture.device, {.address_mode_v = ImageAddressMode::MirrorOnce}).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
     REQUIRE(Forge::Sampler::Create(fixture.device, {.address_mode_w = ImageAddressMode::MirrorOnce}).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
@@ -16102,7 +16102,7 @@ TEST_CASE("Forge a mesh shader draw without the extension", "[forge]")
     }
     // The default fixture asks for no mesh shader, which is the device every other case in this file builds.
     ForgeFixture fixture;
-    REQUIRE_FALSE(fixture.device.GetFeatures().mesh_shader);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().mesh_shader);
     REQUIRE_FALSE(fixture.device.IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME));
 
     Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(fixture.device, fixture.GetQueue()));
@@ -16867,7 +16867,7 @@ TEST_CASE("Forge layered rendering", "[forge]")
         // The view's range is what the pass reaches into, not the texture's.
         REQUIRE(begin(true, 2, 0) == ErrorCode::InvalidArgument);
         // A device made without multiview takes neither a pass nor a pipeline with a mask.
-        REQUIRE_FALSE(fixture.device.GetFeatures().multiview);
+        REQUIRE_FALSE(fixture.device.GetEnabledFeatures().multiview);
         REQUIRE(begin(false, 1, 0b1) == ErrorCode::InvalidArgument);
         // Over shaders that never read the view, since a module that does is refused by the layer on this device.
         const Forge::Shader vertex_shader = ForgeTest::Unwrap(
@@ -17045,10 +17045,10 @@ TEST_CASE("Forge a shader of a stage the device did not enable is refused", "[fo
         SKIP("No Vulkan device on this machine.");
     }
     ForgeFixture fixture;
-    REQUIRE_FALSE(fixture.device.GetFeatures().geometry_shader);
-    REQUIRE_FALSE(fixture.device.GetFeatures().tessellation_shader);
-    REQUIRE_FALSE(fixture.device.GetFeatures().mesh_shader);
-    REQUIRE_FALSE(fixture.device.GetFeatures().task_shader);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().geometry_shader);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().tessellation_shader);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().mesh_shader);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().task_shader);
 
     struct Case
     {
@@ -17289,7 +17289,7 @@ TEST_CASE("Forge scalar block layout", "[forge]")
         // is the field, and the layer's answer changes with it. Nothing is built past the shader - a
         // pipeline over a module the layer rejected is undefined behaviour.
         ForgeFixture fixture;
-        REQUIRE_FALSE(fixture.device.GetFeatures().scalar_block_layout);
+        REQUIRE_FALSE(fixture.device.GetEnabledFeatures().scalar_block_layout);
         const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_scalar_layout_source, {.entry_point = "main_scalar_layout", .cache = GetShaderCache()}));
         INFO(*fixture.GetValidationErrors());
@@ -17510,7 +17510,7 @@ TEST_CASE("Forge variable descriptor count", "[forge]")
             SKIP("This device does not support variable descriptor counts.");
         }
         ForgeFixture fixture(k_variable);
-        REQUIRE(fixture.device.GetFeatures().variable_descriptor_count);
+        REQUIRE(fixture.device.GetEnabledFeatures().variable_descriptor_count);
         const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
             fixture.device, k_runtime_array_source, {.entry_point = "main_runtime_array", .cache = GetShaderCache()}));
         const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(
@@ -17540,7 +17540,7 @@ TEST_CASE("Forge a BC texture on a device without the feature is refused", "[for
     // Vulkan would take the texture on a device that reports the format, and the layer would say nothing,
     // so the refusal is Forge's own and nothing else stands behind it.
     ForgeFixture fixture;
-    REQUIRE_FALSE(fixture.device.GetFeatures().texture_compression_bc);
+    REQUIRE_FALSE(fixture.device.GetEnabledFeatures().texture_compression_bc);
     constexpr Forge::TextureUsageBits k_usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination;
     // The first and the last of the BC range, so a check that stops short at either end shows.
     REQUIRE(Forge::Texture::Create(fixture.device, {.format = PixelFormat::BC1_RGB_UNORM_BLOCK, .width = 4, .height = 4, .usage = k_usage})

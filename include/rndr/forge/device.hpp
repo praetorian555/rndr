@@ -48,8 +48,8 @@ enum class QueueFamily : u8
  * is passed over by SelectPhysicalDevice and refused by Device::Create, with the log naming the field, rather
  * than failing inside vkCreateDevice with a result that names nothing. Everything not required is turned on
  * anyway wherever the device supports it, unless DeviceDesc::enable_supported_features is off. From
- * Device::GetFeatures, it is what the device ended up with, and what to ask before relying on a field that was
- * not required. A field below that says it is refused without the feature means without it in GetFeatures.
+ * Device::GetEnabledFeatures, it is what the device ended up with, and what to ask before relying on a field that was
+ * not required. A field below that says it is refused without the feature means without it in GetEnabledFeatures.
  *
  * Synchronization2 and dynamic rendering are not here: Forge is written on both - every barrier and every
  * CmdBeginRendering - so they are always enabled and turning them off would only break it.
@@ -213,7 +213,7 @@ struct DeviceFeatures
  * an index that differs per invocation, and writes to the table while frames that read it are in flight. Handed
  * to SelectPhysicalDevice and Device::Create as DeviceDesc::features, it picks a device that has all of them and
  * reports the one a device lacks by name. A renderer that can do without one - update_after_bind_descriptors is
- * the one mobile devices limit - stops requiring it, and asks Device::GetFeatures whether it came anyway.
+ * the one mobile devices limit - stops requiring it, and asks Device::GetEnabledFeatures whether it came anyway.
  */
 [[nodiscard]] constexpr DeviceFeatures BindlessFeatures()
 {
@@ -235,7 +235,7 @@ struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
      * Turn on, beside what `features` requires, every other field of DeviceFeatures this device supports. Enabling
      * a feature costs nothing at run time, and leaving one off only moves the failure to the pipeline, sampler or
      * command that needed it, so this is on by default: a device then does whatever the machine can, and
-     * Device::GetFeatures says what that came to. A field left false here means "not required", not "keep off".
+     * Device::GetEnabledFeatures says what that came to. A field left false here means "not required", not "keep off".
      *
      * Off, the device turns on exactly what `features` names. That is for a test of a refusal, which needs the
      * feature off on a device that has it, and for a driver that misbehaves with a feature it reports.
@@ -432,7 +432,7 @@ public:
      * before using a feature, and what a caller asks before relying on one it did not require. GetDesc().features
      * keeps what was required.
      */
-    [[nodiscard]] const DeviceFeatures& GetFeatures() const { return m_features; }
+    [[nodiscard]] const DeviceFeatures& GetEnabledFeatures() const { return m_features; }
 
     /**
      * Whether the device was created with the named extension. Commands that belong to an extension have to ask,
@@ -527,7 +527,7 @@ private:
     Opal::HashMap<QueueFamily, Opal::SharedPtr<DeviceQueue>> m_queue_family_to_queue;
     PhysicalDevice m_physical_device;
     DeviceDesc m_desc;
-    /** What was turned on, which is m_desc.features plus what enable_supported_features found; see GetFeatures. */
+    /** What was turned on, which is m_desc.features plus what enable_supported_features found; see GetEnabledFeatures. */
     DeviceFeatures m_features;
     /** What was actually passed to vkCreateDevice, which is the desc plus what the device adds on its own. */
     Opal::DynamicArray<const char*> m_enabled_extensions;

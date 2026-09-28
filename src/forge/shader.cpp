@@ -372,7 +372,7 @@ Opal::Expected<Rndr::Forge::Shader, Rndr::ErrorCode> Rndr::Forge::Shader::FromSp
     }
     shader.m_native_stage = native_stage.GetValue();
     shader.m_stage = stage.GetValue();
-    if (const char* missing_feature = MissingStageFeature(shader.m_stage, device.GetFeatures()); missing_feature != nullptr)
+    if (const char* missing_feature = MissingStageFeature(shader.m_stage, device.GetEnabledFeatures()); missing_feature != nullptr)
     {
         RNDR_LOG_ERROR("Forge: a shader of this stage needs the device created with DeviceFeatures::{}", missing_feature);
         return Result(ErrorCode::InvalidArgument);

@@ -313,7 +313,7 @@ Everything not required is turned on anyway wherever the device supports it, bec
 `DeviceDesc::enable_supported_features` is on by default. Vulkan only lets a feature be enabled when the device
 is created, and enabling one costs nothing at run time, so leaving a supported feature off would only move the
 failure to the pipeline, sampler or command that needed it - which is where every Forge guard reports it. A
-caller creates the device once, and asks `Device::GetFeatures()`, which is what the guards ask, before relying
+caller creates the device once, and asks `Device::GetEnabledFeatures()`, which is what the guards ask, before relying
 on a field it did not require; `GetDesc().features` keeps what was required. A field left false in the desc
 therefore means "not required", not "keep off".
 

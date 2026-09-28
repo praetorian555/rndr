@@ -22,7 +22,7 @@ VkPipelineStageFlags Rndr::Forge::ToOriginalStages(const Device& device, VkPipel
     if ((stages & VK_PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS_BIT) != 0)
     {
         // Only the stages the device enabled: naming one it did not is an error rather than a stage that never runs.
-        const DeviceFeatures& features = device.GetFeatures();
+        const DeviceFeatures& features = device.GetEnabledFeatures();
         original |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
         if (features.tessellation_shader)
         {

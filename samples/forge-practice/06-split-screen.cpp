@@ -10,7 +10,7 @@
  * Done when: Both halves render with correct depth, and the depth texture is rebuilt on resize.
  * Stretch:   A third viewport showing the depth buffer linearised.
  * Watch out: Wireframe and wide lines are device features. The device turns them on wherever it has them, so
- *            check device.GetFeatures().fill_mode_non_solid and wide_lines before building the right half, or
+ *            check device.GetEnabledFeatures().fill_mode_non_solid and wide_lines before building the right half, or
  *            require them in DeviceDesc::features to fail at creation instead.
  */
 

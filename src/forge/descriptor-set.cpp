@@ -172,7 +172,7 @@ Opal::Expected<Rndr::Forge::DescriptorPool, Rndr::ErrorCode> Rndr::Forge::Descri
         return Result(ErrorCode::InvalidArgument);
     }
 
-    if (desc.use_update_after_bind && !device.GetFeatures().update_after_bind_descriptors)
+    if (desc.use_update_after_bind && !device.GetEnabledFeatures().update_after_bind_descriptors)
     {
         RNDR_LOG_ERROR("Forge: an update after bind pool needs the device created with DeviceFeatures::update_after_bind_descriptors");
         return Result(ErrorCode::InvalidArgument);
@@ -424,7 +424,7 @@ Opal::Expected<Rndr::Forge::DescriptorSetLayout, Rndr::ErrorCode> Rndr::Forge::D
         highest_binding_index = Opal::Max(highest_binding_index, source.binding);
     }
 
-    const DeviceFeatures& features = device.GetFeatures();
+    const DeviceFeatures& features = device.GetEnabledFeatures();
     bool has_update_after_bind = false;
     for (i32 i = 0; i < bindings.GetSize(); i++)
     {

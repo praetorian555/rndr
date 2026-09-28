@@ -11,7 +11,7 @@
  * Stretch:   Read the G-buffer as input attachments inside one pass
  *            (DeviceFeatures::dynamic_rendering_local_read, General layout).
  * Watch out: Different blend states per target need independent_blend. It is on wherever the device has it;
- *            check device.GetFeatures().independent_blend, or require it in DeviceDesc::features.
+ *            check device.GetEnabledFeatures().independent_blend, or require it in DeviceDesc::features.
  */
 
 #include "practice.hpp"

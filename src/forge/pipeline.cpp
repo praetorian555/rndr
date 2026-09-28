@@ -742,7 +742,7 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
         RNDR_LOG_ERROR("Forge: the tessellation stages and PrimitiveTopology::Patch go together, and this desc has one without the other");
         return Result(ErrorCode::InvalidArgument);
     }
-    if (desc.view_mask != 0 && !device.GetFeatures().multiview)
+    if (desc.view_mask != 0 && !device.GetEnabledFeatures().multiview)
     {
         RNDR_LOG_ERROR("Forge: a pipeline with a view mask needs the device created with DeviceFeatures::multiview");
         return Result(ErrorCode::InvalidArgument);
@@ -880,12 +880,12 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
     // Both of these are features rather than something every device does, and asking for one the device did
     // not enable is undefined rather than a pipeline that fails to create - so it is named here instead of
     // being left to the validation layer, the way CmdSetLineWidth names wide_lines.
-    if (desc.rasterizer.fill_mode == FillMode::Wireframe && !device.GetFeatures().fill_mode_non_solid)
+    if (desc.rasterizer.fill_mode == FillMode::Wireframe && !device.GetEnabledFeatures().fill_mode_non_solid)
     {
         RNDR_LOG_ERROR("Forge: a wireframe fill mode needs the device created with DeviceFeatures::fill_mode_non_solid");
         return Result(ErrorCode::InvalidArgument);
     }
-    if (desc.rasterizer.depth_clamp && !device.GetFeatures().depth_clamp)
+    if (desc.rasterizer.depth_clamp && !device.GetEnabledFeatures().depth_clamp)
     {
         RNDR_LOG_ERROR("Forge: clamping depth needs the device created with DeviceFeatures::depth_clamp");
         return Result(ErrorCode::InvalidArgument);
@@ -893,7 +893,7 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
     // The static half of what CmdSetDepthBias already refuses. A pipeline that leaves the bias dynamic is
     // not checked here: the value in the desc is then ignored, and the command supplies one of its own.
     if (desc.rasterizer.depth_bias_enabled && desc.rasterizer.depth_bias_clamp != 0.0f &&
-        !(desc.dynamic_state & DynamicStateBits::DepthBias) && !device.GetFeatures().depth_bias_clamp)
+        !(desc.dynamic_state & DynamicStateBits::DepthBias) && !device.GetEnabledFeatures().depth_bias_clamp)
     {
         RNDR_LOG_ERROR("Forge: clamping the depth bias needs the device created with DeviceFeatures::depth_bias_clamp");
         return Result(ErrorCode::InvalidArgument);
@@ -984,7 +984,7 @@ Opal::Expected<Rndr::Forge::Pipeline, Rndr::ErrorCode> Rndr::Forge::Pipeline::Cr
     // Without independent_blend a device has one blend state for every attachment, and the one it uses is
     // the first: a desc whose attachments differ asks for something the device cannot do, and what it does
     // instead is apply attachment zero to all of them.
-    if (!device.GetFeatures().independent_blend)
+    if (!device.GetEnabledFeatures().independent_blend)
     {
         for (i32 i = 1; i < desc.color_blend_attachments.GetSize(); ++i)
         {

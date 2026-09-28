@@ -18,7 +18,7 @@ Opal::Expected<Rndr::Forge::Buffer, Rndr::ErrorCode> Rndr::Forge::Buffer::Create
 
     // Checked before anything is created: the allocation below asks for device address memory, which is
     // already a validation error on a device without the feature.
-    if (desc.use_device_address && !device.GetFeatures().buffer_device_address)
+    if (desc.use_device_address && !device.GetEnabledFeatures().buffer_device_address)
     {
         RNDR_LOG_ERROR("Forge: a buffer with a device address needs the device created with DeviceFeatures::buffer_device_address");
         return Result(ErrorCode::InvalidArgument);

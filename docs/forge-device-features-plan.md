@@ -8,7 +8,7 @@ a caller has to predict at creation everything any later object will ask of the 
 a cube array view, a BC texture, a mirror-once sampler, an 8-bit index buffer, a host query reset, an indirect
 count draw, a 64-bit atomic, multiview, a workgroup size from a specialization constant. 24 guard sites across
 eight files (`pipeline.cpp`, `texture.cpp`, `command-buffer.cpp`, `descriptor-set.cpp`, `shader.cpp`,
-`query.cpp`, `buffer.cpp`, `synchronization2.cpp`) read `Device::GetFeatures()` and refuse with
+`query.cpp`, `buffer.cpp`, `synchronization2.cpp`) read `Device::GetEnabledFeatures()` and refuse with
 `ErrorCode::InvalidArgument` naming the field, and 20 doc comments across the headers say "needs
 `DeviceFeatures::x`". Each guard is right on its own. Together they make the struct a checklist the caller
 reconstructs by reading every comment or by failing at runtime, and `samples/forge-practice/06-split-screen.cpp:12`
@@ -44,8 +44,8 @@ Written against master `cc565a8` on 2026-09-28.
   k_features{.x = true}` in the suite, `BindlessFeatures()`, `Fill`, and the `require` lambda in
   `FindUnsupportedFeature`. The flag reaches the same place with the 24 guards and every existing test
   untouched. Tri-state is the follow-up if a caller ever needs it.
-- **`Device::GetFeatures()` reports what is on; `GetDesc()` keeps the ask.** The guards already read
-  `GetFeatures()`, so none of them moves; they start answering "what does this device have" instead of "what
+- **`Device::GetEnabledFeatures()` reports what is on; `GetDesc()` keeps the ask.** The guards already read
+  `GetEnabledFeatures()`, so none of them moves; they start answering "what does this device have" instead of "what
   was asked", which is the question they were asking all along. A new `m_features` member holds the merged set
   so `m_desc` stays what the caller passed.
 - **Requirements are checked before the merge.** `ReportUnsupportedFeatures` runs on the ask, so a missing
@@ -115,7 +115,7 @@ suite green.
 1. `include/rndr/forge/device.hpp`: `DeviceDesc::enable_presentation` gains a sibling
    `bool enable_supported_features = true;` with a comment saying what it does and when to turn it off, and
    the `OPAL_CLONE_FIELDS` list at line 247 gains the field. `Device` gains `DeviceFeatures m_features;` and
-   `GetFeatures()` (line 412) returns it, with its comment changed from "the features this device was created
+   `GetEnabledFeatures()` (line 412) returns it, with its comment changed from "the features this device was created
    with" to "the features that are on: what the desc asked for, plus what `enable_supported_features` found".
 2. `src/forge/device.cpp`: `FeatureChain::Read(Forge::DeviceFeatures&) const` beside `Fill` (line 233), the
    inverse map. It reads `vk11`, `vk12`, `vk13` and the three extension structures, which on 1.1 `Query`
@@ -150,9 +150,9 @@ flag turned back on, in the shape the file uses - skip through `IsForgeAvailable
 `REQUIRE_NO_VALIDATION_ERROR` at the end.
 
 - *What is on matches what the device reports.* For `fill_mode_non_solid`, `wide_lines`, `geometry_shader`,
-  `shader_int64` and `image_cube_array`, `GetFeatures().x == (GetPhysicalDevice().GetFeatures().vkX == VK_TRUE)`.
+  `shader_int64` and `image_cube_array`, `GetEnabledFeatures().x == (GetPhysicalDevice().GetFeatures().vkX == VK_TRUE)`.
   `GetDesc().features.fill_mode_non_solid` is still false, which is the ask staying the ask. If
-  `GetFeatures().mesh_shader` then `IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)`, which is the
+  `GetEnabledFeatures().mesh_shader` then `IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)`, which is the
   extension coming with the feature.
 - *The bit reached `vkCreateDevice`.* Skipped unless the physical device reports `wideLines`. A command buffer
   on the auto device records `CmdSetLineWidth(2.0f)` between `Begin` and `End`. Forge's guard passing shows
@@ -172,13 +172,13 @@ One `docs(Forge)` commit, or a `docs` and a `samples` one if the stub edits grow
 
 - `include/rndr/forge/device.hpp`: the `DeviceFeatures` comment (line 53) says a field is a requirement, that
   everything else is on wherever the device has it unless `DeviceDesc::enable_supported_features` is off, and
-  that `Device::GetFeatures()` is what to ask afterwards. `BindlessFeatures()` (line 214) is "the requirements
+  that `Device::GetEnabledFeatures()` is what to ask afterwards. `BindlessFeatures()` (line 214) is "the requirements
   a bindless renderer hands `SelectPhysicalDevice`". The per-field comments stay.
 - `docs/forge.md`, the `DeviceFeatures` paragraph after "Vulkan is still visible in two deliberate places":
   the same three sentences, and the two defaults explained as requirements that stay for the fixture's sake.
 - `samples/forge-practice`: the headers of `02`, `06`, `11`, `15`, `s1`, `s2` and `s3` say "request it in
   DeviceFeatures" or "skips where the device lacks it". They become "on wherever the device has it; check
-  `device.GetFeatures().x` after creation and skip if it is off", which also retires the pattern of probing
+  `device.GetEnabledFeatures().x` after creation and skip if it is off", which also retires the pattern of probing
   with a throwaway device that `CanCreateDevice` uses in the suite - a sample has one device and asks it.
 - `docs/forge-api-gaps.md` and `CLAUDE.md` need nothing.
 
@@ -216,7 +216,7 @@ Nothing to commit; what the flag changes is what a real driver gets asked to ena
 - A tri-state per field. When a caller needs one feature off with the rest floating.
 - Flipping `sampler_anisotropy` and `buffer_device_address` to false. Waits for the tri-state, for the reason
   under Decisions.
-- Logging the auto-enabled set at creation. `GetFeatures()` answers, and the names live in
+- Logging the auto-enabled set at creation. `GetEnabledFeatures()` answers, and the names live in
   `FindUnsupportedFeature` only as strings beside each bit.
 - `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT` at `device.cpp:887`, set whether or not the feature is on.
   Harmless (VMA only adds the allocate flag to buffers with the usage) and untouched.

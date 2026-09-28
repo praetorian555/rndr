@@ -169,7 +169,7 @@ Rndr::ErrorCode Rndr::Forge::TimestampQueryPool::Reset(u32 first_query, u32 quer
     }
     // vkResetQueryPool is the host side of the reset and belongs to the feature the device has to be asked
     // for. Calling it on a device that did not enable it is undefined, not a call that fails.
-    if (!m_device->GetFeatures().host_query_reset)
+    if (!m_device->GetEnabledFeatures().host_query_reset)
     {
         RNDR_LOG_ERROR("Forge: resetting a query pool from the host needs DeviceFeatures::host_query_reset");
         return ErrorCode::InvalidArgument;

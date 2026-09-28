@@ -311,7 +311,7 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
     }
     // More than one cube under one view is a feature of its own, and a device that does not have it rejects
     // the view rather than taking it and reading the first cube.
-    if (m_desc.view_type == TextureViewType::CubeArray && !device.GetFeatures().image_cube_array)
+    if (m_desc.view_type == TextureViewType::CubeArray && !device.GetEnabledFeatures().image_cube_array)
     {
         RNDR_LOG_ERROR("Forge: a cube array view needs the device created with DeviceFeatures::image_cube_array");
         return ErrorCode::InvalidArgument;
@@ -332,7 +332,7 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
     // says nothing either way. Refused here so the feature means what its name says: a device that did not
     // ask for BC formats does not get them.
     const bool is_bc_format = m_desc.format >= PixelFormat::BC1_RGB_UNORM_BLOCK && m_desc.format <= PixelFormat::BC7_SRGB_BLOCK;
-    if (is_bc_format && !device.GetFeatures().texture_compression_bc)
+    if (is_bc_format && !device.GetEnabledFeatures().texture_compression_bc)
     {
         RNDR_LOG_ERROR("Forge: a BC compressed texture needs the device created with DeviceFeatures::texture_compression_bc");
         return ErrorCode::InvalidArgument;
@@ -619,7 +619,7 @@ Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureVi
             {
                 mismatch = "a cube view covers six layers, and a cube array view a multiple of six";
             }
-            else if (desc.view_type == TextureViewType::CubeArray && !device.GetFeatures().image_cube_array)
+            else if (desc.view_type == TextureViewType::CubeArray && !device.GetEnabledFeatures().image_cube_array)
             {
                 mismatch = "a cube array view needs the device created with DeviceFeatures::image_cube_array";
             }
@@ -741,7 +741,7 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
 {
     using Result = Opal::Expected<Sampler, ErrorCode>;
 
-    if (desc.max_anisotropy > 1.0f && !device.GetFeatures().sampler_anisotropy)
+    if (desc.max_anisotropy > 1.0f && !device.GetEnabledFeatures().sampler_anisotropy)
     {
         RNDR_LOG_ERROR("Forge: an anisotropic sampler needs the device created with DeviceFeatures::sampler_anisotropy");
         return Result(ErrorCode::InvalidArgument);
@@ -751,7 +751,7 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
     // the driver samples something. Named here, the way max_anisotropy above is.
     const bool mirrors_once = desc.address_mode_u == ImageAddressMode::MirrorOnce || desc.address_mode_v == ImageAddressMode::MirrorOnce ||
                               desc.address_mode_w == ImageAddressMode::MirrorOnce;
-    if (mirrors_once && !device.GetFeatures().sampler_mirror_clamp_to_edge)
+    if (mirrors_once && !device.GetEnabledFeatures().sampler_mirror_clamp_to_edge)
     {
         RNDR_LOG_ERROR("Forge: ImageAddressMode::MirrorOnce needs the device created with DeviceFeatures::sampler_mirror_clamp_to_edge");
         return Result(ErrorCode::InvalidArgument);
@@ -768,7 +768,7 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
     // different ways of turning the texels read into one value.
     if (desc.reduction != SamplerReduction::WeightedAverage)
     {
-        if (!device.GetFeatures().sampler_filter_minmax)
+        if (!device.GetEnabledFeatures().sampler_filter_minmax)
         {
             RNDR_LOG_ERROR("Forge: a min or max sampler needs the device created with DeviceFeatures::sampler_filter_minmax");
             return Result(ErrorCode::InvalidArgument);

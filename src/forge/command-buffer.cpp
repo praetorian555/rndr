@@ -1405,7 +1405,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginRendering(const RenderingDes
 {
     // A multiview pass takes its layers from the mask, and Vulkan ignores layerCount beside one - so a desc
     // asking for both says two things and only one would be done.
-    if (desc.view_mask != 0 && !m_device->GetFeatures().multiview)
+    if (desc.view_mask != 0 && !m_device->GetEnabledFeatures().multiview)
     {
         RNDR_LOG_ERROR("Forge: a pass with a view mask needs the device created with DeviceFeatures::multiview");
         return ErrorCode::InvalidArgument;
@@ -1579,7 +1579,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetScissor(const Vector2i& offset
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetDepthBias(f32 constant_factor, f32 clamp, f32 slope_factor)
 {
     // A non-zero clamp is a feature, not a value the driver quietly ignores.
-    if (clamp != 0.0f && !m_device->GetFeatures().depth_bias_clamp)
+    if (clamp != 0.0f && !m_device->GetEnabledFeatures().depth_bias_clamp)
     {
         RNDR_LOG_ERROR("Forge: clamping the depth bias needs DeviceFeatures::depth_bias_clamp");
         return ErrorCode::InvalidArgument;
@@ -1609,7 +1609,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetStencilWriteMask(u32 write_mas
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdSetLineWidth(f32 width)
 {
     // One is the only width every device draws; anything else is the wide_lines feature.
-    if (width != 1.0f && !m_device->GetFeatures().wide_lines)
+    if (width != 1.0f && !m_device->GetEnabledFeatures().wide_lines)
     {
         RNDR_LOG_ERROR("Forge: a line width other than one needs DeviceFeatures::wide_lines");
         return ErrorCode::InvalidArgument;
@@ -1647,7 +1647,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBindIndexBuffer(const Buffer& buf
     // rather than through a function the loader would only hand out with the extension on. A device that did
     // not enable it is handed an index type it never agreed to, which is the mistake CmdDrawMeshTasks makes
     // in the other direction, so it is caught here rather than left to the validation layer.
-    if (index_size == IndexSize::uint8 && !m_device->GetFeatures().index_type_uint8)
+    if (index_size == IndexSize::uint8 && !m_device->GetEnabledFeatures().index_type_uint8)
     {
         RNDR_LOG_ERROR("Forge: an 8-bit index buffer needs the device created with DeviceFeatures::index_type_uint8");
         return ErrorCode::InvalidArgument;
@@ -1834,7 +1834,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDraw(u32 vertex_count, u32 instan
 /** More than one command in one indirect draw is a feature rather than something every device can do. */
 static Rndr::ErrorCode ValidateIndirectDrawCount(const Rndr::Forge::Device& device, Rndr::u32 draw_count, const char* what)
 {
-    if (draw_count > 1 && !device.GetFeatures().multi_draw_indirect)
+    if (draw_count > 1 && !device.GetEnabledFeatures().multi_draw_indirect)
     {
         RNDR_LOG_ERROR("Forge: {} of more than one command needs the device created with DeviceFeatures::multi_draw_indirect", what);
         return Rndr::ErrorCode::InvalidArgument;
@@ -1867,7 +1867,7 @@ static Rndr::ErrorCode ValidateIndirectCount(const Rndr::Forge::Device& device, 
                                              Rndr::u64 count_offset, Rndr::u32 stride, Rndr::u64 command_size, const char* what)
 {
     using namespace Rndr;
-    if (!device.GetFeatures().draw_indirect_count)
+    if (!device.GetEnabledFeatures().draw_indirect_count)
     {
         RNDR_LOG_ERROR("Forge: {} needs the device created with DeviceFeatures::draw_indirect_count", what);
         return ErrorCode::InvalidArgument;
