@@ -84,12 +84,24 @@ Written against master `cc565a8` on 2026-09-28.
 | 1 - the flag and the merge | **Done** in `bdb0338` |
 | 2 - the test | **Done** in `227f189` |
 | 3 - docs and samples | **Done** |
-| 4 - verify on both builds and on Android | In progress |
+| 4 - verify on both builds and on Android | **Done** but for the Galaxy A56, which was not attached |
 
 Verified on 2026-09-28 on an RTX 5060 Ti with the validation layer: `[forge]` 151 cases passing in
 `build/msvc-debug`, 150 and one skip in `build/msvc-vk11` (the vertex-stage layer case, which that build never
 supports); `[forge-window]` 11 and one skip in both (a surface colour space this monitor does not offer). The
 windowed fixture keeps the flag on, so it is the auto path under presentation.
+
+Phase 4, the same day:
+
+- `modern-vulkan` on the RTX 5060 Ti with the layer loaded, its desc asking for nothing but a surface, so every
+  feature the driver has is turned on: ten seconds of frames, a clean exit, no validation message.
+- On CI's lavapipe (Mesa 24.3.2): the new case passes in both builds; `[forge]` is 144 passing and 7 skipped on
+  1.3, 143 and 8 on 1.1. Every skip is a missing queue family or the known lavapipe non-uniform indexing bug, plus
+  the vertex-stage layer case on 1.1; none is about a feature.
+- The emulator `rndr-api36` (gfxstream over the same GPU): the debug APK with the layer loaded ran at 60 Hz with no
+  validation message and nothing in the crash buffer. The emulator was killed afterwards and confirmed gone.
+- Not run: the Galaxy A56, which was not attached. Xclipse is the driver most likely to report a feature it
+  mishandles, so a run there is still owed before release.
 
 Phase 3 changed less than planned in the samples: only `06` and `11` said something now wrong ("request it or
 the pipeline is refused", "enable independent_blend"). The others name a field or say to skip where the device
