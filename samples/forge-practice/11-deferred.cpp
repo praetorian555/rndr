@@ -10,7 +10,8 @@
  * Done when: A hundred moving lights at interactive frame rate, each lighting only what its volume touches.
  * Stretch:   Read the G-buffer as input attachments inside one pass
  *            (DeviceFeatures::dynamic_rendering_local_read, General layout).
- * Watch out: Enable independent_blend before giving targets different blend states.
+ * Watch out: Different blend states per target need independent_blend. It is on wherever the device has it;
+ *            check device.GetFeatures().independent_blend, or require it in DeviceDesc::features.
  */
 
 #include "practice.hpp"

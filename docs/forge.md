@@ -303,10 +303,23 @@ Vulkan keeps it in and chains those itself. A caller never sees `VkPhysicalDevic
 keeps a `pNext` chain alive, and never has to know that buffer device addresses arrived in 1.2 while
 descriptor indexing arrived in the same release by a different name.
 
-Every field is off by default but `buffer_device_address` and `sampler_anisotropy`, which nearly every program
-uses, and each names one capability, so a device that lacks it is reported by that name. Where a design wants several together, a preset builds them out of the same fields:
-`BindlessFeatures()` turns on the descriptor features a bindless table needs, and a caller adds to it or turns
-one back off.
+A field set in `DeviceDesc::features` is a requirement. `SelectPhysicalDevice` passes over a device that lacks
+it, and `Device::Create` refuses one with the field named in the log. Every field is unrequired by default but
+`buffer_device_address` and `sampler_anisotropy`, which nearly every program uses. Where a design needs several
+together, a preset builds them out of the same fields: `BindlessFeatures()` requires what a bindless table
+needs, and a caller adds to it or stops requiring one.
+
+Everything not required is turned on anyway wherever the device supports it, because
+`DeviceDesc::enable_supported_features` is on by default. Vulkan only lets a feature be enabled when the device
+is created, and enabling one costs nothing at run time, so leaving a supported feature off would only move the
+failure to the pipeline, sampler or command that needed it - which is where every Forge guard reports it. A
+caller creates the device once, and asks `Device::GetFeatures()`, which is what the guards ask, before relying
+on a field it did not require; `GetDesc().features` keeps what was required. A field left false in the desc
+therefore means "not required", not "keep off".
+
+Turning the flag off gives a device with exactly the fields named. The test suite does that in
+`MakeHeadlessDeviceDesc` and `ForgeFixture`, since a case about a refusal needs the feature off on a machine
+that has it; a program would do it only for a driver that misbehaves with a feature it reports.
 
 ### Vulkan 1.3, or 1.1 and extensions
 

@@ -40,12 +40,16 @@ enum class QueueFamily : u8
 };
 
 /**
- * What a device is asked to turn on, named by what it does rather than by the Vulkan version that introduced
- * it. Forge maps each field onto whichever feature structure Vulkan keeps it in and builds the chain itself,
+ * The optional capabilities of a device, named by what they do rather than by the Vulkan version that introduced
+ * them. Forge maps each field onto whichever feature structure Vulkan keeps it in and builds the chain itself,
  * so nothing here has to be kept alive past the call and no caller has to know which release added what.
  *
- * A field that this device does not support is reported at creation, with the log naming the field, rather
- * than failing inside vkCreateDevice with a result that names nothing.
+ * Used two ways. In DeviceDesc::features a field set true is a requirement: a device that does not support it
+ * is passed over by SelectPhysicalDevice and refused by Device::Create, with the log naming the field, rather
+ * than failing inside vkCreateDevice with a result that names nothing. Everything not required is turned on
+ * anyway wherever the device supports it, unless DeviceDesc::enable_supported_features is off. From
+ * Device::GetFeatures, it is what the device ended up with, and what to ask before relying on a field that was
+ * not required. A field below that says it is refused without the feature means without it in GetFeatures.
  *
  * Synchronization2 and dynamic rendering are not here: Forge is written on both - every barrier and every
  * CmdBeginRendering - so they are always enabled and turning them off would only break it.
@@ -137,8 +141,8 @@ struct DeviceFeatures
      */
     bool maintenance4 = false;
 
-    // Descriptors. All off by default: a renderer that binds a fixed set of resources per draw needs none of
-    // them. Bindless - one large array of every texture or buffer, indexed by a number the draw pushes - wants
+    // Descriptors. None required by default: a renderer that binds a fixed set of resources per draw needs none
+    // of them. Bindless - one large array of every texture or buffer, indexed by a number the draw pushes - wants
     // most of them together, which BindlessFeatures() below hands out. On a Vulkan 1.1 build any of them pulls
     // in VK_EXT_descriptor_indexing.
     /**
@@ -205,11 +209,11 @@ struct DeviceFeatures
 };
 
 /**
- * The features a bindless table needs: unsized descriptor arrays, a length chosen per set, slots left empty,
- * an index that differs per invocation, and writes to the table while frames that read it are in flight. Start
- * from this and add what else the renderer needs; a device that lacks one of them still reports that field by
- * name, and a caller who can do without one - update_after_bind_descriptors is the one mobile devices limit -
- * turns it back off.
+ * The requirements of a bindless renderer: unsized descriptor arrays, a length chosen per set, slots left empty,
+ * an index that differs per invocation, and writes to the table while frames that read it are in flight. Handed
+ * to SelectPhysicalDevice and Device::Create as DeviceDesc::features, it picks a device that has all of them and
+ * reports the one a device lacks by name. A renderer that can do without one - update_after_bind_descriptors is
+ * the one mobile devices limit - stops requiring it, and asks Device::GetFeatures whether it came anyway.
  */
 [[nodiscard]] constexpr DeviceFeatures BindlessFeatures()
 {
