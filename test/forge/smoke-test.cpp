@@ -75,10 +75,17 @@ struct ForgeQueues
  * a case that built a device without saying otherwise would fail outright on a machine whose one family does
  * everything, which is a legal Vulkan device and what a software driver offers. ForgeFixture takes a
  * ForgeQueues; every device built outside it goes through here.
+ *
+ * enable_supported_features is off, here and in ForgeFixture, so a device has exactly the features a case names.
+ * Every "on a device without the feature is refused" case needs the feature off on a machine that has it, and a
+ * case that says nothing gets the two DeviceFeatures defaults and no more. The one case about the flag turns it back on.
  */
 Forge::DeviceDesc MakeHeadlessDeviceDesc(const Forge::DeviceFeatures& features = {})
 {
-    return {.features = features, .use_async_compute_queue = false, .use_dedicated_transfer_queue = false};
+    return {.features = features,
+            .enable_supported_features = false,
+            .use_async_compute_queue = false,
+            .use_dedicated_transfer_queue = false};
 }
 
 /** A Vulkan instance and a device with no surface. Everything below is built on one of these. */
@@ -117,6 +124,7 @@ struct ForgeFixture
             return;
         }
         Forge::DeviceDesc device_desc{.features = features,
+                                      .enable_supported_features = false,
                                       .use_async_compute_queue = queues.async_compute,
                                       .use_dedicated_transfer_queue = queues.dedicated_transfer};
         for (const char* extension : extensions)
@@ -2411,6 +2419,9 @@ TEST_CASE("Forge device features", "[forge]")
 
     SECTION("The defaults are what the device reports back")
     {
+        // MakeHeadlessDeviceDesc turns enable_supported_features off, so this is also the witness that the flag
+        // off leaves the device with exactly what was required: mesh and geometry shaders stay off on a machine
+        // that has them.
         const Forge::Device device = ForgeTest::Unwrap(make_device({}));
         REQUIRE(device.GetFeatures().buffer_device_address);
         REQUIRE_FALSE(device.GetFeatures().runtime_descriptor_array);

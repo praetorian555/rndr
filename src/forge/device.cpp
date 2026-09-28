@@ -316,6 +316,64 @@ struct FeatureChain
 #endif
     }
 
+    /**
+     * The other way round from Fill: every Forge field whose Vulkan bits are all set, after Query. A field that
+     * Fill spreads over several bits is on only when the device has every one of them, since Fill sets them all
+     * and vkCreateDevice refuses any one the device lacks. A structure left out of the chain, because the
+     * extension it belongs to is not there, reads as all false, so an extension-backed field is on only where its
+     * extension is.
+     */
+    void Read(Forge::DeviceFeatures& features) const
+    {
+        const VkPhysicalDeviceFeatures& core = features2.features;
+        features.fill_mode_non_solid = core.fillModeNonSolid == VK_TRUE;
+        features.wide_lines = core.wideLines == VK_TRUE;
+        features.depth_clamp = core.depthClamp == VK_TRUE;
+        features.depth_bias_clamp = core.depthBiasClamp == VK_TRUE;
+        features.geometry_shader = core.geometryShader == VK_TRUE;
+        features.tessellation_shader = core.tessellationShader == VK_TRUE;
+        features.independent_blend = core.independentBlend == VK_TRUE;
+        features.multi_draw_indirect = core.multiDrawIndirect == VK_TRUE;
+        features.draw_indirect_first_instance = core.drawIndirectFirstInstance == VK_TRUE;
+        features.sampler_anisotropy = core.samplerAnisotropy == VK_TRUE;
+        features.texture_compression_bc = core.textureCompressionBC == VK_TRUE;
+        features.image_cube_array = core.imageCubeArray == VK_TRUE;
+        features.shader_int16 = core.shaderInt16 == VK_TRUE;
+        features.shader_int64 = core.shaderInt64 == VK_TRUE;
+        features.shader_float64 = core.shaderFloat64 == VK_TRUE;
+
+        features.multiview = vk11.multiview == VK_TRUE;
+
+        features.runtime_descriptor_array = vk12.runtimeDescriptorArray == VK_TRUE;
+        features.variable_descriptor_count = vk12.descriptorBindingVariableDescriptorCount == VK_TRUE;
+        features.partially_bound_descriptors = vk12.descriptorBindingPartiallyBound == VK_TRUE;
+        features.update_after_bind_descriptors =
+            vk12.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE && vk12.descriptorBindingStorageBufferUpdateAfterBind == VK_TRUE &&
+            vk12.descriptorBindingStorageImageUpdateAfterBind == VK_TRUE && vk12.descriptorBindingUniformBufferUpdateAfterBind == VK_TRUE;
+        features.update_unused_while_pending_descriptors = vk12.descriptorBindingUpdateUnusedWhilePending == VK_TRUE;
+        features.non_uniform_descriptor_indexing =
+            vk12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE && vk12.shaderStorageBufferArrayNonUniformIndexing == VK_TRUE &&
+            vk12.shaderStorageImageArrayNonUniformIndexing == VK_TRUE && vk12.shaderUniformBufferArrayNonUniformIndexing == VK_TRUE;
+        features.buffer_device_address = vk12.bufferDeviceAddress == VK_TRUE;
+        features.scalar_block_layout = vk12.scalarBlockLayout == VK_TRUE;
+        features.host_query_reset = vk12.hostQueryReset == VK_TRUE;
+        features.sampler_mirror_clamp_to_edge = vk12.samplerMirrorClampToEdge == VK_TRUE;
+        features.sampler_filter_minmax = vk12.samplerFilterMinmax == VK_TRUE;
+        features.draw_indirect_count = vk12.drawIndirectCount == VK_TRUE;
+        features.shader_int8 = vk12.shaderInt8 == VK_TRUE;
+        features.shader_float16 = vk12.shaderFloat16 == VK_TRUE;
+        features.shader_buffer_int64_atomics = vk12.shaderBufferInt64Atomics == VK_TRUE;
+        features.shader_shared_int64_atomics = vk12.shaderSharedInt64Atomics == VK_TRUE;
+        features.shader_output_layer = vk12.shaderOutputLayer == VK_TRUE;
+
+        features.maintenance4 = vk13.maintenance4 == VK_TRUE;
+
+        features.mesh_shader = mesh.meshShader == VK_TRUE;
+        features.task_shader = mesh.taskShader == VK_TRUE;
+        features.index_type_uint8 = index_type_uint8.indexTypeUint8 == VK_TRUE;
+        features.dynamic_rendering_local_read = local_read.dynamicRenderingLocalRead == VK_TRUE;
+    }
+
 private:
     VkBaseOutStructure* m_tail = nullptr;
 
@@ -367,8 +425,13 @@ const char* FindIndexTypeUint8Extension(const Forge::PhysicalDevice& physical_de
     return nullptr;
 }
 
-/** Every extension a desc implies, which is what it names plus what its surface and its features pull in. */
-Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDevice& physical_device, const Forge::DeviceDesc& desc)
+/**
+ * Every extension a desc implies, which is what it names plus what its surface and the features pull in. The
+ * features are passed apart from the desc: choosing a device asks about what the desc requires, and creating one
+ * about what is turned on, which enable_supported_features may have made more.
+ */
+Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDevice& physical_device, const Forge::DeviceDesc& desc,
+                                                        const Forge::DeviceFeatures& features)
 {
     Opal::DynamicArray<const char*> extensions(desc.extensions.Clone());
     if (desc.surface.IsValid() || desc.enable_presentation)
@@ -377,18 +440,18 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
     }
     // A feature that lives in an extension only works when the extension is enabled too, so asking for the
     // feature is taken as asking for both rather than as a puzzle for the caller to solve.
-    if (desc.features.mesh_shader || desc.features.task_shader)
+    if (features.mesh_shader || features.task_shader)
     {
         extensions.PushBack(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     }
-    if (desc.features.index_type_uint8)
+    if (features.index_type_uint8)
     {
         // Neither name present leaves the newer one to be reported as unsupported, so a device that cannot do
         // this says which extension it is missing rather than enabling nothing and failing later.
         const char* name = FindIndexTypeUint8Extension(physical_device);
         extensions.PushBack(name != nullptr ? name : VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME);
     }
-    if (desc.features.dynamic_rendering_local_read)
+    if (features.dynamic_rendering_local_read)
     {
         extensions.PushBack(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
     }
@@ -441,7 +504,6 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
     {
         extensions.PushBack(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
     }
-    const Forge::DeviceFeatures& features = desc.features;
     if (features.runtime_descriptor_array || features.variable_descriptor_count ||
         features.partially_bound_descriptors || features.update_after_bind_descriptors ||
         features.update_unused_while_pending_descriptors || features.non_uniform_descriptor_indexing)
@@ -621,7 +683,7 @@ Opal::StringUtf8 FindUnmetRequirement(const Forge::PhysicalDevice& physical_devi
                  VK_API_VERSION_MINOR(api_version));
         return Opal::StringUtf8(buffer);
     }
-    for (const char* extension_name : CollectDeviceExtensions(physical_device, desc))
+    for (const char* extension_name : CollectDeviceExtensions(physical_device, desc, desc.features))
     {
         if (!physical_device.IsExtensionSupported(extension_name))
         {
@@ -780,7 +842,29 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
         return Result(queue_status);
     }
 
-    Opal::DynamicArray<const char*> device_extensions = CollectDeviceExtensions(device.m_physical_device, device.m_desc);
+    // The requirements are checked against what the device reports before anything is asked for, so an unsupported
+    // one names itself instead of coming back as VK_ERROR_FEATURE_NOT_PRESENT from vkCreateDevice. Before the rest
+    // is added, too: once it is, the set is by construction one the device supports, and a missing requirement would
+    // have gone from it without a word.
+    const ErrorCode feature_status = ReportUnsupportedFeatures(device.m_physical_device, device.m_desc.features);
+    if (feature_status != ErrorCode::Success)
+    {
+        return Result(feature_status);
+    }
+    device.m_features = device.m_desc.features;
+    if (device.m_desc.enable_supported_features)
+    {
+        // Everything the device supports, which with the requirements known to be among it is the requirements
+        // plus the rest. Read over the chain the requirement check queried the same way, so the two cannot differ.
+        FeatureChain supported([&device](const char* name) { return device.m_physical_device.IsExtensionSupported(name); });
+        supported.Query(device.m_physical_device.GetNativePhysicalDevice());
+        supported.Read(device.m_features);
+    }
+
+    // After the features are settled, since an extension-backed one brings its extension along. What the merge added
+    // passes this by construction - a feature only reads as supported where its extension is - so what it still
+    // catches is a name in DeviceDesc::extensions the device lacks and a requirement's extension.
+    Opal::DynamicArray<const char*> device_extensions = CollectDeviceExtensions(device.m_physical_device, device.m_desc, device.m_features);
     device.m_enabled_extensions = device_extensions.Clone();
     for (const char* extension_name : device_extensions)
     {
@@ -789,14 +873,6 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
             RNDR_LOG_ERROR("Forge: device extension not supported: {}", extension_name);
             return Result(ErrorCode::FeatureNotSupported);
         }
-    }
-
-    // Checked against what the device reports before anything is asked for, so an unsupported feature names
-    // itself instead of coming back as VK_ERROR_FEATURE_NOT_PRESENT from vkCreateDevice.
-    const ErrorCode feature_status = ReportUnsupportedFeatures(device.m_physical_device, device.m_desc.features);
-    if (feature_status != ErrorCode::Success)
-    {
-        return Result(feature_status);
     }
 
     FeatureChain enabled_features(
@@ -811,7 +887,7 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
             }
             return false;
         });
-    enabled_features.Fill(device.m_desc.features);
+    enabled_features.Fill(device.m_features);
 #if defined(RNDR_FORGE_VULKAN_1_1)
     // Reading or writing a storage image without naming its format, which 1.3 makes core. Without
     // VK_KHR_format_feature_flags2 the device may still have the two original features, and turning them on is what
@@ -1077,6 +1153,7 @@ Rndr::Forge::Device::Device(Device&& other) noexcept
       m_queue_family_to_queue(std::move(other.m_queue_family_to_queue)),
       m_physical_device(std::move(other.m_physical_device)),
       m_desc(std::move(other.m_desc)),
+      m_features(other.m_features),
       m_enabled_extensions(std::move(other.m_enabled_extensions)),
       m_queue_family_indices(other.m_queue_family_indices),
       m_gpu_allocator(other.m_gpu_allocator),
@@ -1091,6 +1168,7 @@ Rndr::Forge::Device::Device(Device&& other) noexcept
     other.m_queue_family_to_queue.Clear();
     other.m_physical_device = {};
     other.m_desc = {};
+    other.m_features = {};
     other.m_enabled_extensions.Clear();
     other.m_queue_family_indices = {};
     other.m_gpu_allocator = VK_NULL_HANDLE;
@@ -1110,6 +1188,7 @@ Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
     m_queue_family_to_queue = std::move(other.m_queue_family_to_queue);
     m_physical_device = std::move(other.m_physical_device);
     m_desc = std::move(other.m_desc);
+    m_features = other.m_features;
     m_enabled_extensions = std::move(other.m_enabled_extensions);
     m_queue_family_indices = other.m_queue_family_indices;
     m_gpu_allocator = other.m_gpu_allocator;
@@ -1124,6 +1203,7 @@ Rndr::Forge::Device& Rndr::Forge::Device::operator=(Device&& other) noexcept
     other.m_queue_family_to_queue.Clear();
     other.m_physical_device = {};
     other.m_desc = {};
+    other.m_features = {};
     other.m_enabled_extensions.Clear();
     other.m_queue_family_indices = {};
     other.m_gpu_allocator = VK_NULL_HANDLE;
@@ -1153,6 +1233,7 @@ void Rndr::Forge::Device::Destroy()
     }
     m_physical_device = {};
     m_desc = {};
+    m_features = {};
 }
 
 Opal::Expected<bool, Rndr::ErrorCode> Rndr::Forge::Device::CanPresentTo(const Surface& surface) const

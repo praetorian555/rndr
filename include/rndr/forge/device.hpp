@@ -222,7 +222,21 @@ struct DeviceFeatures
 
 struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
 {
+    /**
+     * What the device has to have. Every field set here is a requirement: SelectPhysicalDevice passes over a
+     * device that lacks one, and Device::Create refuses it with the field named in the log.
+     */
     DeviceFeatures features;
+    /**
+     * Turn on, beside what `features` requires, every other field of DeviceFeatures this device supports. Enabling
+     * a feature costs nothing at run time, and leaving one off only moves the failure to the pipeline, sampler or
+     * command that needed it, so this is on by default: a device then does whatever the machine can, and
+     * Device::GetFeatures says what that came to. A field left false here means "not required", not "keep off".
+     *
+     * Off, the device turns on exactly what `features` names. That is for a test of a refusal, which needs the
+     * feature off on a device that has it, and for a driver that misbehaves with a feature it reports.
+     */
+    bool enable_supported_features = true;
     Opal::DynamicArray<const char*> extensions;
     /**
      * Surface the present queue is picked against. The precise way to ask for presentation when a window
@@ -244,8 +258,8 @@ struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
     bool use_decode_queue = false;
     bool use_encode_queue = false;
 
-    OPAL_CLONE_FIELDS(features, extensions, surface, enable_presentation, use_async_compute_queue, use_dedicated_transfer_queue,
-                      use_decode_queue, use_encode_queue);
+    OPAL_CLONE_FIELDS(features, enable_supported_features, extensions, surface, enable_presentation, use_async_compute_queue,
+                      use_dedicated_transfer_queue, use_decode_queue, use_encode_queue);
 };
 
 struct QueueFamilyIndices
@@ -408,8 +422,13 @@ public:
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device.GetNativePhysicalDevice(); }
     [[nodiscard]] const DeviceDesc& GetDesc() const { return m_desc; }
 
-    /** The features this device was created with, for the guards that have to ask before using one. */
-    [[nodiscard]] const DeviceFeatures& GetFeatures() const { return m_desc.features; }
+    /**
+     * The features that are on: what DeviceDesc::features required, plus, unless
+     * DeviceDesc::enable_supported_features was off, every other one this device supports. What the guards ask
+     * before using a feature, and what a caller asks before relying on one it did not require. GetDesc().features
+     * keeps what was required.
+     */
+    [[nodiscard]] const DeviceFeatures& GetFeatures() const { return m_features; }
 
     /**
      * Whether the device was created with the named extension. Commands that belong to an extension have to ask,
@@ -504,6 +523,8 @@ private:
     Opal::HashMap<QueueFamily, Opal::SharedPtr<DeviceQueue>> m_queue_family_to_queue;
     PhysicalDevice m_physical_device;
     DeviceDesc m_desc;
+    /** What was turned on, which is m_desc.features plus what enable_supported_features found; see GetFeatures. */
+    DeviceFeatures m_features;
     /** What was actually passed to vkCreateDevice, which is the desc plus what the device adds on its own. */
     Opal::DynamicArray<const char*> m_enabled_extensions;
     QueueFamilyIndices m_queue_family_indices;
