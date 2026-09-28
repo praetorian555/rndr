@@ -2474,6 +2474,106 @@ TEST_CASE("Forge device features", "[forge]")
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
 }
 
+/**
+ * DeviceDesc::enable_supported_features, which every other case turns off through MakeHeadlessDeviceDesc. With it
+ * on, a device turns on whatever it supports beside what was required, GetFeatures says so while the desc keeps the
+ * ask, an extension-backed feature brings its extension, and the bit reaches vkCreateDevice rather than only the
+ * struct Forge's guards read. The last is shown with wide lines, which the layer checks at record time, from both
+ * sides: accepted with the flag on, and objected to with it off once Forge's own guard is stepped round.
+ */
+TEST_CASE("Forge a device takes every feature it supports", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+
+    // A device on this machine's first physical device, with nothing required and the flag as given. What the
+    // physical device reported is read back off the device, since the physical device moves into it.
+    auto make_device = [&context](bool enable_supported_features)
+    {
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+        Forge::DeviceDesc desc = MakeHeadlessDeviceDesc();
+        desc.enable_supported_features = enable_supported_features;
+        return ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, desc));
+    };
+
+    SECTION("What is on is what the device reports, and the desc keeps what was asked")
+    {
+        const Forge::Device device = make_device(true);
+        const VkPhysicalDeviceFeatures& reported = device.GetPhysicalDevice().GetFeatures();
+        const Forge::DeviceFeatures& enabled = device.GetFeatures();
+        REQUIRE(enabled.fill_mode_non_solid == (reported.fillModeNonSolid == VK_TRUE));
+        REQUIRE(enabled.wide_lines == (reported.wideLines == VK_TRUE));
+        REQUIRE(enabled.independent_blend == (reported.independentBlend == VK_TRUE));
+        REQUIRE(enabled.geometry_shader == (reported.geometryShader == VK_TRUE));
+        REQUIRE(enabled.tessellation_shader == (reported.tessellationShader == VK_TRUE));
+        REQUIRE(enabled.image_cube_array == (reported.imageCubeArray == VK_TRUE));
+        REQUIRE(enabled.shader_int64 == (reported.shaderInt64 == VK_TRUE));
+
+        REQUIRE_FALSE(device.GetDesc().features.fill_mode_non_solid);
+        REQUIRE_FALSE(device.GetDesc().features.geometry_shader);
+        REQUIRE_FALSE(device.GetDesc().features.mesh_shader);
+
+        // Nothing required either feature, so its extension is enabled exactly when the merge turned the feature on.
+        REQUIRE(enabled.mesh_shader == device.IsExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME));
+        REQUIRE(enabled.dynamic_rendering_local_read == device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME));
+    }
+    SECTION("A feature nobody required is accepted by the layer")
+    {
+        Forge::Device device = make_device(true);
+        if (!device.GetFeatures().wide_lines)
+        {
+            SKIP("This device does not draw wide lines.");
+        }
+        Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, queue));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetLineWidth(2.0f) == ErrorCode::Success);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+    }
+    SECTION("With the flag off the same command is refused, by Forge and by the layer")
+    {
+        Forge::Device device = make_device(false);
+        if (device.GetPhysicalDevice().GetFeatures().wideLines != VK_TRUE)
+        {
+            SKIP("This device does not draw wide lines.");
+        }
+        REQUIRE_FALSE(device.GetFeatures().wide_lines);
+        Forge::DeviceQueue& queue = ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics));
+        Forge::CommandBuffer command_buffer = ForgeTest::Unwrap(Forge::CommandBuffer::Create(device, queue));
+        REQUIRE(command_buffer.Begin() == ErrorCode::Success);
+        REQUIRE(command_buffer.CmdSetLineWidth(2.0f) == ErrorCode::InvalidArgument);
+        // Past Forge's guard, straight to Vulkan: the layer objecting here is what makes its silence in the section
+        // above mean the bit reached the device.
+        vkCmdSetLineWidth(command_buffer.GetNativeCommandBuffer(), 2.0f);
+        REQUIRE(command_buffer.End() == ErrorCode::Success);
+        REQUIRE(ForgeTest::CountValidationErrors(context) > 0);
+        context.ClearDebugMessages();
+    }
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    SECTION("A promoted extension comes with its feature, and only with the flag on")
+    {
+        {
+            const Forge::Device device = make_device(true);
+            if (!device.GetPhysicalDevice().IsExtensionSupported(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME))
+            {
+                SKIP("This device does not have VK_KHR_draw_indirect_count.");
+            }
+            // The extension carries the feature without a structure of its own, so having it is supporting it.
+            REQUIRE(device.GetFeatures().draw_indirect_count);
+            REQUIRE(device.IsExtensionEnabled(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME));
+        }
+        const Forge::Device device = make_device(false);
+        REQUIRE_FALSE(device.GetFeatures().draw_indirect_count);
+        REQUIRE_FALSE(device.IsExtensionEnabled(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME));
+    }
+#endif
+
+    REQUIRE_NO_VALIDATION_ERROR_IN(context);
+}
+
 TEST_CASE("Forge physical device selection", "[forge]")
 {
     if (!IsForgeAvailable())
