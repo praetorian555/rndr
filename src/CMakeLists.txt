@@ -196,6 +196,7 @@ if (${RNDR_FORGE})
             "${PROJECT_SOURCE_DIR}/src/forge/memory-info.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/synchronization.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/command-buffer.cpp"
+            "${PROJECT_SOURCE_DIR}/src/forge/promoted-commands.hpp"
             "${PROJECT_SOURCE_DIR}/src/forge/render-pass.hpp"
             "${PROJECT_SOURCE_DIR}/src/forge/render-pass.cpp"
             "${PROJECT_SOURCE_DIR}/src/forge/synchronization2.hpp"

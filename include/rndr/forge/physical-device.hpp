@@ -38,10 +38,12 @@ public:
      * families and its extensions.
      *
      * @param physical_device Handle the loader reported.
+     * @param instance_api_version The Vulkan version the instance was created with, which caps what the device may
+     *                             be used at - see GetApiVersion.
      * @return The device, ErrorCode::InvalidArgument for a null handle, or ErrorCode::GraphicsAPIError when
      *         the device reports no queue family at all, which no usable device does.
      */
-    [[nodiscard]] static Opal::Expected<PhysicalDevice, ErrorCode> Create(VkPhysicalDevice physical_device);
+    [[nodiscard]] static Opal::Expected<PhysicalDevice, ErrorCode> Create(VkPhysicalDevice physical_device, u32 instance_api_version);
 
     PhysicalDevice(const PhysicalDevice&) = delete;
     PhysicalDevice& operator=(const PhysicalDevice&) = delete;
@@ -54,6 +56,12 @@ public:
 
     [[nodiscard]] VkPhysicalDevice GetNativePhysicalDevice() const { return m_physical_device; }
     [[nodiscard]] const VkPhysicalDeviceProperties& GetProperties() const { return m_properties; }
+    /**
+     * The Vulkan version this device can be used at: the lower of what it reports in GetProperties and what the
+     * instance was created with, major and minor only. Functionality a version made core is there without its
+     * extension exactly when this reaches that version.
+     */
+    [[nodiscard]] u32 GetApiVersion() const { return m_api_version; }
     [[nodiscard]] const VkPhysicalDeviceFeatures& GetFeatures() const { return m_features; }
     [[nodiscard]] const VkPhysicalDeviceMemoryProperties& GetMemoryProperties() const { return m_memory_properties; }
     /** The resolve modes for depth and stencil, and whether the two sides of one pass may be resolved apart. */
@@ -120,6 +128,7 @@ public:
 private:
     VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties m_properties = {};
+    u32 m_api_version = 0;
     VkPhysicalDeviceFeatures m_features = {};
     VkPhysicalDeviceMemoryProperties m_memory_properties = {};
     VkPhysicalDeviceDepthStencilResolveProperties m_depth_stencil_resolve_properties = {

@@ -939,10 +939,24 @@ TEST_CASE("Forge context and device", "[forge]")
     REQUIRE(device.IsValid());
     REQUIRE(ForgeTest::Unwrap(device.GetQueue(Forge::QueueFamily::Graphics)).IsValid());
 
-    // Dynamic rendering wherever the device has it. On 1.1 a device without it records its passes as render passes,
-    // and the rest of the suite then runs through those; on 1.3 it would not have been chosen.
+    // Dynamic rendering wherever the device has it. On 1.1 a device used below 1.3 without it records its passes as
+    // render passes, and the rest of the suite then runs through those; on 1.3 it would not have been chosen.
     // Synchronization2 the same way: its barriers and submits where the device has it, the ones it replaced where not.
+    // A 1.1 build drives a device used at 1.3 as the default build does, core all of it.
+    const bool at_vulkan13 = device.GetPhysicalDevice().GetApiVersion() >= VK_API_VERSION_1_3;
 #if defined(RNDR_FORGE_VULKAN_1_1)
+    if (at_vulkan13)
+    {
+        REQUIRE_FALSE(device.UsesRenderPasses());
+        REQUIRE(device.HasSynchronization2());
+        REQUIRE(device.HasTimelineSemaphores());
+        REQUIRE(device.CanReadStorageImagesWithoutFormat());
+        REQUIRE(device.CanWriteStorageImagesWithoutFormat());
+        REQUIRE_FALSE(device.IsExtensionEnabled(VK_KHR_SPIRV_1_4_EXTENSION_NAME));
+        REQUIRE_FALSE(device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
+    }
+    else
+    {
     REQUIRE(device.UsesRenderPasses() == !device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
     REQUIRE(device.HasSynchronization2() == device.IsExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME));
     REQUIRE(device.HasTimelineSemaphores() == device.IsExtensionEnabled(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME));
@@ -953,7 +967,9 @@ TEST_CASE("Forge context and device", "[forge]")
             (has_format_feature_flags2 || core_features.shaderStorageImageReadWithoutFormat == VK_TRUE));
     REQUIRE(device.CanWriteStorageImagesWithoutFormat() ==
             (has_format_feature_flags2 || core_features.shaderStorageImageWriteWithoutFormat == VK_TRUE));
+    }
 #else
+    REQUIRE(at_vulkan13);
     REQUIRE_FALSE(device.UsesRenderPasses());
     REQUIRE(device.HasSynchronization2());
     REQUIRE(device.HasTimelineSemaphores());
@@ -961,7 +977,7 @@ TEST_CASE("Forge context and device", "[forge]")
     REQUIRE(device.CanWriteStorageImagesWithoutFormat());
 #endif
     // The runs meant to cover a fallback - under a layer hiding the extension - say so, so that one where the layer did
-    // not load fails here instead of passing on the extension.
+    // not load, or one left on the 1.3 path without RNDR_TEST_EXTENSION_PATH, fails here instead of passing.
     if (ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_EXPECT_RENDER_PASSES"))
     {
         REQUIRE(device.UsesRenderPasses());
@@ -975,6 +991,49 @@ TEST_CASE("Forge context and device", "[forge]")
         REQUIRE_FALSE(device.HasTimelineSemaphores());
     }
     REQUIRE_NO_VALIDATION_ERROR_IN(context);
+}
+
+TEST_CASE("Forge uses a device at the lower of its version and the instance's", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    SECTION("By default the instance takes the newest version the loader offers, up to 1.3")
+    {
+        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(ForgeTest::TestContextDesc()));
+        if (ForgeTest::IsEnvironmentFlagSet("RNDR_TEST_EXTENSION_PATH"))
+        {
+            SKIP("RNDR_TEST_EXTENSION_PATH caps the instance at 1.1.");
+        }
+        REQUIRE(context.GetApiVersion() >= Forge::k_vulkan_api_version);
+        REQUIRE(context.GetApiVersion() <= VK_API_VERSION_1_3);
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+        for (const Forge::PhysicalDevice& physical_device : physical_devices)
+        {
+            const u32 reported = physical_device.GetProperties().apiVersion;
+            const u32 device_version = VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(reported), VK_API_VERSION_MINOR(reported), 0);
+            REQUIRE(physical_device.GetApiVersion() == (device_version < context.GetApiVersion() ? device_version : context.GetApiVersion()));
+        }
+    }
+    SECTION("max_api_version caps the instance, and with it every device, in the 1.1 build")
+    {
+        Forge::GraphicsContextDesc desc = ForgeTest::TestContextDesc();
+        desc.max_api_version = VK_API_VERSION_1_1;
+        const Forge::GraphicsContext context = ForgeTest::Unwrap(Forge::GraphicsContext::Create(desc));
+        Opal::DynamicArray<Forge::PhysicalDevice> physical_devices = ForgeTest::Unwrap(context.EnumeratePhysicalDevices());
+#if defined(RNDR_FORGE_VULKAN_1_1)
+        REQUIRE(context.GetApiVersion() == VK_API_VERSION_1_1);
+        REQUIRE(physical_devices[0].GetApiVersion() == VK_API_VERSION_1_1);
+        // Below 1.3, so on the extension path: SPIR-V 1.4 comes from its extension, whatever the device reports.
+        Forge::Device device = ForgeTest::Unwrap(Forge::Device::Create(std::move(physical_devices[0]), context, MakeHeadlessDeviceDesc()));
+        REQUIRE(device.IsExtensionEnabled(VK_KHR_SPIRV_1_4_EXTENSION_NAME));
+        REQUIRE_NO_VALIDATION_ERROR_IN(context);
+#else
+        REQUIRE(context.GetApiVersion() == VK_API_VERSION_1_3);
+        REQUIRE(physical_devices[0].GetApiVersion() >= VK_API_VERSION_1_3);
+#endif
+    }
 }
 
 TEST_CASE("Forge context desc", "[forge]")
@@ -2557,6 +2616,10 @@ TEST_CASE("Forge a device takes every feature it supports", "[forge]")
     {
         {
             const Forge::Device device = make_device(true);
+            if (device.GetPhysicalDevice().GetApiVersion() >= VK_API_VERSION_1_3)
+            {
+                SKIP("This device is used at 1.3, where the feature is core and comes with no extension.");
+            }
             if (!device.GetPhysicalDevice().IsExtensionSupported(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME))
             {
                 SKIP("This device does not have VK_KHR_draw_indirect_count.");

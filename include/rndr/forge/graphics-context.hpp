@@ -18,10 +18,11 @@ namespace Rndr::Forge
 {
 
 /**
- * The Vulkan version Forge asks for, and the least a device must support. 1.3 by default. A build with
- * RNDR_FORGE_VULKAN_1_1 asks for 1.1 and takes what Forge relies on from 1.2 and 1.3 - timeline semaphores,
+ * The least Vulkan version a device must support. 1.3 by default. A build with RNDR_FORGE_VULKAN_1_1 takes a 1.1 device
+ * too, and on a device that stops short of 1.3 takes what Forge relies on from 1.2 and 1.3 - timeline semaphores,
  * synchronization2, dynamic rendering, and the features DeviceFeatures names - from the extensions those versions
- * promoted, which is what MoltenVK and older drivers offer. The API is the same in both.
+ * promoted, which is what MoltenVK and older drivers offer. A device that reaches 1.3 is driven as the default build
+ * drives it. The API is the same in both.
  */
 #if defined(RNDR_FORGE_VULKAN_1_1)
 inline constexpr u32 k_vulkan_api_version = VK_API_VERSION_1_1;
@@ -106,8 +107,18 @@ struct GraphicsContextDesc : Opal::ClonableBase<GraphicsContextDesc>
      */
     DebugMessageTypeBits logged_message_types = DebugMessageTypeBits::All;
     Opal::DynamicArray<Opal::StringUtf8> required_instance_extensions;
+    /**
+     * The highest Vulkan version a RNDR_FORGE_VULKAN_1_1 build creates the instance at, which caps the version every
+     * device of this context is used at (PhysicalDevice::GetApiVersion). 0, the default, takes the newest the loader
+     * offers up to 1.3, so a device that reaches 1.3 is driven as the default build drives it and one below that
+     * through extensions. VK_API_VERSION_1_1 keeps every device on the extension path, which is how that path is
+     * tested on a machine whose device reaches 1.3. A value below 1.1 counts as 1.1. The default build creates the
+     * instance at 1.3 whatever this says.
+     */
+    u32 max_api_version = 0;
 
-    OPAL_CLONE_FIELDS(collect_debug_messages, max_stored_debug_messages, logged_message_types, required_instance_extensions);
+    OPAL_CLONE_FIELDS(collect_debug_messages, max_stored_debug_messages, logged_message_types, required_instance_extensions,
+                      max_api_version);
 };
 
 class GraphicsContext
@@ -136,6 +147,8 @@ public:
     [[nodiscard]] bool IsValid() const { return m_instance != VK_NULL_HANDLE; }
     [[nodiscard]] const GraphicsContextDesc& GetDesc() const { return m_desc; }
     [[nodiscard]] VkInstance GetInstance() const { return m_instance; }
+    /** The Vulkan version the instance was created with: 1.3 in the default build; see max_api_version for the other. */
+    [[nodiscard]] u32 GetApiVersion() const { return m_api_version; }
 
     /**
      * Every Vulkan capable device on this machine, in the order the loader reports them.
@@ -185,6 +198,7 @@ private:
 
     GraphicsContextDesc m_desc;
     VkInstance m_instance = VK_NULL_HANDLE;
+    u32 m_api_version = 0;
     VkDebugUtilsMessengerEXT m_debug_messenger = VK_NULL_HANDLE;
     Opal::SharedPtr<DebugMessageLog> m_debug_log;
     bool m_debug_utils_enabled = false;

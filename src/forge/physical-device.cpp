@@ -3,7 +3,8 @@
 #include "rndr/forge/swap-chain.hpp"
 #include "rndr/log.hpp"
 
-Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::PhysicalDevice::Create(VkPhysicalDevice physical_device)
+Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::PhysicalDevice::Create(VkPhysicalDevice physical_device,
+                                                                                                       u32 instance_api_version)
 {
     using Result = Opal::Expected<PhysicalDevice, ErrorCode>;
 
@@ -15,6 +16,11 @@ Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::Physic
 
     PhysicalDevice device;
     vkGetPhysicalDeviceProperties(physical_device, &device.m_properties);
+    const u32 device_version = VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(device.m_properties.apiVersion),
+                                                   VK_API_VERSION_MINOR(device.m_properties.apiVersion), 0);
+    const u32 instance_version =
+        VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(instance_api_version), VK_API_VERSION_MINOR(instance_api_version), 0);
+    device.m_api_version = device_version < instance_version ? device_version : instance_version;
     vkGetPhysicalDeviceFeatures(physical_device, &device.m_features);
     vkGetPhysicalDeviceMemoryProperties(physical_device, &device.m_memory_properties);
 
@@ -44,7 +50,7 @@ Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::Physic
     // Core since Vulkan 1.2 and an extension before, and chaining the structure is only allowed on a device that has
     // one or the other. One with neither cannot run Forge, which needs dynamic rendering and so this extension too,
     // and is turned down when a device is chosen; its resolve modes stay zero.
-    if (device.m_properties.apiVersion >= VK_API_VERSION_1_2 || device.IsExtensionSupported(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME))
+    if (device.m_api_version >= VK_API_VERSION_1_2 || device.IsExtensionSupported(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME))
     {
         VkPhysicalDeviceProperties2 properties2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
                                                 .pNext = &device.m_depth_stencil_resolve_properties};
@@ -64,6 +70,7 @@ Rndr::Forge::PhysicalDevice::~PhysicalDevice()
 Rndr::Forge::PhysicalDevice::PhysicalDevice(PhysicalDevice&& other) noexcept
     : m_physical_device(other.m_physical_device),
       m_properties(other.m_properties),
+      m_api_version(other.m_api_version),
       m_features(other.m_features),
       m_memory_properties(other.m_memory_properties),
       m_depth_stencil_resolve_properties(other.m_depth_stencil_resolve_properties),
@@ -72,6 +79,7 @@ Rndr::Forge::PhysicalDevice::PhysicalDevice(PhysicalDevice&& other) noexcept
 {
     other.m_physical_device = VK_NULL_HANDLE;
     other.m_properties = {};
+    other.m_api_version = 0;
     other.m_features = {};
     other.m_memory_properties = {};
     other.m_queue_family_properties.Clear();
@@ -91,6 +99,7 @@ Rndr::Forge::PhysicalDevice& Rndr::Forge::PhysicalDevice::operator=(PhysicalDevi
 
     m_physical_device = other.m_physical_device;
     m_properties = other.m_properties;
+    m_api_version = other.m_api_version;
     m_features = other.m_features;
     m_memory_properties = other.m_memory_properties;
     m_depth_stencil_resolve_properties = other.m_depth_stencil_resolve_properties;
@@ -99,6 +108,7 @@ Rndr::Forge::PhysicalDevice& Rndr::Forge::PhysicalDevice::operator=(PhysicalDevi
 
     other.m_physical_device = VK_NULL_HANDLE;
     other.m_properties = {};
+    other.m_api_version = 0;
     other.m_features = {};
     other.m_memory_properties = {};
     other.m_queue_family_properties.Clear();
@@ -222,6 +232,7 @@ Opal::Expected<Rndr::u32, Rndr::ErrorCode> Rndr::Forge::PhysicalDevice::FindMemo
 void Rndr::Forge::PhysicalDevice::Destroy()
 {
     m_physical_device = VK_NULL_HANDLE;
+    m_api_version = 0;
     m_queue_family_properties.Clear();
     m_supported_extensions.Clear();
     m_queue_family_properties = {};

@@ -13,6 +13,8 @@
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
 
+#include "promoted-commands.hpp"
+
 namespace
 {
 /**
@@ -64,33 +66,54 @@ void ReleaseVolk()
 }
 
 #if defined(RNDR_FORGE_VULKAN_1_1)
-/**
- * Points volk's pointers for the 1.2 and 1.3 commands Forge calls at the extension commands they were promoted from.
- * An instance and a device that ask for 1.1 have no core 1.2 or 1.3 commands - the pointers volk loaded for them
- * dispatch to nothing - while the promoted command takes the same arguments in the same types, the core names being
- * aliases of the extension ones. So every call site in Forge stays as it is and reaches the extension. One whose
- * extension the device does not enable stays unusable, as the core command would be on a device without the feature.
- */
-void AliasPromotedCommands()
+/** The 1.2 and 1.3 commands Forge calls, as either the core commands or the extension commands they were promoted from. */
+struct PromotedCommands
 {
-    // Timeline semaphores (VK_KHR_timeline_semaphore).
-    vkWaitSemaphores = vkWaitSemaphoresKHR;
-    vkSignalSemaphore = vkSignalSemaphoreKHR;
-    vkGetSemaphoreCounterValue = vkGetSemaphoreCounterValueKHR;
-    // Synchronization2 (VK_KHR_synchronization2).
-    vkCmdPipelineBarrier2 = vkCmdPipelineBarrier2KHR;
-    vkQueueSubmit2 = vkQueueSubmit2KHR;
-    vkCmdWriteTimestamp2 = vkCmdWriteTimestamp2KHR;
-    // Dynamic rendering (VK_KHR_dynamic_rendering).
-    vkCmdBeginRendering = vkCmdBeginRenderingKHR;
-    vkCmdEndRendering = vkCmdEndRenderingKHR;
-    // What a device without dynamic rendering makes its render passes with (VK_KHR_create_renderpass2).
-    vkCreateRenderPass2 = vkCreateRenderPass2KHR;
-    // The optional features DeviceFeatures names.
-    vkGetBufferDeviceAddress = vkGetBufferDeviceAddressKHR;
-    vkResetQueryPool = vkResetQueryPoolEXT;
-    vkCmdDrawIndirectCount = vkCmdDrawIndirectCountKHR;
-    vkCmdDrawIndexedIndirectCount = vkCmdDrawIndexedIndirectCountKHR;
+    PFN_vkWaitSemaphores wait_semaphores = nullptr;
+    PFN_vkSignalSemaphore signal_semaphore = nullptr;
+    PFN_vkGetSemaphoreCounterValue get_semaphore_counter_value = nullptr;
+    PFN_vkCmdPipelineBarrier2 cmd_pipeline_barrier2 = nullptr;
+    PFN_vkQueueSubmit2 queue_submit2 = nullptr;
+    PFN_vkCmdWriteTimestamp2 cmd_write_timestamp2 = nullptr;
+    PFN_vkCmdBeginRendering cmd_begin_rendering = nullptr;
+    PFN_vkCmdEndRendering cmd_end_rendering = nullptr;
+    PFN_vkCreateRenderPass2 create_render_pass2 = nullptr;
+    PFN_vkGetBufferDeviceAddress get_buffer_device_address = nullptr;
+    PFN_vkResetQueryPool reset_query_pool = nullptr;
+    PFN_vkCmdDrawIndirectCount cmd_draw_indirect_count = nullptr;
+    PFN_vkCmdDrawIndexedIndirectCount cmd_draw_indexed_indirect_count = nullptr;
+};
+
+// Both sets volkLoadInstance loaded, kept so SelectPromotedCommands can switch between them.
+PromotedCommands g_core_commands;
+PromotedCommands g_extension_commands;
+
+/**
+ * Keeps both sets of pointers volkLoadInstance loaded. The core names are aliases of the extension ones and take the
+ * same arguments in the same types, so every call site in Forge stays as it is whichever set is selected.
+ */
+void CapturePromotedCommands()
+{
+    g_core_commands = {vkWaitSemaphores,         vkSignalSemaphore,    vkGetSemaphoreCounterValue, vkCmdPipelineBarrier2,
+                       vkQueueSubmit2,           vkCmdWriteTimestamp2, vkCmdBeginRendering,        vkCmdEndRendering,
+                       vkCreateRenderPass2,      vkGetBufferDeviceAddress, vkResetQueryPool,       vkCmdDrawIndirectCount,
+                       vkCmdDrawIndexedIndirectCount};
+    g_extension_commands = {vkWaitSemaphoresKHR,         vkSignalSemaphoreKHR,  vkGetSemaphoreCounterValueKHR,
+                            vkCmdPipelineBarrier2KHR,    vkQueueSubmit2KHR,     vkCmdWriteTimestamp2KHR,
+                            vkCmdBeginRenderingKHR,      vkCmdEndRenderingKHR,  vkCreateRenderPass2KHR,
+                            vkGetBufferDeviceAddressKHR, vkResetQueryPoolEXT,   vkCmdDrawIndirectCountKHR,
+                            vkCmdDrawIndexedIndirectCountKHR};
+}
+
+/** The newest instance version the loader offers, major and minor only; 1.0 for a loader too old to say. */
+Rndr::u32 GetLoaderApiVersion()
+{
+    Rndr::u32 version = VK_API_VERSION_1_0;
+    if (vkEnumerateInstanceVersion != nullptr && vkEnumerateInstanceVersion(&version) != VK_SUCCESS)
+    {
+        version = VK_API_VERSION_1_0;
+    }
+    return VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(version), VK_API_VERSION_MINOR(version), 0);
 }
 #endif
 
@@ -331,7 +354,21 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.pEngineName = "RNDR";
     app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.apiVersion = k_vulkan_api_version;
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    // The newest version the loader and the desc allow, up to 1.3 and never below 1.1: a device is used at the lower of
+    // this and its own version, and one that reaches 1.3 is then driven as the default build drives it.
+    u32 api_version = GetLoaderApiVersion();
+    api_version = api_version < VK_API_VERSION_1_3 ? api_version : VK_API_VERSION_1_3;
+    if (context.m_desc.max_api_version != 0 && context.m_desc.max_api_version < api_version)
+    {
+        api_version = context.m_desc.max_api_version;
+    }
+    api_version = api_version > k_vulkan_api_version ? api_version : k_vulkan_api_version;
+    context.m_api_version = VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(api_version), VK_API_VERSION_MINOR(api_version), 0);
+#else
+    context.m_api_version = k_vulkan_api_version;
+#endif
+    app_info.apiVersion = context.m_api_version;
     VkInstanceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create_info.pApplicationInfo = &app_info;
@@ -372,7 +409,8 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
     }
     volkLoadInstance(context.m_instance);
 #if defined(RNDR_FORGE_VULKAN_1_1)
-    AliasPromotedCommands();
+    CapturePromotedCommands();
+    SelectPromotedCommands(false);
 #endif
 
     // Creation of debug messanger
@@ -415,11 +453,13 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 Rndr::Forge::GraphicsContext::GraphicsContext(Rndr::Forge::GraphicsContext&& other) noexcept
     : m_desc(Opal::Move(other.m_desc)),
       m_instance(other.m_instance),
+      m_api_version(other.m_api_version),
       m_debug_messenger(other.m_debug_messenger),
       m_debug_log(Opal::Move(other.m_debug_log)),
       m_debug_utils_enabled(other.m_debug_utils_enabled)
 {
     other.m_instance = VK_NULL_HANDLE;
+    other.m_api_version = 0;
     other.m_debug_messenger = VK_NULL_HANDLE;
     other.m_desc = {};
     other.m_debug_log = {};
@@ -435,12 +475,14 @@ Rndr::Forge::GraphicsContext& Rndr::Forge::GraphicsContext::operator=(Rndr::Forg
     Destroy();
 
     m_instance = other.m_instance;
+    m_api_version = other.m_api_version;
     m_debug_messenger = other.m_debug_messenger;
     m_desc = Opal::Move(other.m_desc);
     m_debug_log = Opal::Move(other.m_debug_log);
     m_debug_utils_enabled = other.m_debug_utils_enabled;
 
     other.m_instance = VK_NULL_HANDLE;
+    other.m_api_version = 0;
     other.m_debug_messenger = VK_NULL_HANDLE;
     other.m_desc = {};
     other.m_debug_log = {};
@@ -591,7 +633,7 @@ Opal::Expected<Opal::DynamicArray<Rndr::Forge::PhysicalDevice>, Rndr::ErrorCode>
     Opal::DynamicArray<PhysicalDevice> gpu_list;
     for (const VkPhysicalDevice& device : physical_devices)
     {
-        Opal::Expected<PhysicalDevice, ErrorCode> physical_device = PhysicalDevice::Create(device);
+        Opal::Expected<PhysicalDevice, ErrorCode> physical_device = PhysicalDevice::Create(device, m_api_version);
         if (!physical_device.HasValue())
         {
             return Result(physical_device.GetError());
@@ -600,3 +642,23 @@ Opal::Expected<Opal::DynamicArray<Rndr::Forge::PhysicalDevice>, Rndr::ErrorCode>
     }
     return Result(std::move(gpu_list));
 }
+
+#if defined(RNDR_FORGE_VULKAN_1_1)
+void Rndr::Forge::SelectPromotedCommands(bool use_core)
+{
+    const PromotedCommands& commands = use_core ? g_core_commands : g_extension_commands;
+    vkWaitSemaphores = commands.wait_semaphores;
+    vkSignalSemaphore = commands.signal_semaphore;
+    vkGetSemaphoreCounterValue = commands.get_semaphore_counter_value;
+    vkCmdPipelineBarrier2 = commands.cmd_pipeline_barrier2;
+    vkQueueSubmit2 = commands.queue_submit2;
+    vkCmdWriteTimestamp2 = commands.cmd_write_timestamp2;
+    vkCmdBeginRendering = commands.cmd_begin_rendering;
+    vkCmdEndRendering = commands.cmd_end_rendering;
+    vkCreateRenderPass2 = commands.create_render_pass2;
+    vkGetBufferDeviceAddress = commands.get_buffer_device_address;
+    vkResetQueryPool = commands.reset_query_pool;
+    vkCmdDrawIndirectCount = commands.cmd_draw_indirect_count;
+    vkCmdDrawIndexedIndirectCount = commands.cmd_draw_indexed_indirect_count;
+}
+#endif

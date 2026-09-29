@@ -324,8 +324,8 @@ that has it; a program would do it only for a driver that misbehaves with a feat
 ### Vulkan 1.3, or 1.1 and extensions
 
 Forge asks for Vulkan 1.3 and turns away a device that reports less. Configured with
-`-DRNDR_FORGE_VULKAN_1_1=ON`, it asks for 1.1 and takes what it relies on from 1.2 and 1.3 from the extensions
-those releases promoted: `VK_KHR_spirv_1_4` (with `VK_KHR_shader_float_controls`) always,
+`-DRNDR_FORGE_VULKAN_1_1=ON`, it takes a 1.1 device too, and takes what it relies on from 1.2 and 1.3 from the
+extensions those releases promoted: `VK_KHR_spirv_1_4` (with `VK_KHR_shader_float_controls`) always,
 `VK_KHR_timeline_semaphore` when the device has it (below), `VK_KHR_dynamic_rendering` (with the `VK_KHR_depth_stencil_resolve` and `VK_KHR_create_renderpass2` it needs)
 or else render passes, `VK_KHR_synchronization2` or else the commands it replaced (both below),
 `VK_KHR_format_feature_flags2` when the device
@@ -333,7 +333,18 @@ has it, and for each
 `DeviceFeatures` field from 1.2 the extension that carries it, only when it is asked for. That is what MoltenVK
 offers, and what drivers that stopped at 1.1 offer when they are recent enough. `Forge::k_vulkan_api_version` says
 which build this is. The API and its behaviour are the same in both, and nothing in either depends on the other,
-so the one choice is made when rndr is configured:
+so the one choice is made when rndr is configured.
+
+**The version a device is used at decides the path, in the 1.1 build.** Vulkan uses a device at the lower of the
+instance's version and its own (`PhysicalDevice::GetApiVersion`), and a driver need not list an extension its version
+made core - the Android emulator's 1.3 device on an NVIDIA host lists neither `VK_KHR_spirv_1_4` nor
+`VK_KHR_create_renderpass2`. So the instance is created at the newest version the loader offers, up to 1.3
+(`GraphicsContextDesc::max_api_version` caps it), and a device used at 1.3 is driven exactly as the default build
+drives it: the version feature structures chained, none of the promoted extensions asked for, the core commands
+called (`SelectPromotedCommands`, `src/forge/promoted-commands.hpp`), and `UsesRenderPasses`,
+`HasSynchronization2`, `HasTimelineSemaphores` and the storage image format answers at their 1.3 values. Everything
+below applies to a device used below 1.3. volk keeps one set of command pointers for the process, so with two
+devices on two paths the one created last decides which commands are called, as with every other volk pointer.
 
 - `FeatureChain` in `src/forge/device.cpp` chains `VkPhysicalDeviceVulkan12Features` and its siblings on 1.3, and
   on 1.1 the extension structures, copying between them and the version structures so that the checks and error
@@ -386,7 +397,8 @@ so the one choice is made when rndr is configured:
   `ErrorCode::FeatureNotSupported`, and every host side call needs such a semaphore to begin with. `FrameContext`,
   which paces its frames with a timeline, takes a fence per frame in flight instead - waited on as a frame begins,
   reset and signalled with the submit as it ends - so a frame loop behaves the same on either device.
-- The fallbacks are tested by running the suite under the SDK's profiles layer with the extensions hidden,
+- The fallbacks are tested by running the suite under the SDK's profiles layer with the extensions hidden and
+  `RNDR_TEST_EXTENSION_PATH=1`, which caps the test contexts at 1.1 so a 1.3 device takes the extension path at all,
   `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_profiles` and `VK_KHRONOS_PROFILES_EXCLUDE_DEVICE_EXTENSIONS=` any of
   `VK_KHR_dynamic_rendering`, `VK_KHR_synchronization2`, `VK_KHR_timeline_semaphore` and
   `VK_KHR_format_feature_flags2`, with
@@ -400,7 +412,7 @@ so the one choice is made when rndr is configured:
 - With validation, `VK_EXT_debug_utils` counts as available when the validation layer provides it, not only when
   the implementation does. On a phone the layer packaged with the app is what brings it; the driver of a Galaxy
   A71 has none.
-- `shader_output_layer` is never supported in the 1.1 build. `VK_EXT_shader_viewport_index_layer` would carry it,
+- `shader_output_layer` is never supported in the 1.1 build, whatever version the device is used at. `VK_EXT_shader_viewport_index_layer` would carry it,
   but Slang (2026.10) writes `SV_RenderTargetArrayIndex` from a vertex stage with the `ShaderLayer` capability,
   which SPIR-V only has from 1.5, whatever version it is asked for, so no module compiled for it would load.
 

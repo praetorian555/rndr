@@ -12,6 +12,7 @@
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
 
+#include "promoted-commands.hpp"
 #include "render-pass.hpp"
 #include "synchronization2.hpp"
 
@@ -77,6 +78,21 @@ namespace
 {
 using namespace Rndr;
 
+/**
+ * Whether a device is driven the way the default build drives every device: core 1.2 and 1.3 features, structures and
+ * commands, and none of the extensions they were promoted from. Always in the default build. In a
+ * RNDR_FORGE_VULKAN_1_1 build, for a device used at 1.3 (PhysicalDevice::GetApiVersion), since a driver need not list
+ * an extension its version made core; a device below 1.3 goes through the extensions instead.
+ */
+bool IsUsedAtVulkan13([[maybe_unused]] const Forge::PhysicalDevice& physical_device)
+{
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    return physical_device.GetApiVersion() >= VK_API_VERSION_1_3;
+#else
+    return true;
+#endif
+}
+
 #if defined(RNDR_FORGE_VULKAN_1_1)
 /**
  * What a device on Vulkan 1.1 needs before it can do dynamic rendering: the extension, and the two it is built on.
@@ -92,10 +108,10 @@ constexpr const char* k_dynamic_rendering_extensions[] = {
  * it supports, and to tell it what to enable.
  *
  * vk11, vk12 and vk13 hold the features by the version that made them core, and the rest of this file reads and
- * writes them there in either build. On Vulkan 1.3 they are what gets chained. On Vulkan 1.1 (RNDR_FORGE_VULKAN_1_1)
- * the device knows none of the three, so each feature travels in the structure of the extension it was promoted
- * from, and Query and Fill copy between those and the three; a feature whose extension has no structure is
- * supported exactly when the extension is there.
+ * writes them there in either build. For a device used at 1.3 (IsUsedAtVulkan13) they are what gets chained. Below
+ * that - a RNDR_FORGE_VULKAN_1_1 build on an older device - the device knows none of the three, so each feature travels
+ * in the structure of the extension it was promoted from, and Query and Fill copy between those and the three; a
+ * feature whose extension has no structure is supported exactly when the extension is there.
  *
  * The chain points at its own members, so an instance of this must not be copied or moved after it is built.
  */
@@ -129,6 +145,8 @@ struct FeatureChain
     bool has_sampler_filter_minmax = false;
     bool has_draw_indirect_count = false;
     bool has_dynamic_rendering = false;
+    /** Whether vk11, vk12 and vk13 are chained themselves, for a device used at 1.3, rather than the structures above. */
+    bool uses_version_structures = false;
 #endif
 
     /**
@@ -136,40 +154,48 @@ struct FeatureChain
      * the extension backed ones goes in only once that extension is known to be there. The tail is walked
      * rather than each structure naming the next, so that which ones are in does not decide the order.
      *
+     * @param at_vulkan13 Whether the device is used at 1.3 (IsUsedAtVulkan13), which chains vk11, vk12 and vk13 in
+     *                    place of the extension structures.
      * @param has_extension Called with an extension name, true when it is in: supported by the device when the chain
      *                      asks what the device can do, enabled on it when the chain says what to turn on.
      */
     template <typename HasExtension>
-    explicit FeatureChain(const HasExtension& has_extension)
+    FeatureChain([[maybe_unused]] bool at_vulkan13, const HasExtension& has_extension)
     {
         m_tail = reinterpret_cast<VkBaseOutStructure*>(&features2);
         m_tail->pNext = nullptr;
 #if defined(RNDR_FORGE_VULKAN_1_1)
-        Append(&multiview);
-        AppendIf(has_extension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME), &timeline_semaphore);
-        AppendIf(has_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME), &synchronization2);
-        has_dynamic_rendering = true;
-        for (const char* name : k_dynamic_rendering_extensions)
+        uses_version_structures = at_vulkan13;
+        if (!uses_version_structures)
         {
-            has_dynamic_rendering = has_dynamic_rendering && has_extension(name);
+            Append(&multiview);
+            AppendIf(has_extension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME), &timeline_semaphore);
+            AppendIf(has_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME), &synchronization2);
+            has_dynamic_rendering = true;
+            for (const char* name : k_dynamic_rendering_extensions)
+            {
+                has_dynamic_rendering = has_dynamic_rendering && has_extension(name);
+            }
+            AppendIf(has_dynamic_rendering, &dynamic_rendering);
+            has_descriptor_indexing = has_extension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+            AppendIf(has_descriptor_indexing, &descriptor_indexing);
+            AppendIf(has_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME), &buffer_device_address);
+            AppendIf(has_extension(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME), &scalar_block_layout);
+            AppendIf(has_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME), &host_query_reset);
+            AppendIf(has_extension(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME), &float16_int8);
+            AppendIf(has_extension(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME), &atomic_int64);
+            AppendIf(has_extension(VK_KHR_MAINTENANCE_4_EXTENSION_NAME), &maintenance4);
+            has_sampler_mirror_clamp_to_edge = has_extension(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+            has_sampler_filter_minmax = has_extension(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
+            has_draw_indirect_count = has_extension(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
         }
-        AppendIf(has_dynamic_rendering, &dynamic_rendering);
-        has_descriptor_indexing = has_extension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-        AppendIf(has_descriptor_indexing, &descriptor_indexing);
-        AppendIf(has_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME), &buffer_device_address);
-        AppendIf(has_extension(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME), &scalar_block_layout);
-        AppendIf(has_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME), &host_query_reset);
-        AppendIf(has_extension(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME), &float16_int8);
-        AppendIf(has_extension(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME), &atomic_int64);
-        AppendIf(has_extension(VK_KHR_MAINTENANCE_4_EXTENSION_NAME), &maintenance4);
-        has_sampler_mirror_clamp_to_edge = has_extension(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
-        has_sampler_filter_minmax = has_extension(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
-        has_draw_indirect_count = has_extension(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
-#else
-        Append(&vk11);
-        Append(&vk12);
-        Append(&vk13);
+        else
 #endif
+        {
+            Append(&vk11);
+            Append(&vk12);
+            Append(&vk13);
+        }
         AppendIf(has_extension(VK_EXT_MESH_SHADER_EXTENSION_NAME), &mesh);
         AppendIf(has_extension(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME) || has_extension(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME),
                  &index_type_uint8);
@@ -184,48 +210,51 @@ struct FeatureChain
     {
         vkGetPhysicalDeviceFeatures2(physical_device, &features2);
 #if defined(RNDR_FORGE_VULKAN_1_1)
-        vk11.multiview = multiview.multiview;
-
-        vk12.descriptorIndexing = has_descriptor_indexing ? VK_TRUE : VK_FALSE;
-        vk12.runtimeDescriptorArray = descriptor_indexing.runtimeDescriptorArray;
-        vk12.descriptorBindingVariableDescriptorCount = descriptor_indexing.descriptorBindingVariableDescriptorCount;
-        vk12.descriptorBindingPartiallyBound = descriptor_indexing.descriptorBindingPartiallyBound;
-        vk12.descriptorBindingSampledImageUpdateAfterBind = descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind;
-        vk12.descriptorBindingStorageBufferUpdateAfterBind = descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind;
-        vk12.descriptorBindingStorageImageUpdateAfterBind = descriptor_indexing.descriptorBindingStorageImageUpdateAfterBind;
-        vk12.descriptorBindingUniformBufferUpdateAfterBind = descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind;
-        vk12.descriptorBindingUpdateUnusedWhilePending = descriptor_indexing.descriptorBindingUpdateUnusedWhilePending;
-        vk12.shaderSampledImageArrayNonUniformIndexing = descriptor_indexing.shaderSampledImageArrayNonUniformIndexing;
-        vk12.shaderStorageBufferArrayNonUniformIndexing = descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing;
-        vk12.shaderStorageImageArrayNonUniformIndexing = descriptor_indexing.shaderStorageImageArrayNonUniformIndexing;
-        vk12.shaderUniformBufferArrayNonUniformIndexing = descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing;
-        vk12.bufferDeviceAddress = buffer_device_address.bufferDeviceAddress;
-        vk12.scalarBlockLayout = scalar_block_layout.scalarBlockLayout;
-        vk12.hostQueryReset = host_query_reset.hostQueryReset;
-        vk12.samplerMirrorClampToEdge = has_sampler_mirror_clamp_to_edge ? VK_TRUE : VK_FALSE;
-        vk12.samplerFilterMinmax = has_sampler_filter_minmax ? VK_TRUE : VK_FALSE;
-        vk12.drawIndirectCount = has_draw_indirect_count ? VK_TRUE : VK_FALSE;
-        vk12.shaderInt8 = float16_int8.shaderInt8;
-        vk12.shaderFloat16 = float16_int8.shaderFloat16;
-        vk12.shaderBufferInt64Atomics = atomic_int64.shaderBufferInt64Atomics;
-        vk12.shaderSharedInt64Atomics = atomic_int64.shaderSharedInt64Atomics;
-        // VK_EXT_shader_viewport_index_layer would carry it, but Slang (2026.10) writes the layer from a vertex stage
-        // with the ShaderLayer capability, which SPIR-V only has from 1.5, whatever older version it targets. No
-        // module this build compiles for it would load, so no device is said to have it.
-        vk12.shaderOutputLayer = VK_FALSE;
-        vk12.timelineSemaphore = timeline_semaphore.timelineSemaphore;
-
-        vk13.synchronization2 = synchronization2.synchronization2;
-        vk13.maintenance4 = maintenance4.maintenance4;
-        // The extension structure is left out of the chain unless all three extensions are there, and then it
-        // reports the feature; without them the feature is not there however the device answers.
-        vk13.dynamicRendering = has_dynamic_rendering ? dynamic_rendering.dynamicRendering : VK_FALSE;
-        // Local read is built on dynamic rendering, and a device without it renders through render passes, which have
-        // no local read to offer. A driver would not list the extension alone; a layer hiding extensions can.
-        if (!has_dynamic_rendering)
+        if (!uses_version_structures)
         {
-            local_read.dynamicRenderingLocalRead = VK_FALSE;
+            vk11.multiview = multiview.multiview;
+
+            vk12.descriptorIndexing = has_descriptor_indexing ? VK_TRUE : VK_FALSE;
+            vk12.runtimeDescriptorArray = descriptor_indexing.runtimeDescriptorArray;
+            vk12.descriptorBindingVariableDescriptorCount = descriptor_indexing.descriptorBindingVariableDescriptorCount;
+            vk12.descriptorBindingPartiallyBound = descriptor_indexing.descriptorBindingPartiallyBound;
+            vk12.descriptorBindingSampledImageUpdateAfterBind = descriptor_indexing.descriptorBindingSampledImageUpdateAfterBind;
+            vk12.descriptorBindingStorageBufferUpdateAfterBind = descriptor_indexing.descriptorBindingStorageBufferUpdateAfterBind;
+            vk12.descriptorBindingStorageImageUpdateAfterBind = descriptor_indexing.descriptorBindingStorageImageUpdateAfterBind;
+            vk12.descriptorBindingUniformBufferUpdateAfterBind = descriptor_indexing.descriptorBindingUniformBufferUpdateAfterBind;
+            vk12.descriptorBindingUpdateUnusedWhilePending = descriptor_indexing.descriptorBindingUpdateUnusedWhilePending;
+            vk12.shaderSampledImageArrayNonUniformIndexing = descriptor_indexing.shaderSampledImageArrayNonUniformIndexing;
+            vk12.shaderStorageBufferArrayNonUniformIndexing = descriptor_indexing.shaderStorageBufferArrayNonUniformIndexing;
+            vk12.shaderStorageImageArrayNonUniformIndexing = descriptor_indexing.shaderStorageImageArrayNonUniformIndexing;
+            vk12.shaderUniformBufferArrayNonUniformIndexing = descriptor_indexing.shaderUniformBufferArrayNonUniformIndexing;
+            vk12.bufferDeviceAddress = buffer_device_address.bufferDeviceAddress;
+            vk12.scalarBlockLayout = scalar_block_layout.scalarBlockLayout;
+            vk12.hostQueryReset = host_query_reset.hostQueryReset;
+            vk12.samplerMirrorClampToEdge = has_sampler_mirror_clamp_to_edge ? VK_TRUE : VK_FALSE;
+            vk12.samplerFilterMinmax = has_sampler_filter_minmax ? VK_TRUE : VK_FALSE;
+            vk12.drawIndirectCount = has_draw_indirect_count ? VK_TRUE : VK_FALSE;
+            vk12.shaderInt8 = float16_int8.shaderInt8;
+            vk12.shaderFloat16 = float16_int8.shaderFloat16;
+            vk12.shaderBufferInt64Atomics = atomic_int64.shaderBufferInt64Atomics;
+            vk12.shaderSharedInt64Atomics = atomic_int64.shaderSharedInt64Atomics;
+            vk12.timelineSemaphore = timeline_semaphore.timelineSemaphore;
+
+            vk13.synchronization2 = synchronization2.synchronization2;
+            vk13.maintenance4 = maintenance4.maintenance4;
+            // The extension structure is left out of the chain unless all three extensions are there, and then it
+            // reports the feature; without them the feature is not there however the device answers.
+            vk13.dynamicRendering = has_dynamic_rendering ? dynamic_rendering.dynamicRendering : VK_FALSE;
+            // Local read is built on dynamic rendering, and a device without it renders through render passes, which have
+            // no local read to offer. A driver would not list the extension alone; a layer hiding extensions can.
+            if (!has_dynamic_rendering)
+            {
+                local_read.dynamicRenderingLocalRead = VK_FALSE;
+            }
         }
+        // This build compiles shaders to SPIR-V 1.4, on a device used at 1.3 too. Slang (2026.10) writes the layer from a
+        // vertex stage with the ShaderLayer capability, which SPIR-V only has from 1.5 whatever older version it
+        // targets, so no module this build compiles for it would load, and no device is said to have it.
+        vk12.shaderOutputLayer = VK_FALSE;
 #endif
     }
 
@@ -456,95 +485,99 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
         extensions.PushBack(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
     }
 #if defined(RNDR_FORGE_VULKAN_1_1)
-    // What 1.2 and 1.3 made core, which a device asked for 1.1 only has as extensions: the three Forge is written on
-    // always, and each of the others once a feature it carries is asked for.
-    // Taken when the device has it; without it a timeline semaphore is refused (Device::HasTimelineSemaphores).
-    if (physical_device.IsExtensionSupported(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))
+    if (!IsUsedAtVulkan13(physical_device))
     {
-        extensions.PushBack(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
-    }
-    // Taken when the device has it; without it the commands it replaced are recorded instead
-    // (Device::HasSynchronization2).
-    if (physical_device.IsExtensionSupported(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME))
-    {
-        extensions.PushBack(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-    }
-    // Shaders are SPIR-V 1.4 in this build (k_spirv_profile), which 1.2 made core and 1.1 has through this extension,
-    // built on the float controls one.
-    extensions.PushBack(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
-    extensions.PushBack(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
-    // Dynamic rendering when the device has it. One without records its passes as render passes instead
-    // (Device::UsesRenderPasses), made with VK_KHR_create_renderpass2 and resolving depth and stencil through
-    // VK_KHR_depth_stencil_resolve when it has that - without it the device reports no depth stencil resolve modes, and
-    // CmdBeginRendering refuses such a resolve.
-    bool has_dynamic_rendering = true;
-    for (const char* name : k_dynamic_rendering_extensions)
-    {
-        has_dynamic_rendering = has_dynamic_rendering && physical_device.IsExtensionSupported(name);
-    }
-    if (has_dynamic_rendering)
-    {
+        // What 1.2 and 1.3 made core, which a device used below 1.3 only has as extensions: the three Forge is written on
+        // always, and each of the others once a feature it carries is asked for. A device used at 1.3 has all of it core,
+        // and need not list the extensions at all.
+        // Taken when the device has it; without it a timeline semaphore is refused (Device::HasTimelineSemaphores).
+        if (physical_device.IsExtensionSupported(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))
+        {
+            extensions.PushBack(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+        }
+        // Taken when the device has it; without it the commands it replaced are recorded instead
+        // (Device::HasSynchronization2).
+        if (physical_device.IsExtensionSupported(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME))
+        {
+            extensions.PushBack(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+        }
+        // Shaders are SPIR-V 1.4 in this build (k_spirv_profile), which 1.2 made core and 1.1 has through this extension,
+        // built on the float controls one.
+        extensions.PushBack(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+        extensions.PushBack(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+        // Dynamic rendering when the device has it. One without records its passes as render passes instead
+        // (Device::UsesRenderPasses), made with VK_KHR_create_renderpass2 and resolving depth and stencil through
+        // VK_KHR_depth_stencil_resolve when it has that - without it the device reports no depth stencil resolve modes, and
+        // CmdBeginRendering refuses such a resolve.
+        bool has_dynamic_rendering = true;
         for (const char* name : k_dynamic_rendering_extensions)
         {
-            extensions.PushBack(name);
+            has_dynamic_rendering = has_dynamic_rendering && physical_device.IsExtensionSupported(name);
         }
-    }
-    else
-    {
-        extensions.PushBack(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
-        if (physical_device.IsExtensionSupported(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME))
+        if (has_dynamic_rendering)
         {
-            extensions.PushBack(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME);
+            for (const char* name : k_dynamic_rendering_extensions)
+            {
+                extensions.PushBack(name);
+            }
         }
-    }
-    // 1.3 lets a shader read or write a storage image without naming its format, which is what Slang emits for a
-    // RWTexture, wherever the format allows it; this is where 1.3 got that. Taken when it is there, not demanded,
-    // since only such a shader needs it.
-    if (physical_device.IsExtensionSupported(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME))
-    {
-        extensions.PushBack(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
-    }
-    if (features.runtime_descriptor_array || features.variable_descriptor_count ||
-        features.partially_bound_descriptors || features.update_after_bind_descriptors ||
-        features.update_unused_while_pending_descriptors || features.non_uniform_descriptor_indexing)
-    {
-        extensions.PushBack(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-    }
-    if (features.buffer_device_address)
-    {
-        extensions.PushBack(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-    }
-    if (features.scalar_block_layout)
-    {
-        extensions.PushBack(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
-    }
-    if (features.host_query_reset)
-    {
-        extensions.PushBack(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
-    }
-    if (features.sampler_mirror_clamp_to_edge)
-    {
-        extensions.PushBack(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
-    }
-    if (features.sampler_filter_minmax)
-    {
-        extensions.PushBack(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
-    }
-    if (features.draw_indirect_count)
-    {
-        extensions.PushBack(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
-    }
-    if (features.shader_int8 || features.shader_float16)
-    {
-        extensions.PushBack(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
-    }
-    if (features.shader_buffer_int64_atomics || features.shader_shared_int64_atomics)
-    {
-        extensions.PushBack(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
-    }
-    if (features.maintenance4)
-    {
-        extensions.PushBack(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+        else
+        {
+            extensions.PushBack(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+            if (physical_device.IsExtensionSupported(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME))
+            {
+                extensions.PushBack(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME);
+            }
+        }
+        // 1.3 lets a shader read or write a storage image without naming its format, which is what Slang emits for a
+        // RWTexture, wherever the format allows it; this is where 1.3 got that. Taken when it is there, not demanded,
+        // since only such a shader needs it.
+        if (physical_device.IsExtensionSupported(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME))
+        {
+            extensions.PushBack(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+        }
+        if (features.runtime_descriptor_array || features.variable_descriptor_count ||
+            features.partially_bound_descriptors || features.update_after_bind_descriptors ||
+            features.update_unused_while_pending_descriptors || features.non_uniform_descriptor_indexing)
+        {
+            extensions.PushBack(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        }
+        if (features.buffer_device_address)
+        {
+            extensions.PushBack(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+        }
+        if (features.scalar_block_layout)
+        {
+            extensions.PushBack(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME);
+        }
+        if (features.host_query_reset)
+        {
+            extensions.PushBack(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME);
+        }
+        if (features.sampler_mirror_clamp_to_edge)
+        {
+            extensions.PushBack(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+        }
+        if (features.sampler_filter_minmax)
+        {
+            extensions.PushBack(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME);
+        }
+        if (features.draw_indirect_count)
+        {
+            extensions.PushBack(VK_KHR_DRAW_INDIRECT_COUNT_EXTENSION_NAME);
+        }
+        if (features.shader_int8 || features.shader_float16)
+        {
+            extensions.PushBack(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+        }
+        if (features.shader_buffer_int64_atomics || features.shader_shared_int64_atomics)
+        {
+            extensions.PushBack(VK_KHR_SHADER_ATOMIC_INT64_EXTENSION_NAME);
+        }
+        if (features.maintenance4)
+        {
+            extensions.PushBack(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+        }
     }
 #endif
     return extensions;
@@ -559,7 +592,8 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     const bool has_mesh_extension = physical_device.IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     const char* index_type_uint8_extension = FindIndexTypeUint8Extension(physical_device);
     const bool has_local_read_extension = physical_device.IsExtensionSupported(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
-    FeatureChain supported([&physical_device](const char* name) { return physical_device.IsExtensionSupported(name); });
+    FeatureChain supported(IsUsedAtVulkan13(physical_device),
+                           [&physical_device](const char* name) { return physical_device.IsExtensionSupported(name); });
     supported.Query(physical_device.GetNativePhysicalDevice());
 
     const char* missing = nullptr;
@@ -626,19 +660,16 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.shader_output_layer, supported.vk12.shaderOutputLayer, "shader_output_layer");
     require(requested.maintenance4, supported.vk13.maintenance4, "maintenance4");
 
-    // Forge needs these three whatever the caller asked for, so a device without them cannot be used at all.
-#if !defined(RNDR_FORGE_VULKAN_1_1)
-    // On 1.1 a device without them makes no timelines, and FrameContext uses fences there instead.
-    require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");
-#endif
-#if !defined(RNDR_FORGE_VULKAN_1_1)
-    // On 1.1 a device without it has its barriers and submits recorded the way synchronization2 replaced.
-    require(true, supported.vk13.synchronization2, "synchronization2, which Forge requires");
-#endif
-#if !defined(RNDR_FORGE_VULKAN_1_1)
-    // On 1.1 a device without it renders through render passes instead, and what that needs is an extension.
-    require(true, supported.vk13.dynamicRendering, "dynamic rendering, which Forge requires");
-#endif
+    // Forge needs these three whatever the caller asked for, so a device used at 1.3 without them cannot be used at
+    // all. 1.3 makes all three mandatory, so this only catches a driver that breaks that promise. Below 1.3 a device
+    // without timelines gets fences from FrameContext, one without synchronization2 has its barriers and submits
+    // recorded the way synchronization2 replaced, and one without dynamic rendering renders through render passes.
+    if (IsUsedAtVulkan13(physical_device))
+    {
+        require(true, supported.vk12.timelineSemaphore, "timeline semaphores, which Forge requires");
+        require(true, supported.vk13.synchronization2, "synchronization2, which Forge requires");
+        require(true, supported.vk13.dynamicRendering, "dynamic rendering, which Forge requires");
+    }
 
     require(requested.mesh_shader, has_mesh_extension ? supported.mesh.meshShader : VK_FALSE, "mesh_shader");
     require(requested.task_shader, has_mesh_extension ? supported.mesh.taskShader : VK_FALSE, "task_shader");
@@ -846,6 +877,7 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
     // one names itself instead of coming back as VK_ERROR_FEATURE_NOT_PRESENT from vkCreateDevice. Before the rest
     // is added, too: once it is, the set is by construction one the device supports, and a missing requirement would
     // have gone from it without a word.
+    const bool at_vulkan13 = IsUsedAtVulkan13(device.m_physical_device);
     const ErrorCode feature_status = ReportUnsupportedFeatures(device.m_physical_device, device.m_desc.features);
     if (feature_status != ErrorCode::Success)
     {
@@ -856,7 +888,7 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
     {
         // Everything the device supports, which with the requirements known to be among it is the requirements
         // plus the rest. Read over the chain the requirement check queried the same way, so the two cannot differ.
-        FeatureChain supported([&device](const char* name) { return device.m_physical_device.IsExtensionSupported(name); });
+        FeatureChain supported(at_vulkan13, [&device](const char* name) { return device.m_physical_device.IsExtensionSupported(name); });
         supported.Query(device.m_physical_device.GetNativePhysicalDevice());
         supported.Read(device.m_features);
     }
@@ -876,6 +908,7 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
     }
 
     FeatureChain enabled_features(
+        at_vulkan13,
         [&device_extensions](const char* name)
         {
             for (const char* enabled_name : device_extensions)
@@ -889,20 +922,23 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
         });
     enabled_features.Fill(device.m_features);
 #if defined(RNDR_FORGE_VULKAN_1_1)
-    // Reading or writing a storage image without naming its format, which 1.3 makes core. Without
+    // Reading or writing a storage image without naming its format, which 1.3 makes core. Below 1.3 and without
     // VK_KHR_format_feature_flags2 the device may still have the two original features, and turning them on is what
     // keeps a shader that 1.3 would take working here too, the way it is not the caller's to ask for on 1.3 either.
-    const bool has_format_feature_flags2 = device.IsExtensionEnabled(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
-    if (!has_format_feature_flags2)
+    if (!at_vulkan13)
     {
-        const VkPhysicalDeviceFeatures& supported = device.m_physical_device.GetFeatures();
-        enabled_features.features2.features.shaderStorageImageReadWithoutFormat = supported.shaderStorageImageReadWithoutFormat;
-        enabled_features.features2.features.shaderStorageImageWriteWithoutFormat = supported.shaderStorageImageWriteWithoutFormat;
+        const bool has_format_feature_flags2 = device.IsExtensionEnabled(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+        if (!has_format_feature_flags2)
+        {
+            const VkPhysicalDeviceFeatures& supported = device.m_physical_device.GetFeatures();
+            enabled_features.features2.features.shaderStorageImageReadWithoutFormat = supported.shaderStorageImageReadWithoutFormat;
+            enabled_features.features2.features.shaderStorageImageWriteWithoutFormat = supported.shaderStorageImageWriteWithoutFormat;
+        }
+        device.m_can_read_storage_images_without_format =
+            has_format_feature_flags2 || enabled_features.features2.features.shaderStorageImageReadWithoutFormat == VK_TRUE;
+        device.m_can_write_storage_images_without_format =
+            has_format_feature_flags2 || enabled_features.features2.features.shaderStorageImageWriteWithoutFormat == VK_TRUE;
     }
-    device.m_can_read_storage_images_without_format =
-        has_format_feature_flags2 || enabled_features.features2.features.shaderStorageImageReadWithoutFormat == VK_TRUE;
-    device.m_can_write_storage_images_without_format =
-        has_format_feature_flags2 || enabled_features.features2.features.shaderStorageImageWriteWithoutFormat == VK_TRUE;
 #endif
 
     VkDeviceCreateInfo create_info{};
@@ -970,17 +1006,23 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
     RNDR_FORGE_VK_CHECK_EXPECTED(vmaCreateAllocator(&vma_alloc_create_info, &device.m_gpu_allocator), "vmaCreateAllocator", Result);
 
 #if defined(RNDR_FORGE_VULKAN_1_1)
-    device.m_has_synchronization2 = device.IsExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-    device.m_has_timeline_semaphores = device.IsExtensionEnabled(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
-    if (!device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
+    // A device used at 1.3 keeps the defaults - all three core - and calls the core commands; one below it calls the
+    // extension commands, and falls back wherever an extension is missing.
+    SelectPromotedCommands(at_vulkan13);
+    if (!at_vulkan13)
     {
-        device.m_render_pass_cache = Opal::MakeScoped<RenderPassCache>(nullptr);
-        if (!device.m_render_pass_cache.IsValid())
+        device.m_has_synchronization2 = device.IsExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+        device.m_has_timeline_semaphores = device.IsExtensionEnabled(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+        if (!device.IsExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME))
         {
-            return Result(ErrorCode::OutOfMemory);
+            device.m_render_pass_cache = Opal::MakeScoped<RenderPassCache>(nullptr);
+            if (!device.m_render_pass_cache.IsValid())
+            {
+                return Result(ErrorCode::OutOfMemory);
+            }
+            RNDR_LOG_INFO("Forge: {} has no dynamic rendering, so passes are recorded as render passes",
+                          static_cast<const char*>(device.m_physical_device.GetProperties().deviceName));
         }
-        RNDR_LOG_INFO("Forge: {} has no dynamic rendering, so passes are recorded as render passes",
-                      static_cast<const char*>(device.m_physical_device.GetProperties().deviceName));
     }
 #endif
 

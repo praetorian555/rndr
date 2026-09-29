@@ -48,12 +48,6 @@ namespace ForgeTest
  * the two that matter. Those are General messages, so naming the other two types leaves them out of the
  * log. Nothing is left out of the counts or the storage, which is where the assertions look.
  */
-inline Rndr::Forge::GraphicsContextDesc TestContextDesc()
-{
-    return {.collect_debug_messages = true,
-            .logged_message_types = Rndr::Forge::DebugMessageTypeBits::Validation | Rndr::Forge::DebugMessageTypeBits::Performance};
-}
-
 inline bool RegisterLogCategory()
 {
     Opal::Logger& logger = Opal::GetLogger();
@@ -134,6 +128,23 @@ inline bool IsEnvironmentFlagSet(const char* name)
     is_set = value != nullptr && value[0] != '0';
 #endif
     return is_set;
+}
+
+/**
+ * The desc every case builds its context from. RNDR_TEST_EXTENSION_PATH caps a RNDR_FORGE_VULKAN_1_1 build's instance at
+ * 1.1, so a device that reaches 1.3 still goes through the extensions - the runs that hide extensions under the
+ * profiles layer set it, or they would test the 1.3 path instead of the fallbacks.
+ */
+inline Rndr::Forge::GraphicsContextDesc TestContextDesc()
+{
+    Rndr::Forge::GraphicsContextDesc desc{
+        .collect_debug_messages = true,
+        .logged_message_types = Rndr::Forge::DebugMessageTypeBits::Validation | Rndr::Forge::DebugMessageTypeBits::Performance};
+    if (IsEnvironmentFlagSet("RNDR_TEST_EXTENSION_PATH"))
+    {
+        desc.max_api_version = VK_API_VERSION_1_1;
+    }
+    return desc;
 }
 
 /**
