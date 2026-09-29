@@ -314,15 +314,14 @@ void Rndr::WindowsApplication::ProcessSystemEvents(u32 timeout_ms)
         MsgWaitForMultipleObjectsEx(0, nullptr, wait_timeout, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
     }
 
-    for (const auto& window : m_generic_windows)
+    // Drain the whole thread queue, not only the messages of our own windows. The wait above returns while any
+    // message is queued, so one addressed to the thread itself or to a window some other code created on this thread
+    // would otherwise stay there and turn every wait into a spin. DispatchMessage routes each to its window procedure.
+    MSG msg;
+    while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
     {
-        MSG msg;
-        const HWND window_handle = reinterpret_cast<HWND>(window->GetNativeHandle());
-        while (PeekMessage(&msg, window_handle, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
     }
 
     if (m_focused_window.IsValid() && m_focused_window->GetCursorPositionMode() == CursorPositionMode::ResetToCenter)
