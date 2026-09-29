@@ -145,6 +145,13 @@ TEST_CASE("Keeping the screen on is recorded and released", "[window]")
     REQUIRE_FALSE(app->IsKeepScreenOn());
 }
 
+TEST_CASE("A desktop has no system bars to recolour and no vibrator", "[window]")
+{
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    REQUIRE(app->SetSystemBarsDarkContent(true) == ErrorCode::FeatureNotSupported);
+    REQUIRE(app->Vibrate(50) == ErrorCode::FeatureNotSupported);
+}
+
 TEST_CASE("A desktop window has no on-screen keyboard over it", "[window]")
 {
     Opal::ScopePtr<Application> app = Application::Create({}).GetValue();

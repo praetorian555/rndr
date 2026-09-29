@@ -412,6 +412,16 @@ void Rndr::AndroidApplication::SetUpJava()
     {
         m_set_text_input_active = nullptr;
     }
+    m_set_system_bars_dark_content = jni->GetMethodID(activity_class, "setSystemBarsDarkContent", "(Z)V");
+    if (jni.Threw("looking up RndrActivity.setSystemBarsDarkContent"))
+    {
+        m_set_system_bars_dark_content = nullptr;
+    }
+    m_vibrate = jni->GetMethodID(activity_class, "vibrate", "(I)Z");
+    if (jni.Threw("looking up RndrActivity.vibrate"))
+    {
+        m_vibrate = nullptr;
+    }
 }
 
 void Rndr::AndroidApplication::TearDownJava()
@@ -499,6 +509,45 @@ Rndr::ErrorCode Rndr::AndroidApplication::SetTextInputActive(bool active)
         return ErrorCode::PlatformError;
     }
     return PlatformApplication::SetTextInputActive(active);
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::SetSystemBarsDarkContent(bool dark)
+{
+    if (m_set_system_bars_dark_content == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_set_system_bars_dark_content, static_cast<jboolean>(dark ? JNI_TRUE : JNI_FALSE));
+    if (jni.Threw("setting the system bars' icons"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::Vibrate(u32 milliseconds)
+{
+    if (m_vibrate == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    const jint duration = static_cast<jint>(milliseconds > static_cast<u32>(INT_MAX) ? INT_MAX : milliseconds);
+    const jboolean started = jni->CallBooleanMethod(jni.GetActivity(), m_vibrate, duration);
+    if (jni.Threw("vibrating"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return started == JNI_TRUE ? ErrorCode::Success : ErrorCode::FeatureNotSupported;
 }
 
 Rndr::ErrorCode Rndr::AndroidApplication::SetKeepScreenOn(bool keep_on)

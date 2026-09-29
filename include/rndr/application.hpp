@@ -114,6 +114,12 @@ public:
     ErrorCode SetKeepScreenOn(bool keep_on);
     [[nodiscard]] bool IsKeepScreenOn() const;
 
+    /** Dark or light icons in the system bars over the window. See PlatformApplication::SetSystemBarsDarkContent. */
+    ErrorCode SetSystemBarsDarkContent(bool dark);
+
+    /** Buzz the vibrator for a moment. See PlatformApplication::Vibrate. */
+    ErrorCode Vibrate(u32 milliseconds);
+
     /**
      * Checks whether a gamepad is currently connected on the given slot. Connection state is
      * refreshed by ProcessSystemEvents.

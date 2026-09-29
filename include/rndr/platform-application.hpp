@@ -122,6 +122,32 @@ public:
     /** Whether the last SetKeepScreenOn asked for the display to stay on. */
     [[nodiscard]] bool IsKeepScreenOn() const { return m_is_keep_screen_on; }
 
+    /**
+     * Draw the icons in the system's status and navigation bars dark, for a light window background, or light, for a dark
+     * one. Only Android draws bars over the window.
+     * @param dark True for dark icons, false for light ones.
+     * @return ErrorCode::Success, ErrorCode::FeatureNotSupported where the system draws no bars over the window or the
+     *         activity cannot change them, or ErrorCode::PlatformError when the call failed.
+     */
+    virtual ErrorCode SetSystemBarsDarkContent(bool dark)
+    {
+        (void)dark;
+        return ErrorCode::FeatureNotSupported;
+    }
+
+    /**
+     * Buzz the device's vibrator for a moment, at its default strength. Only Android has one; there the manifest must ask
+     * for android.permission.VIBRATE.
+     * @param milliseconds How long to vibrate.
+     * @return ErrorCode::Success, ErrorCode::FeatureNotSupported where there is no vibrator, no permission for it or no
+     *         way to reach it, or ErrorCode::PlatformError when the call failed.
+     */
+    virtual ErrorCode Vibrate(u32 milliseconds)
+    {
+        (void)milliseconds;
+        return ErrorCode::FeatureNotSupported;
+    }
+
     [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
     [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;
     [[nodiscard]] virtual MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const = 0;

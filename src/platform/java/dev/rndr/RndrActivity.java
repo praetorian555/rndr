@@ -4,11 +4,15 @@ import android.app.NativeActivity;
 import android.content.Context;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -76,6 +80,55 @@ public class RndrActivity extends NativeActivity {
                 textInputView.setFocusableInTouchMode(false);
             }
         });
+    }
+
+    /**
+     * Dark icons in the status and navigation bars, for a light window background, or light ones for a dark background.
+     * Called by native code on its own thread; the window is only touched on the UI thread, so the work is posted there.
+     */
+    @SuppressWarnings("deprecation")
+    public void setSystemBarsDarkContent(final boolean dark) {
+        runOnUiThread(() -> {
+            View decor = getWindow().getDecorView();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                WindowInsetsController controller = decor.getWindowInsetsController();
+                if (controller == null) {
+                    return;
+                }
+                int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(dark ? mask : 0, mask);
+            } else {
+                int bits = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                int flags = decor.getSystemUiVisibility();
+                decor.setSystemUiVisibility(dark ? (flags | bits) : (flags & ~bits));
+            }
+        });
+    }
+
+    /**
+     * Buzz for a moment at the default strength. Called by native code on its own thread. Does nothing on a device without
+     * a vibrator, and nothing when the manifest does not ask for android.permission.VIBRATE.
+     *
+     * @return Whether the vibrator was asked to run.
+     */
+    @SuppressWarnings("deprecation")
+    public boolean vibrate(final int milliseconds) {
+        Vibrator vibrator;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            VibratorManager manager = (VibratorManager) getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+            vibrator = manager != null ? manager.getDefaultVibrator() : null;
+        } else {
+            vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        }
+        if (vibrator == null || !vibrator.hasVibrator()) {
+            return false;
+        }
+        try {
+            vibrator.vibrate(VibrationEffect.createOneShot(milliseconds, VibrationEffect.DEFAULT_AMPLITUDE));
+            return true;
+        } catch (SecurityException e) {
+            return false;
+        }
     }
 
     /** Text the keyboard committed. Registered by AndroidApplication; runs on the UI thread. */

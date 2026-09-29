@@ -167,6 +167,16 @@ bool Rndr::Application::IsKeepScreenOn() const
     return m_platform_application->IsKeepScreenOn();
 }
 
+Rndr::ErrorCode Rndr::Application::SetSystemBarsDarkContent(bool dark)
+{
+    return m_platform_application->SetSystemBarsDarkContent(dark);
+}
+
+Rndr::ErrorCode Rndr::Application::Vibrate(u32 milliseconds)
+{
+    return m_platform_application->Vibrate(milliseconds);
+}
+
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::Application::GetMonitors() const
 {
     return m_platform_application->GetMonitors();

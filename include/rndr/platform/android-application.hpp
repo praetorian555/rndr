@@ -125,6 +125,12 @@ public:
     /** Sets or clears AWINDOW_FLAG_KEEP_SCREEN_ON on the activity's window. */
     ErrorCode SetKeepScreenOn(bool keep_on) override;
 
+    /** Through dev.rndr.RndrActivity; a plain NativeActivity cannot change the bars and reports FeatureNotSupported. */
+    ErrorCode SetSystemBarsDarkContent(bool dark) override;
+
+    /** Through dev.rndr.RndrActivity, which reports whether the device has a vibrator and the app may use it. */
+    ErrorCode Vibrate(u32 milliseconds) override;
+
     /**
      * Text an on-screen keyboard committed, handed over by RndrActivity on the UI thread. Queued, and delivered as
      * OnCharacter on this application's thread at the next ProcessSystemEvents, which the queueing wakes.
@@ -203,6 +209,8 @@ private:
     _jmethodID* m_key_character_map_get = nullptr;
     /** RndrActivity.setTextInputActive, or null when the activity is a plain NativeActivity. */
     _jmethodID* m_set_text_input_active = nullptr;
+    _jmethodID* m_set_system_bars_dark_content = nullptr;
+    _jmethodID* m_vibrate = nullptr;
 
     /** The choreographer the refresh rate callback is registered with, or null below API 30. */
     AChoreographer* m_choreographer = nullptr;
