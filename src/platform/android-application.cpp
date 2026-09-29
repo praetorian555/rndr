@@ -21,6 +21,7 @@
 #include <android/looper.h>
 #include <android/native_activity.h>
 #include <android/native_window.h>
+#include <android/window.h>
 
 #include "android_native_app_glue.h"
 
@@ -498,6 +499,21 @@ Rndr::ErrorCode Rndr::AndroidApplication::SetTextInputActive(bool active)
         return ErrorCode::PlatformError;
     }
     return PlatformApplication::SetTextInputActive(active);
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::SetKeepScreenOn(bool keep_on)
+{
+    // The activity posts the change to its UI thread, so this is safe from the application's thread.
+    if (keep_on)
+    {
+        ANativeActivity_setWindowFlags(m_app->activity, AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
+    }
+    else
+    {
+        ANativeActivity_setWindowFlags(m_app->activity, 0, AWINDOW_FLAG_KEEP_SCREEN_ON);
+    }
+    PlatformApplication::SetKeepScreenOn(keep_on);
+    return ErrorCode::Success;
 }
 
 void Rndr::AndroidApplication::OnRefreshRateChanged(int64_t vsync_period_nanos, void* data)

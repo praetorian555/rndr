@@ -157,6 +157,16 @@ bool Rndr::Application::IsTextInputActive() const
     return m_platform_application->IsTextInputActive();
 }
 
+Rndr::ErrorCode Rndr::Application::SetKeepScreenOn(bool keep_on)
+{
+    return m_platform_application->SetKeepScreenOn(keep_on);
+}
+
+bool Rndr::Application::IsKeepScreenOn() const
+{
+    return m_platform_application->IsKeepScreenOn();
+}
+
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::Application::GetMonitors() const
 {
     return m_platform_application->GetMonitors();

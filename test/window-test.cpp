@@ -127,6 +127,24 @@ TEST_CASE("A desktop window has no safe insets", "[window]")
     app->DestroyGenericWindow(std::move(window));
 }
 
+TEST_CASE("Keeping the screen on is recorded and released", "[window]")
+{
+    Opal::ScopePtr<Application> app = Application::Create({}).GetValue();
+    REQUIRE_FALSE(app->IsKeepScreenOn());
+
+    const ErrorCode on = app->SetKeepScreenOn(true);
+#if RNDR_WINDOWS
+    REQUIRE(on == ErrorCode::Success);
+#else
+    REQUIRE((on == ErrorCode::Success || on == ErrorCode::FeatureNotSupported));
+#endif
+    REQUIRE(app->IsKeepScreenOn());
+
+    const ErrorCode off = app->SetKeepScreenOn(false);
+    REQUIRE(off == on);
+    REQUIRE_FALSE(app->IsKeepScreenOn());
+}
+
 TEST_CASE("A desktop window has no on-screen keyboard over it", "[window]")
 {
     Opal::ScopePtr<Application> app = Application::Create({}).GetValue();

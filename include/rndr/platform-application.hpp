@@ -106,6 +106,22 @@ public:
     }
     [[nodiscard]] bool IsTextInputActive() const { return m_is_text_input_active; }
 
+    /**
+     * Hold the display on, or let it dim and lock for inactivity again. Meant for a screen the user watches without
+     * touching, such as a timer or a video. On Windows it asks the system to keep the display on; on Android it sets
+     * the activity window's keep-screen-on flag. A platform without either records the request and reports it.
+     * @param keep_on True to keep the display on, false to let it sleep again.
+     * @return ErrorCode::Success, ErrorCode::FeatureNotSupported where the platform has no way to do it, or
+     *         ErrorCode::PlatformError when the system refused.
+     */
+    virtual ErrorCode SetKeepScreenOn(bool keep_on)
+    {
+        m_is_keep_screen_on = keep_on;
+        return ErrorCode::FeatureNotSupported;
+    }
+    /** Whether the last SetKeepScreenOn asked for the display to stay on. */
+    [[nodiscard]] bool IsKeepScreenOn() const { return m_is_keep_screen_on; }
+
     [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
     [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;
     [[nodiscard]] virtual MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const = 0;
@@ -120,6 +136,7 @@ protected:
     Opal::Ref<GenericWindow> m_focused_window;
     ModifierKeysState m_modifier_keys;
     bool m_is_text_input_active = false;
+    bool m_is_keep_screen_on = false;
 };
 
 }  // namespace Rndr

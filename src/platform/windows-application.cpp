@@ -338,6 +338,19 @@ void Rndr::WindowsApplication::ProcessSystemEvents(u32 timeout_ms)
     PollGamepads();
 }
 
+Rndr::ErrorCode Rndr::WindowsApplication::SetKeepScreenOn(bool keep_on)
+{
+    // ES_CONTINUOUS makes the state stick until the next call; alone it clears the display request.
+    const EXECUTION_STATE state = keep_on ? (ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED) : ES_CONTINUOUS;
+    if (SetThreadExecutionState(state) == 0)
+    {
+        RNDR_LOG_ERROR("SetThreadExecutionState failed to {} the display on", keep_on ? "keep" : "stop keeping");
+        return ErrorCode::PlatformError;
+    }
+    PlatformApplication::SetKeepScreenOn(keep_on);
+    return ErrorCode::Success;
+}
+
 void Rndr::WindowsApplication::PollGamepads()
 {
     const Timestamp now = GetTimestamp();

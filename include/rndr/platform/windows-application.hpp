@@ -43,6 +43,9 @@ public:
     ErrorCode SetClipboardText(const Opal::StringUtf8& text) override;
     [[nodiscard]] Opal::Expected<Opal::StringUtf8, ErrorCode> GetClipboardText() override;
 
+    /** Asks the system to keep the display on through SetThreadExecutionState, which holds while the thread runs. */
+    ErrorCode SetKeepScreenOn(bool keep_on) override;
+
     [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
     [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
     [[nodiscard]] MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const override;

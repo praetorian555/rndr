@@ -108,6 +108,13 @@ public:
     /** End of text input API. */
 
     /**
+     * Keep the display on while the application shows something the user watches without touching, or let it dim and
+     * lock again. See PlatformApplication::SetKeepScreenOn for what each platform does and returns.
+     */
+    ErrorCode SetKeepScreenOn(bool keep_on);
+    [[nodiscard]] bool IsKeepScreenOn() const;
+
+    /**
      * Checks whether a gamepad is currently connected on the given slot. Connection state is
      * refreshed by ProcessSystemEvents.
      * @param gamepad_index Slot in [0, k_max_gamepads).

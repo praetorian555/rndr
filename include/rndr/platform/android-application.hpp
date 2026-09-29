@@ -122,6 +122,9 @@ public:
      */
     ErrorCode SetTextInputActive(bool active) override;
 
+    /** Sets or clears AWINDOW_FLAG_KEEP_SCREEN_ON on the activity's window. */
+    ErrorCode SetKeepScreenOn(bool keep_on) override;
+
     /**
      * Text an on-screen keyboard committed, handed over by RndrActivity on the UI thread. Queued, and delivered as
      * OnCharacter on this application's thread at the next ProcessSystemEvents, which the queueing wakes.
