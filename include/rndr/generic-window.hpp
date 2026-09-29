@@ -186,6 +186,15 @@ public:
      */
     virtual ErrorCode RequestClose() = 0;
 
+    /**
+     * Moves and resizes the window.
+     * @param pos_x Left edge of the whole window, in screen pixels.
+     * @param pos_y Top edge of the whole window, in screen pixels.
+     * @param width Width of the client area in pixels, as in GenericWindowDesc::width and GetSize.
+     * @param height Height of the client area in pixels.
+     * @return ErrorCode::WindowAlreadyClosed if the window is closed, ErrorCode::PlatformError if the OS refuses,
+     * ErrorCode::FeatureNotSupported where the platform sizes the window itself.
+     */
     virtual ErrorCode Reshape(i32 pos_x, i32 pos_y, i32 width, i32 height) = 0;
     virtual ErrorCode MoveTo(i32 pos_x, i32 pos_y) = 0;
     virtual void BringToFront() = 0;

@@ -132,7 +132,12 @@ Rndr::ErrorCode Rndr::WindowsWindow::Reshape(i32 pos_x, i32 pos_y, i32 width, i3
     m_pos_y = pos_y;
     m_width = width;
     m_height = height;
-    const BOOL rtn = MoveWindow(RNDR_TO_HWND(m_native_window_handle), pos_x, pos_y, width, height, TRUE);
+    // The size is the client area's, as at creation and in GetSize; MoveWindow takes the whole window's.
+    HWND handle = RNDR_TO_HWND(m_native_window_handle);
+    RECT rc = {0, 0, width, height};
+    ::AdjustWindowRectEx(&rc, static_cast<DWORD>(::GetWindowLongPtr(handle, GWL_STYLE)), FALSE,
+                         static_cast<DWORD>(::GetWindowLongPtr(handle, GWL_EXSTYLE)));
+    const BOOL rtn = MoveWindow(handle, pos_x, pos_y, rc.right - rc.left, rc.bottom - rc.top, TRUE);
     if (rtn == 0)
     {
         RNDR_LOG_ERROR("MoveWindow failed");
