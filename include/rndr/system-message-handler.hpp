@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rndr/input-primitives.hpp"
+#include "rndr/location.hpp"
 #include "rndr/math.hpp"
 #include "rndr/types.hpp"
 
@@ -70,5 +71,11 @@ struct SystemMessageHandler
         (void)gamepad_index;
         (void)is_connected;
     }
+
+    // A fix from the location updates Application::StartLocationUpdates started. Global to the application, like the
+    // gamepads.
+    virtual void OnLocationFix(const LocationFix& fix) { (void)fix; }
+    // The answer to Application::RequestLocationPermission.
+    virtual void OnLocationPermissionChanged(LocationPermission permission) { (void)permission; }
 };
 }  // namespace Rndr

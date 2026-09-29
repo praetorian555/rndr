@@ -177,6 +177,26 @@ Rndr::ErrorCode Rndr::Application::Vibrate(u32 milliseconds)
     return m_platform_application->Vibrate(milliseconds);
 }
 
+Rndr::LocationPermission Rndr::Application::GetLocationPermission() const
+{
+    return m_platform_application->GetLocationPermission();
+}
+
+Rndr::ErrorCode Rndr::Application::RequestLocationPermission()
+{
+    return m_platform_application->RequestLocationPermission();
+}
+
+Rndr::ErrorCode Rndr::Application::StartLocationUpdates(const LocationUpdatesDesc& desc)
+{
+    return m_platform_application->StartLocationUpdates(desc);
+}
+
+Rndr::ErrorCode Rndr::Application::StopLocationUpdates()
+{
+    return m_platform_application->StopLocationUpdates();
+}
+
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::Application::GetMonitors() const
 {
     return m_platform_application->GetMonitors();
@@ -251,6 +271,24 @@ void Rndr::Application::OnWindowSizeChanged(const GenericWindow& window, i32 wid
         system_message_handler->OnWindowSizeChanged(window, width, height);
     }
     on_window_resize.Execute(window, width, height);
+}
+
+void Rndr::Application::OnLocationFix(const LocationFix& fix)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnLocationFix(fix);
+    }
+    on_location_fix.Execute(fix);
+}
+
+void Rndr::Application::OnLocationPermissionChanged(LocationPermission permission)
+{
+    for (const Opal::Ref<SystemMessageHandler>& system_message_handler : m_system_message_handlers)
+    {
+        system_message_handler->OnLocationPermissionChanged(permission);
+    }
+    on_location_permission_change.Execute(permission);
 }
 
 void Rndr::Application::OnMonitorChange()

@@ -247,6 +247,22 @@ Input, all from `onInputEvent`:
   Enter come back as key events. On the desktop both calls only record the request. The view is focusable only
   while text input is active: a window focuses its first focusable view when it opens, and Samsung's keyboard
   shows itself for a focused text editor, so on the A56 it came up on launch.
+- Location: `Application::RequestLocationPermission` asks for `ACCESS_FINE_LOCATION` (with the coarse one, which
+  Android 12 wants beside it, and `POST_NOTIFICATIONS` from Android 13) through `RndrActivity`, and the answer comes
+  back from `onRequestPermissionsResult` as `OnLocationPermissionChanged`; only the precise location counts as
+  granted. `StartLocationUpdates` registers a `LocationListener` for `LocationManager`'s GPS provider on the UI
+  thread's looper - no Play services - and each fix is queued and delivered as `OnLocationFix` at the next
+  `ProcessSystemEvents`, like committed text, but without needing a window. Its time is `getElapsedRealtimeNanos`,
+  which keeps counting through sleep. With `keep_running_in_background`, a foreground service of type `location`
+  (`RndrActivity$LocationService`, nested so the one file still carries it) holds a notification for as long as the
+  updates run; that is what lets an activity that went to the background, or whose screen went off, keep getting
+  fixes without `ACCESS_BACKGROUND_LOCATION`. It has to be started while the activity is in use: Android 12 refuses
+  a foreground service started from the background, and then the updates stop when the activity does. The
+  application's manifest asks for `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_LOCATION` and `POST_NOTIFICATIONS`, and declares
+  `<service android:name="dev.rndr.RndrActivity$LocationService" android:foregroundServiceType="location" android:exported="false" />`.
+  Without the service declared the updates still run while the activity is in use. On the desktop there is no
+  GPS: the permission is always denied and the calls report `FeatureNotSupported`.
 - Cursor: `ShowCursor`, `IsCursorVisible`, `SetCursorPosition` are no-ops; `GetCursorPosition` is the last
   touch, which is in screen space already since the window is the screen.
 - Safe insets: `GenericWindow::GetSafeInsets` is the system bars and the display cutout, from

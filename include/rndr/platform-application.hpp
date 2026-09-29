@@ -6,6 +6,7 @@
 
 #include "rndr/error-codes.hpp"
 #include "rndr/generic-window.hpp"
+#include "rndr/location.hpp"
 #include "rndr/math.hpp"
 #include "rndr/monitor-info.hpp"
 #include "rndr/types.hpp"
@@ -147,6 +148,35 @@ public:
         (void)milliseconds;
         return ErrorCode::FeatureNotSupported;
     }
+
+    /** Whether the precise location may be read. Only Android has a GPS to read; elsewhere it is always Denied. */
+    [[nodiscard]] virtual LocationPermission GetLocationPermission() const { return LocationPermission::Denied; }
+
+    /**
+     * Ask the user for the precise location. The system shows its own prompt, or answers at once when the user already
+     * decided; either way the answer arrives later as SystemMessageHandler::OnLocationPermissionChanged. On Android 13
+     * and later this also asks to post notifications, which the tracking notification needs to be seen.
+     * @return ErrorCode::Success when the question was asked, ErrorCode::FeatureNotSupported where there is no location
+     *         to ask for, or ErrorCode::PlatformError when the call failed.
+     */
+    virtual ErrorCode RequestLocationPermission() { return ErrorCode::FeatureNotSupported; }
+
+    /**
+     * Start reporting GPS fixes, as SystemMessageHandler::OnLocationFix, until StopLocationUpdates. Starting again
+     * replaces the running updates.
+     * @param desc How often, and whether to keep going in the background.
+     * @return ErrorCode::Success; ErrorCode::FeatureNotSupported where there is no GPS, or no way to reach it;
+     *         ErrorCode::InvalidArgument without the permission; ErrorCode::PlatformError when the location is switched
+     *         off in the system settings or the call failed.
+     */
+    virtual ErrorCode StartLocationUpdates(const LocationUpdatesDesc& desc)
+    {
+        (void)desc;
+        return ErrorCode::FeatureNotSupported;
+    }
+
+    /** Stop the updates StartLocationUpdates started, and their notification. Does nothing when none run. */
+    virtual ErrorCode StopLocationUpdates() { return ErrorCode::FeatureNotSupported; }
 
     [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
     [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;

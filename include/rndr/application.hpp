@@ -52,6 +52,12 @@ public:
     using WindowNativeHandleChangeDelegate = Opal::MultiDelegate<void(const GenericWindow& /*window*/)>;
     WindowNativeHandleChangeDelegate on_window_native_handle_change;
 
+    using LocationFixDelegate = Opal::MultiDelegate<void(const LocationFix& /*fix*/)>;
+    LocationFixDelegate on_location_fix;
+
+    using LocationPermissionChangeDelegate = Opal::MultiDelegate<void(LocationPermission /*permission*/)>;
+    LocationPermissionChangeDelegate on_location_permission_change;
+
     /**
      * Creates the one Application instance. Reports ErrorCode::InvalidArgument when one already exists, and on
      * Android when desc.android_application is null.
@@ -121,6 +127,16 @@ public:
     ErrorCode Vibrate(u32 milliseconds);
 
     /**
+     * Location API: the GPS, on Android. Ask for the permission, then start updates; fixes arrive as
+     * SystemMessageHandler::OnLocationFix and on_location_fix. See PlatformApplication for what each returns.
+     */
+    [[nodiscard]] LocationPermission GetLocationPermission() const;
+    ErrorCode RequestLocationPermission();
+    ErrorCode StartLocationUpdates(const LocationUpdatesDesc& desc);
+    ErrorCode StopLocationUpdates();
+    /** End of location API. */
+
+    /**
      * Checks whether a gamepad is currently connected on the given slot. Connection state is
      * refreshed by ProcessSystemEvents.
      * @param gamepad_index Slot in [0, k_max_gamepads).
@@ -151,6 +167,8 @@ public:
     bool OnGamepadButtonUp(u8 gamepad_index, GamepadButton button) override;
     bool OnGamepadAxis(u8 gamepad_index, GamepadAxis axis, f32 value) override;
     void OnGamepadConnectionChanged(u8 gamepad_index, bool is_connected) override;
+    void OnLocationFix(const LocationFix& fix) override;
+    void OnLocationPermissionChanged(LocationPermission permission) override;
     /** End of SystemMessageHandler API */
 
 private:

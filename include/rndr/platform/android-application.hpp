@@ -132,6 +132,25 @@ public:
     ErrorCode Vibrate(u32 milliseconds) override;
 
     /**
+     * Location through dev.rndr.RndrActivity: the permission prompt, LocationManager's GPS provider, and a foreground
+     * service of type location while updates keep running in the background. A plain NativeActivity has none of it
+     * and reports FeatureNotSupported.
+     */
+    [[nodiscard]] LocationPermission GetLocationPermission() const override;
+    ErrorCode RequestLocationPermission() override;
+    ErrorCode StartLocationUpdates(const LocationUpdatesDesc& desc) override;
+    ErrorCode StopLocationUpdates() override;
+
+    /**
+     * A GPS fix, handed over by RndrActivity on the UI thread. Queued, and delivered as OnLocationFix at the next
+     * ProcessSystemEvents, which the queueing wakes.
+     */
+    static void QueueLocationFix(const LocationFix& fix);
+
+    /** The answer to the permission prompt, from RndrActivity on the UI thread; delivered like a fix. */
+    static void QueueLocationPermission(bool granted);
+
+    /**
      * Text an on-screen keyboard committed, handed over by RndrActivity on the UI thread. Queued, and delivered as
      * OnCharacter on this application's thread at the next ProcessSystemEvents, which the queueing wakes.
      */
@@ -211,6 +230,10 @@ private:
     _jmethodID* m_set_text_input_active = nullptr;
     _jmethodID* m_set_system_bars_dark_content = nullptr;
     _jmethodID* m_vibrate = nullptr;
+    _jmethodID* m_has_location_permission = nullptr;
+    _jmethodID* m_request_location_permission = nullptr;
+    _jmethodID* m_start_location_updates = nullptr;
+    _jmethodID* m_stop_location_updates = nullptr;
 
     /** The choreographer the refresh rate callback is registered with, or null below API 30. */
     AChoreographer* m_choreographer = nullptr;
@@ -225,12 +248,17 @@ private:
     /** The on-screen keyboard as QueueWindowInsetsChange last had it, under the same mutex. */
     bool m_is_keyboard_visible = false;
     i32 m_keyboard_height = 0;
+    /** GPS fixes waiting for ProcessSystemEvents, under the same mutex. */
+    Opal::DynamicArray<LocationFix> m_pending_location_fixes;
+    /** The permission prompt's answer waiting for ProcessSystemEvents: -1 for none, else 0 or 1. Same mutex. */
+    i32 m_pending_location_permission = -1;
 
     void SetUpJava();
     void TearDownJava();
     /** The character a key event types, from KeyCharacterMap; 0 when it types none this layer reports. */
     uchar32 CharacterForKey(const AInputEvent* event) const;
     void DeliverPendingCharacters();
+    void DeliverPendingLocation();
 };
 
 }  // namespace Rndr

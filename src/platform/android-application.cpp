@@ -105,8 +105,8 @@ Rndr::f32 ReadDpiScale(const android_app* app)
 }
 
 /**
- * Guards what the UI thread hands AndroidApplication - the committed text queue, the stale insets flag and the
- * on-screen keyboard's insets - and the pointer to the application that owns them, which the UI thread reaches while
+ * Guards what the UI thread hands AndroidApplication - the committed text queue, the stale insets flag, the
+ * on-screen keyboard's insets and the location fixes and permission answer - and the pointer to the application that owns them, which the UI thread reaches while
  * android_main may be tearing it down.
  */
 std::mutex g_text_input_mutex;
@@ -133,6 +133,25 @@ void JNICALL NativeCommitText(JNIEnv* env, jclass /*activity_class*/, jstring te
         return;
     }
     Rndr::AndroidApplication::QueueCommittedText(code_points);
+}
+
+/** RndrActivity.nativeLocationFix. Runs on the UI thread. */
+void JNICALL NativeLocationFix(JNIEnv* /*env*/, jclass /*activity_class*/, jdouble latitude, jdouble longitude, jfloat accuracy, jfloat speed,
+                               jlong elapsed_realtime_nanos)
+{
+    Rndr::LocationFix fix;
+    fix.latitude_degrees = latitude;
+    fix.longitude_degrees = longitude;
+    fix.accuracy_meters = accuracy;
+    fix.speed_meters_per_second = speed;
+    fix.time_seconds = static_cast<Rndr::f64>(elapsed_realtime_nanos) * 1.0e-9;
+    Rndr::AndroidApplication::QueueLocationFix(fix);
+}
+
+/** RndrActivity.nativeLocationPermissionChanged. Runs on the UI thread. */
+void JNICALL NativeLocationPermissionChanged(JNIEnv* /*env*/, jclass /*activity_class*/, jboolean granted)
+{
+    Rndr::AndroidApplication::QueueLocationPermission(granted == JNI_TRUE);
 }
 
 /** RndrActivity.nativeWindowInsetsChanged. Runs on the UI thread. */
@@ -274,6 +293,7 @@ void Rndr::AndroidApplication::ProcessSystemEvents(u32 timeout_ms)
         }
     }
     DeliverPendingCharacters();
+    DeliverPendingLocation();
     bool are_insets_stale = false;
     {
         const std::lock_guard<std::mutex> lock(g_text_input_mutex);
@@ -400,6 +420,8 @@ void Rndr::AndroidApplication::SetUpJava()
     const JNINativeMethod natives[] = {
         {"nativeCommitText", "(Ljava/lang/String;)V", reinterpret_cast<void*>(&NativeCommitText)},
         {"nativeWindowInsetsChanged", "(ZI)V", reinterpret_cast<void*>(&NativeWindowInsetsChanged)},
+        {"nativeLocationFix", "(DDFFJ)V", reinterpret_cast<void*>(&NativeLocationFix)},
+        {"nativeLocationPermissionChanged", "(Z)V", reinterpret_cast<void*>(&NativeLocationPermissionChanged)},
     };
     if (jni->RegisterNatives(activity_class, natives, static_cast<jint>(sizeof(natives) / sizeof(natives[0]))) != JNI_OK)
     {
@@ -421,6 +443,17 @@ void Rndr::AndroidApplication::SetUpJava()
     if (jni.Threw("looking up RndrActivity.vibrate"))
     {
         m_vibrate = nullptr;
+    }
+    m_has_location_permission = jni->GetMethodID(activity_class, "hasLocationPermission", "()Z");
+    m_request_location_permission = jni->GetMethodID(activity_class, "requestLocationPermission", "()V");
+    m_start_location_updates = jni->GetMethodID(activity_class, "startLocationUpdates", "(IZLjava/lang/String;Ljava/lang/String;)I");
+    m_stop_location_updates = jni->GetMethodID(activity_class, "stopLocationUpdates", "()V");
+    if (jni.Threw("looking up the location methods of RndrActivity"))
+    {
+        m_has_location_permission = nullptr;
+        m_request_location_permission = nullptr;
+        m_start_location_updates = nullptr;
+        m_stop_location_updates = nullptr;
     }
 }
 
@@ -550,6 +583,105 @@ Rndr::ErrorCode Rndr::AndroidApplication::Vibrate(u32 milliseconds)
     return started == JNI_TRUE ? ErrorCode::Success : ErrorCode::FeatureNotSupported;
 }
 
+Rndr::LocationPermission Rndr::AndroidApplication::GetLocationPermission() const
+{
+    if (m_has_location_permission == nullptr)
+    {
+        return LocationPermission::Denied;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return LocationPermission::Denied;
+    }
+    const jboolean granted = jni->CallBooleanMethod(jni.GetActivity(), m_has_location_permission);
+    if (jni.Threw("checking the location permission"))
+    {
+        return LocationPermission::Denied;
+    }
+    return granted == JNI_TRUE ? LocationPermission::Granted : LocationPermission::Denied;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::RequestLocationPermission()
+{
+    if (m_request_location_permission == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_request_location_permission);
+    if (jni.Threw("asking for the location permission"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::StartLocationUpdates(const LocationUpdatesDesc& desc)
+{
+    if (m_start_location_updates == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    // JNI takes modified UTF-8, which differs from UTF-8 only for NUL and characters outside the BMP.
+    jstring title = jni->NewStringUTF(desc.notification_title.GetData() != nullptr ? desc.notification_title.GetData() : "");
+    jstring text = jni->NewStringUTF(desc.notification_text.GetData() != nullptr ? desc.notification_text.GetData() : "");
+    if (jni.Threw("making the location notification's text"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    const jint interval = static_cast<jint>(desc.interval_ms > static_cast<u32>(INT_MAX) ? INT_MAX : desc.interval_ms);
+    const jint status = jni->CallIntMethod(jni.GetActivity(), m_start_location_updates, interval,
+                                           static_cast<jboolean>(desc.keep_running_in_background ? JNI_TRUE : JNI_FALSE), title, text);
+    if (jni.Threw("starting location updates"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    // RndrActivity.startLocationUpdates: 0 started, 1 no permission, 2 location switched off, 3 no GPS.
+    switch (status)
+    {
+        case 0:
+            return ErrorCode::Success;
+        case 1:
+            RNDR_LOG_WARNING("Location updates need the location permission first");
+            return ErrorCode::InvalidArgument;
+        case 2:
+            RNDR_LOG_WARNING("Location is switched off in the system settings");
+            return ErrorCode::PlatformError;
+        default:
+            RNDR_LOG_WARNING("This device has no GPS to track the location with");
+            return ErrorCode::FeatureNotSupported;
+    }
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::StopLocationUpdates()
+{
+    if (m_stop_location_updates == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_stop_location_updates);
+    if (jni.Threw("stopping location updates"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
 Rndr::ErrorCode Rndr::AndroidApplication::SetKeepScreenOn(bool keep_on)
 {
     // The activity posts the change to its UI thread, so this is safe from the application's thread.
@@ -632,6 +764,28 @@ void Rndr::AndroidApplication::QueueWindowInsetsChange(bool keyboard_visible, i3
     ALooper_wake(g_android_app->m_app->looper);
 }
 
+void Rndr::AndroidApplication::QueueLocationFix(const LocationFix& fix)
+{
+    const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+    if (g_android_app == nullptr)
+    {
+        return;
+    }
+    g_android_app->m_pending_location_fixes.PushBack(fix);
+    ALooper_wake(g_android_app->m_app->looper);
+}
+
+void Rndr::AndroidApplication::QueueLocationPermission(bool granted)
+{
+    const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+    if (g_android_app == nullptr)
+    {
+        return;
+    }
+    g_android_app->m_pending_location_permission = granted ? 1 : 0;
+    ALooper_wake(g_android_app->m_app->looper);
+}
+
 void Rndr::AndroidApplication::RefreshOnScreenKeyboard()
 {
     if (m_window == nullptr)
@@ -664,6 +818,32 @@ void Rndr::AndroidApplication::RefreshOnScreenKeyboard()
     m_window->m_on_screen_keyboard = keyboard;
     RNDR_LOG_INFO("On-screen keyboard: {}, position ({}, {}), size ({}, {})", keyboard.is_visible ? "up" : "down", keyboard.position.x,
                   keyboard.position.y, keyboard.size.x, keyboard.size.y);
+}
+
+void Rndr::AndroidApplication::DeliverPendingLocation()
+{
+    Opal::DynamicArray<LocationFix> fixes;
+    i32 permission = -1;
+    {
+        const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+        if (m_pending_location_fixes.IsEmpty() && m_pending_location_permission < 0)
+        {
+            return;
+        }
+        fixes = std::move(m_pending_location_fixes);
+        m_pending_location_fixes = Opal::DynamicArray<LocationFix>();
+        permission = m_pending_location_permission;
+        m_pending_location_permission = -1;
+    }
+    if (permission >= 0)
+    {
+        m_message_handler->OnLocationPermissionChanged(permission == 1 ? LocationPermission::Granted : LocationPermission::Denied);
+    }
+    // Unlike text, a fix needs no window: tracking goes on in the background, where there is none.
+    for (const LocationFix& fix : fixes)
+    {
+        m_message_handler->OnLocationFix(fix);
+    }
 }
 
 void Rndr::AndroidApplication::DeliverPendingCharacters()

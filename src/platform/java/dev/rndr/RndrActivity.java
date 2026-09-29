@@ -1,9 +1,24 @@
 package dev.rndr;
 
+import android.Manifest;
 import android.app.NativeActivity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.Looper;
+import android.util.Log;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
@@ -29,7 +44,12 @@ import android.view.inputmethod.InputMethodManager;
  * key events only.
  */
 public class RndrActivity extends NativeActivity {
+    private static final String TAG = "Rndr";
+    private static final int LOCATION_PERMISSION_REQUEST = 0x4c4f;
+
     private TextInputView textInputView;
+    /** The GPS listener while location updates run, touched only on the UI thread. */
+    private LocationListener locationListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -131,6 +151,183 @@ public class RndrActivity extends NativeActivity {
         }
     }
 
+    /** Whether the precise location may be read. Called by native code on its own thread. */
+    public boolean hasLocationPermission() {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
+     * Ask for the precise location, and on Android 13 and later for posting notifications, which the tracking
+     * notification needs to be seen. The answer goes to nativeLocationPermissionChanged; when everything was already
+     * granted the system answers at once, without a prompt. Called by native code on its own thread.
+     */
+    public void requestLocationPermission() {
+        runOnUiThread(() -> {
+            String[] permissions;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissions = new String[] {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION,
+                                            Manifest.permission.POST_NOTIFICATIONS};
+            } else {
+                permissions = new String[] {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+            }
+            requestPermissions(permissions, LOCATION_PERMISSION_REQUEST);
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != LOCATION_PERMISSION_REQUEST) {
+            return;
+        }
+        try {
+            nativeLocationPermissionChanged(hasLocationPermission());
+        } catch (UnsatisfiedLinkError e) {
+            // android_main is gone; nobody is waiting for the answer.
+        }
+    }
+
+    /**
+     * Start GPS updates, replacing any that run, and deliver each fix to nativeLocationFix. With keepRunningInBackground
+     * a foreground service of type location runs alongside, showing the title and text, so that the updates keep coming
+     * with the screen off; the manifest must declare RndrActivity$LocationService for it. Called by native code on its
+     * own thread; the listener is registered on the UI thread.
+     *
+     * @return 0 when started, 1 without the permission, 2 when location is switched off in the settings, 3 without a GPS.
+     */
+    public int startLocationUpdates(final int intervalMs, final boolean keepRunningInBackground, final String title, final String text) {
+        if (!hasLocationPermission()) {
+            return 1;
+        }
+        final LocationManager manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        if (manager == null || !manager.getAllProviders().contains(LocationManager.GPS_PROVIDER)) {
+            return 3;
+        }
+        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            return 2;
+        }
+        runOnUiThread(() -> {
+            removeLocationListener(manager);
+            locationListener = new FixListener();
+            try {
+                manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, intervalMs, 0.0f, locationListener, Looper.getMainLooper());
+            } catch (SecurityException e) {
+                Log.w(TAG, "The location permission was taken away before the updates could start", e);
+                locationListener = null;
+                return;
+            }
+            Intent service = new Intent(this, LocationService.class);
+            if (!keepRunningInBackground) {
+                stopService(service);
+                return;
+            }
+            service.putExtra(LocationService.EXTRA_TITLE, title);
+            service.putExtra(LocationService.EXTRA_TEXT, text);
+            try {
+                startForegroundService(service);
+            } catch (RuntimeException e) {
+                // Android 12 refuses a foreground service started from the background. The updates still run while
+                // the activity is in use.
+                Log.w(TAG, "The location service could not start; tracking stops when the app goes to the background", e);
+            }
+        });
+        return 0;
+    }
+
+    /** Stop the GPS updates and the service startLocationUpdates started. Called by native code on its own thread. */
+    public void stopLocationUpdates() {
+        runOnUiThread(() -> {
+            removeLocationListener((LocationManager) getSystemService(Context.LOCATION_SERVICE));
+            stopService(new Intent(this, LocationService.class));
+        });
+    }
+
+    private void removeLocationListener(LocationManager manager) {
+        if (locationListener != null && manager != null) {
+            manager.removeUpdates(locationListener);
+        }
+        locationListener = null;
+    }
+
+    @Override
+    protected void onDestroy() {
+        removeLocationListener((LocationManager) getSystemService(Context.LOCATION_SERVICE));
+        stopService(new Intent(this, LocationService.class));
+        super.onDestroy();
+    }
+
+    /** Hands each fix to native code. Runs on the UI thread, whose looper the updates were requested on. */
+    private static final class FixListener implements LocationListener {
+        @Override
+        public void onLocationChanged(Location location) {
+            try {
+                nativeLocationFix(location.getLatitude(), location.getLongitude(), location.hasAccuracy() ? location.getAccuracy() : -1.0f,
+                                  location.hasSpeed() ? location.getSpeed() : -1.0f, location.getElapsedRealtimeNanos());
+            } catch (UnsatisfiedLinkError e) {
+                // android_main is gone.
+            }
+        }
+
+        // Abstract below API 30.
+        @Override
+        public void onProviderEnabled(String provider) {}
+
+        @Override
+        public void onProviderDisabled(String provider) {}
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public void onStatusChanged(String provider, int status, Bundle extras) {}
+    }
+
+    /**
+     * The foreground service that keeps location updates coming while the activity is in the background or the screen
+     * is off. It holds nothing but its notification: the updates are the activity's, and a running foreground service of
+     * type location is what lets the app keep receiving them. Declared by the application's manifest as
+     * dev.rndr.RndrActivity$LocationService with android:foregroundServiceType="location".
+     */
+    public static class LocationService extends Service {
+        static final String EXTRA_TITLE = "dev.rndr.location.title";
+        static final String EXTRA_TEXT = "dev.rndr.location.text";
+        private static final String CHANNEL_ID = "dev.rndr.location";
+        private static final int NOTIFICATION_ID = 0x4c4f43;
+
+        @Override
+        public int onStartCommand(Intent intent, int flags, int startId) {
+            String title = intent != null ? intent.getStringExtra(EXTRA_TITLE) : null;
+            String text = intent != null ? intent.getStringExtra(EXTRA_TEXT) : null;
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(new NotificationChannel(CHANNEL_ID, "Location tracking", NotificationManager.IMPORTANCE_LOW));
+            }
+            Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
+                                               .setContentTitle(title)
+                                               .setContentText(text)
+                                               .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                                               .setOngoing(true);
+            // The launcher's intent brings the running task forward rather than starting a second activity.
+            Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
+            if (launch != null) {
+                launch.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                builder.setContentIntent(PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE));
+            }
+            try {
+                startForeground(NOTIFICATION_ID, builder.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+            } catch (RuntimeException e) {
+                // Android 14 refuses a location service without the location permission, or without
+                // FOREGROUND_SERVICE_LOCATION in the manifest.
+                Log.w(TAG, "The location service could not come to the foreground", e);
+                stopSelf();
+            }
+            return START_NOT_STICKY;
+        }
+
+        @Override
+        public IBinder onBind(Intent intent) {
+            return null;
+        }
+    }
+
     /** Text the keyboard committed. Registered by AndroidApplication; runs on the UI thread. */
     static native void nativeCommitText(String text);
 
@@ -140,6 +337,15 @@ public class RndrActivity extends NativeActivity {
      * thread.
      */
     static native void nativeWindowInsetsChanged(boolean keyboardVisible, int keyboardHeight);
+
+    /**
+     * A GPS fix: degrees, the accuracy radius and the speed (negative when unknown), and when it was taken on the
+     * elapsed-realtime clock. Registered by AndroidApplication; runs on the UI thread.
+     */
+    static native void nativeLocationFix(double latitude, double longitude, float accuracy, float speed, long elapsedRealtimeNanos);
+
+    /** The answer to requestLocationPermission. Registered by AndroidApplication; runs on the UI thread. */
+    static native void nativeLocationPermissionChanged(boolean granted);
 
     /**
      * A view with nothing to draw, there to own the InputConnection. Focusable only while text input is active: a
