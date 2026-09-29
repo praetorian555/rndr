@@ -29,6 +29,7 @@ set(SOURCE_LIST
         "${PROJECT_SOURCE_DIR}/src/fly-camera.cpp"
         "${PROJECT_SOURCE_DIR}/src/frames-per-second-counter.cpp"
         "${PROJECT_SOURCE_DIR}/src/trace.cpp"
+        "${PROJECT_SOURCE_DIR}/src/log.cpp"
         "${PROJECT_SOURCE_DIR}/src/projections.cpp"
         "${PROJECT_SOURCE_DIR}/src/application.cpp"
         "${PROJECT_SOURCE_DIR}/src/platform-application.cpp"

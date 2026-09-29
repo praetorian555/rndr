@@ -63,11 +63,6 @@ Rndr::Application& Rndr::Application::GetChecked()
 
 Rndr::Application::Application(const ApplicationDesc& desc) : m_desc(desc)
 {
-    Opal::Logger& logger = Opal::GetLogger();
-    if (!logger.IsCategoryRegistered("Rndr"))
-    {
-        logger.RegisterCategory("Rndr", Opal::LogLevel::Verbose);
-    }
 #if RNDR_WINDOWS
     m_platform_application = Opal::MakeScoped<PlatformApplication, WindowsApplication>(Opal::GetDefaultAllocator(), this);
 #elif RNDR_ANDROID
