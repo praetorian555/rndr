@@ -158,6 +158,13 @@ public:
     static void QueueLocationPermission(bool granted);
 
     /**
+     * Back, from RndrActivity's OnBackInvokedCallback on the UI thread, which is how Android 16 hands it to an app
+     * that targets it instead of the back key. Taken at the next ProcessSystemEvents as the key is, through
+     * CloseWindow.
+     */
+    static void QueueBack();
+
+    /**
      * Text an on-screen keyboard committed, handed over by RndrActivity on the UI thread. Queued, and delivered as
      * OnCharacter on this application's thread at the next ProcessSystemEvents, which the queueing wakes.
      */
@@ -261,6 +268,8 @@ private:
     Opal::DynamicArray<LocationFix> m_pending_location_fixes;
     /** The permission prompt's answer waiting for ProcessSystemEvents: -1 for none, else 0 or 1. Same mutex. */
     i32 m_pending_location_permission = -1;
+    /** Set by QueueBack, under the same mutex. */
+    bool m_is_back_pending = false;
 
     void SetUpJava();
     void TearDownJava();
@@ -268,6 +277,7 @@ private:
     uchar32 CharacterForKey(const AInputEvent* event) const;
     void DeliverPendingCharacters();
     void DeliverPendingLocation();
+    void DeliverPendingBack();
 };
 
 }  // namespace Rndr

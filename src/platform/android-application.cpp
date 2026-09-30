@@ -148,6 +148,12 @@ void JNICALL NativeLocationFix(JNIEnv* /*env*/, jclass /*activity_class*/, jdoub
     Rndr::AndroidApplication::QueueLocationFix(fix);
 }
 
+/** RndrActivity.nativeBackPressed. Runs on the UI thread. */
+void JNICALL NativeBackPressed(JNIEnv* /*env*/, jclass /*activity_class*/)
+{
+    Rndr::AndroidApplication::QueueBack();
+}
+
 /** RndrActivity.nativeLocationPermissionChanged. Runs on the UI thread. */
 void JNICALL NativeLocationPermissionChanged(JNIEnv* /*env*/, jclass /*activity_class*/, jboolean granted)
 {
@@ -294,6 +300,7 @@ void Rndr::AndroidApplication::ProcessSystemEvents(u32 timeout_ms)
     }
     DeliverPendingCharacters();
     DeliverPendingLocation();
+    DeliverPendingBack();
     bool are_insets_stale = false;
     {
         const std::lock_guard<std::mutex> lock(g_text_input_mutex);
@@ -422,6 +429,7 @@ void Rndr::AndroidApplication::SetUpJava()
         {"nativeWindowInsetsChanged", "(ZI)V", reinterpret_cast<void*>(&NativeWindowInsetsChanged)},
         {"nativeLocationFix", "(DDFFJ)V", reinterpret_cast<void*>(&NativeLocationFix)},
         {"nativeLocationPermissionChanged", "(Z)V", reinterpret_cast<void*>(&NativeLocationPermissionChanged)},
+        {"nativeBackPressed", "()V", reinterpret_cast<void*>(&NativeBackPressed)},
     };
     if (jni->RegisterNatives(activity_class, natives, static_cast<jint>(sizeof(natives) / sizeof(natives[0]))) != JNI_OK)
     {
@@ -838,6 +846,17 @@ void Rndr::AndroidApplication::QueueLocationFix(const LocationFix& fix)
     ALooper_wake(g_android_app->m_app->looper);
 }
 
+void Rndr::AndroidApplication::QueueBack()
+{
+    const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+    if (g_android_app == nullptr)
+    {
+        return;
+    }
+    g_android_app->m_is_back_pending = true;
+    ALooper_wake(g_android_app->m_app->looper);
+}
+
 void Rndr::AndroidApplication::QueueLocationPermission(bool granted)
 {
     const std::lock_guard<std::mutex> lock(g_text_input_mutex);
@@ -907,6 +926,20 @@ void Rndr::AndroidApplication::DeliverPendingLocation()
     {
         m_message_handler->OnLocationFix(fix);
     }
+}
+
+void Rndr::AndroidApplication::DeliverPendingBack()
+{
+    {
+        const std::lock_guard<std::mutex> lock(g_text_input_mutex);
+        if (!m_is_back_pending)
+        {
+            return;
+        }
+        m_is_back_pending = false;
+    }
+    // As the back key does: the close button, which the application can turn down.
+    CloseWindow();
 }
 
 void Rndr::AndroidApplication::DeliverPendingCharacters()

@@ -37,6 +37,7 @@ import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
+import android.window.OnBackInvokedDispatcher;
 import java.util.Locale;
 
 /**
@@ -90,6 +91,20 @@ public class RndrActivity extends NativeActivity {
             notifyWindowInsetsChanged(insets);
             return view.onApplyWindowInsets(insets);
         });
+        // An app that targets Android 16 no longer gets the back key there: back goes to an OnBackInvokedCallback, and
+        // with none the system finishes the activity. This one hands it to native code, which takes it as it takes
+        // the key, as a close request the application can turn down. Android 13 to 15 ignore the callback unless the
+        // manifest opts in, and send the key instead, so back arrives once either way.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> {
+                try {
+                    nativeBackPressed();
+                } catch (UnsatisfiedLinkError e) {
+                    // android_main has not registered it yet, or is gone; back leaves, as it would with no callback.
+                    finish();
+                }
+            });
+        }
     }
 
     private static void notifyWindowInsetsChanged(WindowInsets insets) {
@@ -484,6 +499,9 @@ public class RndrActivity extends NativeActivity {
 
     /** The answer to requestLocationPermission. Registered by AndroidApplication; runs on the UI thread. */
     static native void nativeLocationPermissionChanged(boolean granted);
+
+    /** Back, from the OnBackInvokedCallback. Registered by AndroidApplication; runs on the UI thread. */
+    static native void nativeBackPressed();
 
     /**
      * A view with nothing to draw, there to own the InputConnection. Focusable only while text input is active: a
