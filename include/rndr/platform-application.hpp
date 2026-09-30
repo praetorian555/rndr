@@ -149,6 +149,32 @@ public:
         return ErrorCode::FeatureNotSupported;
     }
 
+    /**
+     * Say the text aloud with the system's text-to-speech voice, cutting off whatever was still being said. It returns at once and the voice follows, a moment later the first time while the engine starts.
+     * Windows speaks through SAPI. Android speaks through TextToSpeech, and turns other audio, such as music, down
+     * while the voice speaks rather than stopping it; it needs dev.rndr.RndrActivity, and from Android 11 a manifest
+     * that lists the engines it looks for: <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>.
+     * @param text What to say, in UTF-8.
+     * @param language The language to say it in, as a BCP 47 tag such as "en" or "en-GB"; empty for the system's. A
+     *                 language the voice lacks falls back to the system's. Windows speaks with its default voice.
+     * @return ErrorCode::Success when the voice was asked to speak, ErrorCode::InvalidArgument when the text is not
+     *         UTF-8, ErrorCode::FeatureNotSupported where there is no voice or no way to reach one, or
+     *         ErrorCode::PlatformError when the call failed.
+     */
+    virtual ErrorCode Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language)
+    {
+        (void)text;
+        (void)language;
+        return ErrorCode::FeatureNotSupported;
+    }
+
+    /**
+     * Cut off whatever Speak is still saying.
+     * @return ErrorCode::Success, ErrorCode::FeatureNotSupported where there is no voice, or ErrorCode::PlatformError
+     *         when the call failed.
+     */
+    virtual ErrorCode StopSpeaking() { return ErrorCode::FeatureNotSupported; }
+
     /** Whether the precise location may be read. Only Android has a GPS to read; elsewhere it is always Denied. */
     [[nodiscard]] virtual LocationPermission GetLocationPermission() const { return LocationPermission::Denied; }
 

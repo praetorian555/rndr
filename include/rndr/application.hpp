@@ -126,6 +126,10 @@ public:
     /** Buzz the vibrator for a moment. See PlatformApplication::Vibrate. */
     ErrorCode Vibrate(u32 milliseconds);
 
+    /** Say text aloud with the system's voice, or stop saying it. See PlatformApplication::Speak. */
+    ErrorCode Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language = Opal::StringUtf8());
+    ErrorCode StopSpeaking();
+
     /**
      * Location API: the GPS, on Android. Ask for the permission, then start updates; fixes arrive as
      * SystemMessageHandler::OnLocationFix and on_location_fix. See PlatformApplication for what each returns.

@@ -132,6 +132,13 @@ public:
     ErrorCode Vibrate(u32 milliseconds) override;
 
     /**
+     * Through dev.rndr.RndrActivity, which starts a TextToSpeech engine on the first call and holds the latest text
+     * until it is ready. A plain NativeActivity has no voice and reports FeatureNotSupported.
+     */
+    ErrorCode Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language) override;
+    ErrorCode StopSpeaking() override;
+
+    /**
      * Location through dev.rndr.RndrActivity: the permission prompt, LocationManager's GPS provider, and a foreground
      * service of type location while updates keep running in the background. A plain NativeActivity has none of it
      * and reports FeatureNotSupported.
@@ -230,6 +237,8 @@ private:
     _jmethodID* m_set_text_input_active = nullptr;
     _jmethodID* m_set_system_bars_dark_content = nullptr;
     _jmethodID* m_vibrate = nullptr;
+    _jmethodID* m_speak = nullptr;
+    _jmethodID* m_stop_speaking = nullptr;
     _jmethodID* m_has_location_permission = nullptr;
     _jmethodID* m_request_location_permission = nullptr;
     _jmethodID* m_start_location_updates = nullptr;

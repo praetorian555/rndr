@@ -13,6 +13,8 @@
 #include "rndr/platform/windows-forward-def.hpp"
 #endif
 
+struct ISpVoice;
+
 namespace Rndr
 {
 
@@ -28,6 +30,11 @@ class WindowsApplication : public PlatformApplication
 {
 public:
     WindowsApplication(struct SystemMessageHandler* message_handler);
+    ~WindowsApplication() override;
+    WindowsApplication(const WindowsApplication&) = delete;
+    WindowsApplication& operator=(const WindowsApplication&) = delete;
+    WindowsApplication(WindowsApplication&&) = delete;
+    WindowsApplication& operator=(WindowsApplication&&) = delete;
 
     i32 ProcessMessage(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l);
 
@@ -46,6 +53,13 @@ public:
     /** Asks the system to keep the display on through SetThreadExecutionState, which holds while the thread runs. */
     ErrorCode SetKeepScreenOn(bool keep_on) override;
 
+    /**
+     * Through the default SAPI voice, made on the first call, whatever the language asked for. Windows does not turn
+     * other audio down for it.
+     */
+    ErrorCode Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language) override;
+    ErrorCode StopSpeaking() override;
+
     [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
     [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
     [[nodiscard]] MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const override;
@@ -63,6 +77,13 @@ private:
     // XInput has no message queue to drain, so gamepads are polled instead. ProcessSystemEvents
     // takes no delta time, so the poll interval is measured here rather than passed in.
     Timestamp m_last_gamepad_poll_timestamp = 0;
+
+    /** The SAPI voice, or null before the first Speak and when there is none. */
+    ISpVoice* m_voice = nullptr;
+    /** Whether Speak has tried to make the voice, so a missing one is not looked for again. */
+    bool m_voice_attempted = false;
+    /** Whether making the voice initialized COM on this thread, which the destructor then undoes. */
+    bool m_com_initialized = false;
 };
 
 }  // namespace Rndr

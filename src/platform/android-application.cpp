@@ -444,6 +444,13 @@ void Rndr::AndroidApplication::SetUpJava()
     {
         m_vibrate = nullptr;
     }
+    m_speak = jni->GetMethodID(activity_class, "speak", "(Ljava/lang/String;Ljava/lang/String;)V");
+    m_stop_speaking = jni->GetMethodID(activity_class, "stopSpeaking", "()V");
+    if (jni.Threw("looking up the speech methods of RndrActivity"))
+    {
+        m_speak = nullptr;
+        m_stop_speaking = nullptr;
+    }
     m_has_location_permission = jni->GetMethodID(activity_class, "hasLocationPermission", "()Z");
     m_request_location_permission = jni->GetMethodID(activity_class, "requestLocationPermission", "()V");
     m_start_location_updates = jni->GetMethodID(activity_class, "startLocationUpdates", "(IZLjava/lang/String;Ljava/lang/String;)I");
@@ -581,6 +588,62 @@ Rndr::ErrorCode Rndr::AndroidApplication::Vibrate(u32 milliseconds)
         return ErrorCode::PlatformError;
     }
     return started == JNI_TRUE ? ErrorCode::Success : ErrorCode::FeatureNotSupported;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language)
+{
+    if (m_speak == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    // As with the clipboard: UTF-16, since NewStringUTF takes only modified UTF-8.
+    Opal::StringWide wide_text;
+    if (Opal::Transcode(text, wide_text) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Text to speak is not valid UTF-8");
+        return ErrorCode::InvalidArgument;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jstring java_text = jni->NewString(reinterpret_cast<const jchar*>(wide_text.GetData()), static_cast<jsize>(wide_text.GetSize()));
+    if (jni.Threw("making the text to speak"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    // A language tag is ASCII, which modified UTF-8 spells the same.
+    jstring java_language = jni->NewStringUTF(language.GetData() != nullptr ? language.GetData() : "");
+    if (jni.Threw("making the language to speak in"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_speak, java_text, java_language);
+    if (jni.Threw("speaking"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::StopSpeaking()
+{
+    if (m_stop_speaking == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_stop_speaking);
+    if (jni.Threw("stopping speech"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
 }
 
 Rndr::LocationPermission Rndr::AndroidApplication::GetLocationPermission() const

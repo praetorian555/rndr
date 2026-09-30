@@ -177,6 +177,16 @@ Rndr::ErrorCode Rndr::Application::Vibrate(u32 milliseconds)
     return m_platform_application->Vibrate(milliseconds);
 }
 
+Rndr::ErrorCode Rndr::Application::Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language)
+{
+    return m_platform_application->Speak(text, language);
+}
+
+Rndr::ErrorCode Rndr::Application::StopSpeaking()
+{
+    return m_platform_application->StopSpeaking();
+}
+
 Rndr::LocationPermission Rndr::Application::GetLocationPermission() const
 {
     return m_platform_application->GetLocationPermission();

@@ -7,6 +7,7 @@
 #include "opal/container/in-place-array.h"
 
 #include <ShellScalingApi.h>
+#include <sapi.h>
 
 #include "rndr/application.hpp"
 #include "rndr/log.hpp"
@@ -29,6 +30,19 @@ Rndr::WindowsApplication::WindowsApplication(SystemMessageHandler* message_handl
         m_gamepads[gamepad_index].Initialize(gamepad_index, message_handler);
     }
     m_last_gamepad_poll_timestamp = GetTimestamp();
+}
+
+Rndr::WindowsApplication::~WindowsApplication()
+{
+    if (m_voice != nullptr)
+    {
+        m_voice->Release();
+        m_voice = nullptr;
+    }
+    if (m_com_initialized)
+    {
+        CoUninitialize();
+    }
 }
 
 LRESULT RndrPrivate::WindowProc(HWND window_handle, UINT msg_code, WPARAM param_w, LPARAM param_l)
@@ -348,6 +362,67 @@ Rndr::ErrorCode Rndr::WindowsApplication::SetKeepScreenOn(bool keep_on)
         return ErrorCode::PlatformError;
     }
     PlatformApplication::SetKeepScreenOn(keep_on);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::WindowsApplication::Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language)
+{
+    (void)language;
+    Opal::StringWide wide_text;
+    if (Opal::Transcode(text, wide_text) != Opal::ErrorCode::Success)
+    {
+        RNDR_LOG_ERROR("Text to speak is not valid UTF-8");
+        return ErrorCode::InvalidArgument;
+    }
+    if (!m_voice_attempted)
+    {
+        m_voice_attempted = true;
+        // S_FALSE means COM was already initialized on this thread, and still counts a call to undo. A thread that
+        // someone else made multithreaded answers RPC_E_CHANGED_MODE; SAPI works there too, and that is not ours to undo.
+        const HRESULT com_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        if (SUCCEEDED(com_result))
+        {
+            m_com_initialized = true;
+        }
+        else if (com_result != RPC_E_CHANGED_MODE)
+        {
+            RNDR_LOG_ERROR("CoInitializeEx failed with {:#x}, so there is no voice to speak with", static_cast<u32>(com_result));
+            return ErrorCode::PlatformError;
+        }
+        const HRESULT voice_result =
+            CoCreateInstance(__uuidof(SpVoice), nullptr, CLSCTX_ALL, __uuidof(ISpVoice), reinterpret_cast<void**>(&m_voice));
+        if (FAILED(voice_result))
+        {
+            RNDR_LOG_WARNING("No SAPI voice could be made ({:#x}), so Speak says nothing", static_cast<u32>(voice_result));
+            m_voice = nullptr;
+        }
+    }
+    if (m_voice == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const HRESULT result = m_voice->Speak(wide_text.GetData(), SPF_ASYNC | SPF_PURGEBEFORESPEAK | SPF_IS_NOT_XML, nullptr);
+    if (FAILED(result))
+    {
+        RNDR_LOG_ERROR("ISpVoice::Speak failed with {:#x}", static_cast<u32>(result));
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::WindowsApplication::StopSpeaking()
+{
+    if (m_voice == nullptr)
+    {
+        return m_voice_attempted ? ErrorCode::FeatureNotSupported : ErrorCode::Success;
+    }
+    // Speaking nothing with the purge flag cuts off what is queued and what is being said.
+    const HRESULT result = m_voice->Speak(nullptr, SPF_ASYNC | SPF_PURGEBEFORESPEAK, nullptr);
+    if (FAILED(result))
+    {
+        RNDR_LOG_ERROR("ISpVoice::Speak failed to stop the voice with {:#x}", static_cast<u32>(result));
+        return ErrorCode::PlatformError;
+    }
     return ErrorCode::Success;
 }
 

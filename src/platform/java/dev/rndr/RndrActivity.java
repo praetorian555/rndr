@@ -14,6 +14,9 @@ import android.content.pm.ServiceInfo;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -22,6 +25,8 @@ import android.util.Log;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.View;
@@ -32,6 +37,7 @@ import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
+import java.util.Locale;
 
 /**
  * The NativeActivity rndr's Android platform layer runs in, plus the one thing NativeActivity cannot do: take text from
@@ -50,6 +56,27 @@ public class RndrActivity extends NativeActivity {
     private TextInputView textInputView;
     /** The GPS listener while location updates run, touched only on the UI thread. */
     private LocationListener locationListener;
+
+    /** Speech plays as guidance over other audio, which is turned down for it rather than paused. */
+    private static final AudioAttributes SPEECH_ATTRIBUTES = new AudioAttributes.Builder()
+                                                                 .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                                                                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                                                 .build();
+    /** The voice, made by the first speak; it and the fields below are touched only on the UI thread. */
+    private TextToSpeech speech;
+    /** Whether the engine has started. Until then speak keeps only the latest text, in pendingSpeech. */
+    private boolean speechReady;
+    /** Whether the engine failed to start, after which speak says nothing. */
+    private boolean speechUnavailable;
+    private String pendingSpeech;
+    private String pendingLanguage;
+    /** The language tag the engine was last set to; empty for the system's. */
+    private String speechLanguage = "";
+    /** The id of the latest utterance, whose end gives back the audio focus; an earlier one was cut off by it. */
+    private String currentUtterance;
+    private int utteranceCount;
+    private final AudioFocusRequest speechFocus =
+        new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(SPEECH_ATTRIBUTES).build();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -148,6 +175,112 @@ public class RndrActivity extends NativeActivity {
             return true;
         } catch (SecurityException e) {
             return false;
+        }
+    }
+
+    /**
+     * Say the text with the system's text-to-speech voice, cutting off what is still being said. The first call starts
+     * the engine, which takes a moment; the latest text asked for in the meantime is said once it is up. Other audio
+     * is turned down while the voice speaks. Called by native code on its own thread; the engine is used on the UI thread.
+     *
+     * @param language A BCP 47 tag such as "en", or empty for the system's language.
+     */
+    public void speak(final String text, final String language) {
+        runOnUiThread(() -> {
+            if (speechUnavailable) {
+                return;
+            }
+            if (!speechReady) {
+                pendingSpeech = text;
+                pendingLanguage = language;
+                if (speech == null) {
+                    speech = new TextToSpeech(this, this::onSpeechInit);
+                }
+                return;
+            }
+            say(text, language);
+        });
+    }
+
+    /** Cut off what speak is still saying. Called by native code on its own thread. */
+    public void stopSpeaking() {
+        runOnUiThread(() -> {
+            pendingSpeech = null;
+            if (speechReady) {
+                currentUtterance = null;
+                speech.stop();
+                abandonSpeechFocus();
+            }
+        });
+    }
+
+    /** The engine is up, or could not start. Runs on the UI thread, possibly inside the TextToSpeech constructor. */
+    private void onSpeechInit(int status) {
+        if (status != TextToSpeech.SUCCESS) {
+            Log.w(TAG, "The text-to-speech engine could not start; speak says nothing");
+            speechUnavailable = true;
+            pendingSpeech = null;
+            return;
+        }
+        speechReady = true;
+        speech.setAudioAttributes(SPEECH_ATTRIBUTES);
+        speech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+            // These run on a thread of the engine's; the focus is handed back on the UI thread.
+            @Override
+            public void onStart(String utteranceId) {}
+
+            @Override
+            public void onDone(String utteranceId) {
+                runOnUiThread(() -> onUtteranceEnded(utteranceId));
+            }
+
+            @Override
+            @SuppressWarnings("deprecation")
+            public void onError(String utteranceId) {
+                runOnUiThread(() -> onUtteranceEnded(utteranceId));
+            }
+
+            @Override
+            public void onStop(String utteranceId, boolean interrupted) {
+                runOnUiThread(() -> onUtteranceEnded(utteranceId));
+            }
+        });
+        if (pendingSpeech != null) {
+            say(pendingSpeech, pendingLanguage);
+            pendingSpeech = null;
+        }
+    }
+
+    private void say(String text, String language) {
+        String tag = language != null ? language : "";
+        if (!tag.equals(speechLanguage)) {
+            speechLanguage = tag;
+            Locale locale = tag.isEmpty() ? Locale.getDefault() : Locale.forLanguageTag(tag);
+            if (speech.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) {
+                Log.w(TAG, "The voice has no " + locale + "; it speaks in the system's language");
+                speech.setLanguage(Locale.getDefault());
+            }
+        }
+        AudioManager audio = getSystemService(AudioManager.class);
+        if (audio != null) {
+            audio.requestAudioFocus(speechFocus);
+        }
+        utteranceCount++;
+        currentUtterance = "rndr-" + utteranceCount;
+        speech.speak(text, TextToSpeech.QUEUE_FLUSH, null, currentUtterance);
+    }
+
+    private void onUtteranceEnded(String utteranceId) {
+        if (utteranceId != null && utteranceId.equals(currentUtterance)) {
+            currentUtterance = null;
+            abandonSpeechFocus();
+        }
+    }
+
+    private void abandonSpeechFocus() {
+        AudioManager audio = getSystemService(AudioManager.class);
+        if (audio != null) {
+            audio.abandonAudioFocusRequest(speechFocus);
         }
     }
 
@@ -253,6 +386,11 @@ public class RndrActivity extends NativeActivity {
     protected void onDestroy() {
         removeLocationListener((LocationManager) getSystemService(Context.LOCATION_SERVICE));
         stopService(new Intent(this, LocationService.class));
+        if (speech != null) {
+            speech.shutdown();
+            speech = null;
+            abandonSpeechFocus();
+        }
         super.onDestroy();
     }
 
