@@ -18397,3 +18397,110 @@ TEST_CASE("Forge buffers and textures created for a video profile", "[forge]")
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }
+
+namespace
+{
+
+/** The sequence parameter set of a 1920x1080 H.264 High stream: whole macroblocks to 1088, cropped by 8 rows. */
+StdVideoH264SequenceParameterSet MakeHdSequenceParameterSet(u8 id)
+{
+    StdVideoH264SequenceParameterSet sps{};
+    sps.flags.frame_mbs_only_flag = 1;
+    sps.flags.direct_8x8_inference_flag = 1;
+    sps.flags.frame_cropping_flag = 1;
+    sps.profile_idc = STD_VIDEO_H264_PROFILE_IDC_HIGH;
+    sps.level_idc = STD_VIDEO_H264_LEVEL_IDC_4_1;
+    sps.chroma_format_idc = STD_VIDEO_H264_CHROMA_FORMAT_IDC_420;
+    sps.seq_parameter_set_id = id;
+    sps.log2_max_frame_num_minus4 = 0;
+    sps.pic_order_cnt_type = STD_VIDEO_H264_POC_TYPE_0;
+    sps.log2_max_pic_order_cnt_lsb_minus4 = 2;
+    sps.max_num_ref_frames = 4;
+    sps.pic_width_in_mbs_minus1 = 1920 / 16 - 1;
+    sps.pic_height_in_map_units_minus1 = 1088 / 16 - 1;
+    // Cropping counts chroma rows, two picture rows each in 4:2:0.
+    sps.frame_crop_bottom_offset = 4;
+    return sps;
+}
+
+/** A CABAC picture parameter set over the sequence parameter set with `sps_id`. */
+StdVideoH264PictureParameterSet MakePictureParameterSet(u8 id, u8 sps_id)
+{
+    StdVideoH264PictureParameterSet pps{};
+    pps.flags.entropy_coding_mode_flag = 1;
+    pps.flags.transform_8x8_mode_flag = 1;
+    pps.flags.deblocking_filter_control_present_flag = 1;
+    pps.seq_parameter_set_id = sps_id;
+    pps.pic_parameter_set_id = id;
+    pps.weighted_bipred_idc = STD_VIDEO_H264_WEIGHTED_BIPRED_IDC_DEFAULT;
+    return pps;
+}
+
+}  // namespace
+
+TEST_CASE("Forge a video session and its H.264 parameter sets", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_h264{.decode = Forge::VideoCodecBits::H264};
+    if (!CanCreateDevice({}, k_h264))
+    {
+        SKIP("This device has no queue that decodes H.264.");
+    }
+    ForgeFixture fixture({}, k_h264);
+    const Forge::VideoProfile profile{.codec = Forge::VideoCodec::H264, .codec_profile = 100};
+    const Forge::VideoCapabilities capabilities =
+        ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(fixture.device.GetPhysicalDevice(), profile));
+    constexpr PixelFormat k_nv12 = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    if (!ContainsFormat(capabilities.dpb_formats, k_nv12) || !ContainsFormat(capabilities.output_formats, k_nv12))
+    {
+        SKIP("This device does not decode H.264 into NV12.");
+    }
+    const Forge::VideoSessionDesc desc{.profile = profile,
+                                       .max_coded_extent = {1920, 1088},
+                                       .max_dpb_slots = Opal::Min(17u, capabilities.max_dpb_slots),
+                                       .max_active_reference_pictures = Opal::Min(16u, capabilities.max_active_reference_pictures)};
+
+    SECTION("A session for HD H.264 is created with its memory bound, and takes the stream's parameter sets")
+    {
+        const Forge::VideoSession session = ForgeTest::Unwrap(Forge::VideoSession::Create(fixture.device, desc));
+        REQUIRE(session.IsValid());
+        INFO("session memory " << session.GetMemorySize() << " bytes");
+
+        const StdVideoH264SequenceParameterSet sps = MakeHdSequenceParameterSet(0);
+        const StdVideoH264PictureParameterSet pps = MakePictureParameterSet(0, 0);
+        Forge::VideoSessionParameters parameters =
+            ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateH264(fixture.device, session, {.sequence_parameter_sets = {&sps, 1},
+                                                                                                 .picture_parameter_sets = {&pps, 1}}));
+        REQUIRE(parameters.IsValid());
+
+        // A stream may bring more as it goes; each id is handed over once.
+        const StdVideoH264PictureParameterSet second = MakePictureParameterSet(1, 0);
+        REQUIRE(parameters.AddH264({.picture_parameter_sets = {&second, 1}}) == ErrorCode::Success);
+        REQUIRE(parameters.AddH264({.picture_parameter_sets = {&pps, 1}}) == ErrorCode::InvalidArgument);
+        const StdVideoH264SequenceParameterSet past_the_last = MakeHdSequenceParameterSet(32);
+        REQUIRE(parameters.AddH264({.sequence_parameter_sets = {&past_the_last, 1}}) == ErrorCode::InvalidArgument);
+        // A refused update leaves the count where it was, so the next one is still taken.
+        const StdVideoH264SequenceParameterSet another = MakeHdSequenceParameterSet(1);
+        REQUIRE(parameters.AddH264({.sequence_parameter_sets = {&another, 1}}) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A session the device cannot hold is refused before it reaches the driver")
+    {
+        Forge::VideoSessionDesc too_large = desc;
+        too_large.max_coded_extent = {capabilities.max_coded_extent.x + 16, capabilities.max_coded_extent.y};
+        REQUIRE(Forge::VideoSession::Create(fixture.device, too_large).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        Forge::VideoSessionDesc too_many_slots = desc;
+        too_many_slots.max_dpb_slots = capabilities.max_dpb_slots + 1;
+        REQUIRE(Forge::VideoSession::Create(fixture.device, too_many_slots).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        Forge::VideoSessionDesc ten_bit_pictures = desc;
+        ten_bit_pictures.picture_format = PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16;
+        REQUIRE(Forge::VideoSession::Create(fixture.device, ten_bit_pictures).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        // H.264 parameters need an H.264 session, and an empty one is not.
+        const Forge::VideoSession empty;
+        REQUIRE(Forge::VideoSessionParameters::CreateH264(fixture.device, empty).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}

@@ -19,6 +19,8 @@ class Texture;
 class TextureView;
 class Sampler;
 class SamplerYcbcrConversion;
+class VideoSession;
+class VideoSessionParameters;
 class Buffer;
 class Shader;
 class Pipeline;
