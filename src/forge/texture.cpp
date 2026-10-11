@@ -124,7 +124,8 @@ static bool SupportsImageView(Rndr::Forge::TextureUsageBits usage)
     using Rndr::Forge::TextureUsageBits;
     constexpr TextureUsageBits k_view_usages = TextureUsageBits::Sampled | TextureUsageBits::Storage | TextureUsageBits::ColorAttachment |
                                                TextureUsageBits::DepthStencilAttachment | TextureUsageBits::TransientAttachment |
-                                               TextureUsageBits::InputAttachment;
+                                               TextureUsageBits::InputAttachment | TextureUsageBits::VideoDecodeDestination |
+                                               TextureUsageBits::VideoDecodeDpb;
     return !!(usage & k_view_usages);
 }
 

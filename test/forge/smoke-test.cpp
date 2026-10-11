@@ -18392,6 +18392,8 @@ TEST_CASE("Forge buffers and textures created for a video profile", "[forge]")
         const Forge::Texture dpb = ForgeTest::Unwrap(Forge::Texture::Create(
             fixture.device,
             {.format = k_nv12, .width = k_width, .height = k_height, .usage = Forge::TextureUsageBits::VideoDecodeDpb, .video_profile = profile}));
+        // A texture whose only use is the decoder's still takes a decode view, and only one of its own usage.
+        REQUIRE(ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, dpb, {.usage = Forge::TextureUsageBits::VideoDecodeDpb})).IsValid());
         REQUIRE(Forge::TextureView::Create(fixture.device, dpb, {.usage = Forge::TextureUsageBits::VideoDecodeDestination})
                     .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
         REQUIRE_NO_VALIDATION_ERROR(fixture);
