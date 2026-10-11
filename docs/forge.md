@@ -346,7 +346,8 @@ reference picture's slot (`dpb_and_output_coincide`, the only mode NVIDIA offers
 picture needs a slot, its output view is the slot's view with both decode usages, and a picture nothing refers to frees
 its slot once it has been read.
 
-**What the NVIDIA driver does differently.** On the 616.56 driver, and without a word from the validation layer:
+**What the NVIDIA driver does differently.** Two things on the 616.56 driver, neither of which the validation layer
+reports:
 
 - It reads the structures of `vkCmdDecodeVideoKHR` - the picture information, the slice offsets, the reference slots and
   their `StdVideoDecodeH264ReferenceInfo` - again when the command buffer is submitted, where Vulkan lets them go when the
@@ -356,6 +357,11 @@ its slot once it has been read.
   reset or freed - the same lifetime as the framebuffers of its passes. The validation layer, when it wraps handles,
   hands the driver copies of its own, released as the call returns; `GraphicsContext::Create` turns that off through
   `VK_EXT_layer_settings` (`unique_handles`), and warns when the layer does not offer the extension.
+- It builds the initial H.264 reference lists from `StdVideoDecodeH264ReferenceInfo::FrameNum` as given, without
+  FrameNumWrap: once `frame_num` wraps, a reference from before the wrap sorts above the newer ones and the picture comes
+  out wrong. It does wrap the value when it applies `ref_pic_list_modification`. A short-term reference handed over as
+  FrameNumWrap plus MaxFrameNum - the `frame_num` after the wrap, MaxFrameNum more before it - decodes right on this driver
+  and on one that wraps the value itself.
 
 What is not there yet: H.265 and AV1 parameters and decode, the result status query that says whether a decode
 succeeded, and reference pictures as layers of one texture.
