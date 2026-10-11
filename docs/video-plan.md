@@ -45,7 +45,7 @@ the feature read through `VkPhysicalDeviceSamplerYcbcrConversionFeatures` - has 
 
 | Phase | State |
 |---|---|
-| 0 - planes and YCbCr sampling | **Done**: textures filled a plane at a time, `SamplerYcbcrConversion`, the `[forge]` case and `samples/video-frame`; described in [forge.md](forge.md#video-frames). NV12 is checked; P010 and I420 are in place and wait for their first use |
+| 0 - planes and YCbCr sampling | **Done**: textures filled a plane at a time, `SamplerYcbcrConversion`, the `[forge]` case and `samples/video-frame`; described in [forge.md](forge.md#video-frames). NV12, P010 and I420 are each checked against the CPU |
 | 1 - Vulkan Video decode | Not started |
 | 2 - Android hardware buffer import | Not started |
 | 3 - streamed audio | Not started |
@@ -76,11 +76,11 @@ What Forge gains:
   aspect. A query of what the format supports on this device (whether its chroma can be sampled with a linear
   filter, whether the chroma is cosited or midpoint) so the caller can build a conversion the device accepts.
 
-Checked by a `[forge]` case: upload a 16x16 NV12 frame of sixteen known colours, sample it in a compute shader through
-a BT.709 narrow range conversion and through a BT.601 full range one, and compare every colour with the same
-conversion worked out on the CPU, within one step. It also checks that each rule above is refused, skips on a device
-without the feature, and ends with no validation error. A sample, `samples/video-frame`, shows one still NV12 frame
-in a window.
+Checked by a `[forge]` case: upload a 16x16 frame of sixteen known colours, sample it in a compute shader through a
+conversion, and compare every colour with the same conversion worked out on the CPU, within one step - NV12 through
+BT.709 narrow range and BT.601 full range, P010 through BT.2020 narrow and full range at 10 bits, and I420 filled by
+three copies. It also checks that each rule above is refused, skips a format the device cannot sample, and ends with
+no validation error. A sample, `samples/video-frame`, shows one still frame in a window in each of the three formats.
 
 ## Phase 1 - Vulkan Video decode
 
