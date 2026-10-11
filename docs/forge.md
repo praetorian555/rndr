@@ -301,6 +301,49 @@ Space switching between them.
 
 ---
 
+## Video decode
+
+Forge decodes video through Vulkan Video on a decode queue: it wraps the objects and commands, and checks what Vulkan
+requires of them. Reading a codec's bitstream is the caller's - parameter sets and slice headers arrive already parsed,
+as the `StdVideo*` structures Vulkan defines - and so is deciding which reference picture goes in which slot. H.264 is
+the codec with session parameters and a decode command so far; H.265 and AV1 have the profile, the capabilities and the
+resources, and get the rest the same way.
+
+**The device.** `DeviceDesc::use_decode_queue` takes a decode queue and `decode_codecs` names the codecs it has to
+decode, all on one family: the video extensions and one per codec are enabled with it, and a device whose decode queues
+cannot is passed over by `SelectPhysicalDevice`. `PhysicalDevice::GetVideoCodecOperations` says what each family decodes.
+
+**What a profile decodes.** A `VideoProfile` is the codec, its profile (`profile_idc` for H.264 and H.265) and the bit
+depth. `GetVideoDecodeCapabilities` answers for one: the picture sizes, the reference slots, the bitstream alignments,
+the formats reference and output pictures can have, and whether the output is written into the reference picture image
+(`dpb_and_output_coincide`) or into an image of its own (`dpb_and_output_distinct`).
+
+**Resources.** A bitstream buffer has `BufferUsageBits::VideoDecodeSource`, reference picture textures
+`TextureUsageBits::VideoDecodeDpb` and output textures `VideoDecodeDestination`, each with `video_profile` set to the
+stream's - Vulkan creates them for a profile. A decode reads and writes pictures through views with that usage in
+`TextureViewDesc::usage`; such a view of a YCbCr texture is not sampled and needs no conversion. Sampling the output
+afterwards is the conversion sampler of the section above. Each reference picture is a texture of its own, since a YCbCr
+texture has one layer. `TextureBarrier::ToVideoDecodeDestination` and `ToVideoDecodeDpb` move textures into the decode
+layouts, and `PipelineStageBits::VideoDecode` with `VideoDecodeRead` and `VideoDecodeWrite` name the decode in a barrier.
+
+**Session and parameters.** A `VideoSession` holds the decoder's state for one stream, in memory the device asks for and
+Forge binds; its desc is refused when it asks for more than the capabilities allow. `VideoSessionParameters::CreateH264`
+keeps the stream's SPS and PPS, and `AddH264` takes those a stream brings later. An id is given once: a changed set needs
+parameters of their own.
+
+**Decoding.** On a command buffer of the decode queue, `CmdBeginVideoCoding` opens a scope over the session, the
+parameters and every reference slot its decodes touch; `CmdResetVideoCoding` resets the session, which its first scope
+has to; `CmdDecodeVideo` decodes one picture from a bitstream range into an output, keeping it in a setup slot when
+later pictures refer to it; `CmdEndVideoCoding` closes the scope. A decode outside a scope, on a queue that does not
+decode the codec, from a buffer or a range that breaks the session's rules, or with more references than it takes, is
+refused. The decoded picture moves to the graphics queue by a queue family ownership transfer: a barrier with
+`source_queue_family` and `destination_queue_family` set, recorded on both queues.
+
+What is not there yet: H.265 and AV1 parameters and decode, the result status query that says whether a decode
+succeeded, and reference pictures as layers of one texture.
+
+---
+
 ## Parameters and references
 
 References at the API surface are plain C++ references. `Opal::Ref` appears only where a reference has to be
