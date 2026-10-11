@@ -337,7 +337,14 @@ has to; `CmdDecodeVideo` decodes one picture from a bitstream range into an outp
 later pictures refer to it; `CmdEndVideoCoding` closes the scope. A decode outside a scope, on a queue that does not
 decode the codec, from a buffer or a range that breaks the session's rules, or with more references than it takes, is
 refused. The decoded picture moves to the graphics queue by a queue family ownership transfer: a barrier with
-`source_queue_family` and `destination_queue_family` set, recorded on both queues.
+`source_queue_family` and `destination_queue_family` set, recorded on both queues. Read or copy it there: on NVIDIA's
+616.56 driver, copying a decoded picture to a buffer on the decode queue crashes the driver at submit, though the family
+reports transfer support and the validation layer has nothing to say.
+
+A device writes the decoded picture either into an output texture of its own (`dpb_and_output_distinct`) or into the
+reference picture's slot (`dpb_and_output_coincide`, the only mode NVIDIA offers for H.264). In the second, every
+picture needs a slot, its output view is the slot's view with both decode usages, and a picture nothing refers to frees
+its slot once it has been read.
 
 What is not there yet: H.265 and AV1 parameters and decode, the result status query that says whether a decode
 succeeded, and reference pictures as layers of one texture.

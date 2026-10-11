@@ -46,7 +46,7 @@ the feature read through `VkPhysicalDeviceSamplerYcbcrConversionFeatures` - has 
 | Phase | State |
 |---|---|
 | 0 - planes and YCbCr sampling | **Done**: textures filled a plane at a time, `SamplerYcbcrConversion`, the `[forge]` case and `samples/video-frame`; described in [forge.md](forge.md#video-frames). NV12, P010 and I420 are each checked against the CPU |
-| 1 - Vulkan Video decode | **Forge side for H.264 done**: decode queue by codec, capabilities, video buffers and textures, `VideoSession`, H.264 `VideoSessionParameters`, the coding scope and `CmdDecodeVideo`; described in [forge.md](forge.md#video-decode). Left: the result status query, H.265 and AV1 parameters and decode, and a decode checked end to end in the player |
+| 1 - Vulkan Video decode | **H.264 decodes end to end**: decode queue by codec, capabilities, video buffers and textures, `VideoSession`, H.264 `VideoSessionParameters`, the coding scope and `CmdDecodeVideo`, described in [forge.md](forge.md#video-decode); the player decodes five ITU-T conformance streams (CAVLC and CABAC, I and P pictures, several slices a picture) bit for bit. Left: the result status query, B pictures and long-term references checked against streams that have them, H.265 and AV1 |
 | 2 - Android hardware buffer import | Not started |
 | 3 - streamed audio | Not started |
 
