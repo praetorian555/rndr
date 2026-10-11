@@ -296,7 +296,8 @@ that names it:
 
 The conversion yields R'G'B' still gamma encoded, the way the video carries it. Written to a UNORM target that is what
 the display wants; an sRGB target would encode it a second time. HDR content - BT.2020 with the PQ or HLG curve - still
-needs tone mapping after the conversion. `samples/video-frame` draws one NV12 frame this way.
+needs tone mapping after the conversion. `samples/video-frame` draws one frame this way in each of the three formats,
+Space switching between them.
 
 ---
 
