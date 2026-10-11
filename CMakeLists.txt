@@ -20,23 +20,19 @@ option(RNDR_FORGE_PRACTICE "Build the Forge practice samples in samples/forge-pr
 option(RNDR_ASSIMP "Enable Assimp dependency for mesh/model loading" ON)
 option(RNDR_KTX "Enable KTX-Software dependency for KTX texture loading" ON)
 option(RNDR_SHARED_LIBS "Build rndr (and opal) as shared libraries" OFF)
-option(RNDR_AUDIO "Enable the audio system: clips, a software mixer and a WASAPI device on Windows" ON)
+option(RNDR_AUDIO "Enable the audio system: clips, streams, a software mixer, and a WASAPI device on Windows or an AAudio one on Android" ON)
 
 # rndr and opal key their static-vs-shared choice off the standard BUILD_SHARED_LIBS variable;
 # RNDR_SHARED_LIBS is the project-facing knob that drives it.
 set(BUILD_SHARED_LIBS ${RNDR_SHARED_LIBS})
 
-# Canvas is WGL-bound (src/canvas/context.cpp) and the audio device is WASAPI-bound, so neither
-# can build on Linux or Android yet. Forge is the rendering path on both.
+# Canvas is WGL-bound (src/canvas/context.cpp), so it builds on neither Linux nor Android; Forge is the
+# rendering path on both. The audio device is WASAPI on Windows and AAudio on Android, with none on Linux yet.
 # The NDK toolchain leaves UNIX true, so ANDROID is checked first everywhere UNIX is.
 if (ANDROID)
     if (RNDR_CANVAS)
         message(STATUS "RNDR_CANVAS is not supported on Android, forcing it OFF")
         set(RNDR_CANVAS OFF)
-    endif ()
-    if (RNDR_AUDIO)
-        message(STATUS "RNDR_AUDIO is not supported on Android, forcing it OFF")
-        set(RNDR_AUDIO OFF)
     endif ()
     # ASan on Android goes through wrap.sh and a runtime copied into the APK, and HWASan is the
     # sanitizer arm64 supports; neither is wired up. Off before dependencies.cmake hands it to Opal.

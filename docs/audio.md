@@ -2,7 +2,8 @@
 
 Basic sound for games: load a clip, play it with volume, pan and pitch, loop it, route it through a volume bus,
 pause everything. Two-dimensional only. Clips are decoded into memory; a stream is fed by the caller while it plays,
-which is how a video's sound gets in. It is on by default (`RNDR_AUDIO`) and on Windows plays through WASAPI.
+which is how a video's sound gets in. It is on by default (`RNDR_AUDIO`) and plays through WASAPI on Windows and
+AAudio on Android.
 
 The public types live under `include/rndr/audio/`:
 
@@ -211,7 +212,7 @@ two callbacks, roughly 10 ms apart - the command is dropped with a warning and `
 dropped `Play` hands its voice back and returns an invalid handle; a dropped `DestroyClip` leaves the clip live so
 it can be tried again.
 
-**The device.** `WindowsAudioDevice` opens the default render endpoint in shared, event-driven mode, asking for
+**The Windows device.** `WindowsAudioDevice` opens the default render endpoint in shared, event-driven mode, asking for
 stereo f32 at the mix rate with `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM`, so Windows converts to whatever the endpoint
 runs at and the mixer never has to adapt. All COM work happens on the audio thread; the thread that builds the
 device never needs `CoInitializeEx`. `AudioDevice::Create` waits for the thread's first attempt at the stream and
@@ -220,6 +221,15 @@ the thread reopens against the new default every half second; the mixer's state 
 on. The thread asks MMCSS for "Pro Audio" scheduling, best effort. What the device holds ahead of a buffer comes from
 the stream's `IAudioClock` - frames written less what the endpoint has played by now - and from the padding where
 the stream has no clock.
+
+**The Android device.** `AndroidAudioDevice` opens a shared AAudio stream of stereo f32 at the mix rate and runs the
+callback from AAudio's data callback, so AAudio's thread is the audio thread there and the rate is converted by
+the system. A stream that comes out in any other format is refused. AAudio reports a lost output - headphones
+unplugged, a Bluetooth headset connecting - as a disconnected stream, which may not be closed from its own callback,
+so a thread of the device's waits for that, closes the stream and opens one on the new default every half second.
+What it holds ahead of a buffer comes from `AAudioStream_getTimestamp`, and from frames written less frames read
+until the stream has played enough to have a timestamp. AAudio is an NDK system library from API 26; rndr's minimum
+is 29.
 
 ---
 
@@ -235,6 +245,10 @@ device, which from the outside looks like a pass; set `RNDR_TEST_REQUIRE_AUDIO=1
     ./build/msvc-debug/Debug/rndr-test.exe "[audio]"
     RNDR_TEST_REQUIRE_AUDIO=1 ./build/msvc-debug/Debug/rndr-test.exe "[audio-device]"
 
+On Android the same cases run from `adb shell` in the `rndr-test` executable the NDK build makes (see
+[android-plan.md](android-plan.md)); the decoder cases need the OGG fixture pushed with it, so a run without it filters
+to `"[audio-device],Mixer*"`.
+
 `audio-sample` is a window that makes noises: Space for a panned blip, O for the OGG fixture, M for a looping chord
 on its own bus, Up/Down for master volume, P to pause everything.
 
@@ -247,4 +261,7 @@ on its own bus, Up/Down for master volume, P to pause everything.
 - **3D.** No listener, no distance attenuation, no spatial pan. A game can compute pan and volume from positions
   and set them per sound.
 - **Effects and sends.** No filters, no reverb, no bus-to-bus routing beyond a single gain per bus.
-- **Other platforms.** `AudioDevice::Create` is where another backend would be picked; the mixer does not care.
+- **Linux.** `AudioDevice::Create` is where a backend would be picked, and Linux has none, so `RNDR_AUDIO` is off
+  there; the mixer does not care.
+- **A lost output on Android, checked.** The reopening is written as Windows' is but has not been through a
+  disconnection on a device yet.

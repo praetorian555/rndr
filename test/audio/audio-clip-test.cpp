@@ -34,7 +34,7 @@ f32 Rms(Opal::ArrayView<const f32> samples)
     f64 sum = 0.0;
     for (const f32 sample : samples)
     {
-        sum += static_cast<f64>(sample) * sample;
+        sum += static_cast<f64>(sample) * static_cast<f64>(sample);
     }
     return static_cast<f32>(std::sqrt(sum / static_cast<f64>(samples.GetSize())));
 }

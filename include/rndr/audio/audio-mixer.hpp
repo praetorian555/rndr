@@ -27,6 +27,47 @@ struct AudioMixerDesc
     u32 command_queue_capacity = 1024;
 };
 
+namespace Impl
+{
+
+/**
+ * What the main thread asks of the audio thread, one call at a time. Outside AudioMixer so that it is a complete type
+ * where the mixer's queue of them is declared: clang does not see a nested class with member initializers as default
+ * constructible until its enclosing class is complete.
+ */
+struct AudioMixerCommand
+{
+    enum class Type : u8
+    {
+        None,
+        Play,
+        Stop,
+        StopAll,
+        Pause,
+        Resume,
+        PauseAll,
+        ResumeAll,
+        SetVolume,
+        SetPan,
+        SetPitch,
+        SetLooping,
+        DestroyClip,
+        CreateStream,
+        DestroyStream,
+    };
+
+    Type type = Type::None;
+    SoundHandle sound;
+    /** The clip or, with is_stream, the stream. */
+    u32 source_index = 0;
+    bool is_stream = false;
+    PlaySoundDesc desc;
+    f32 value = 0.0f;
+    bool flag = false;
+};
+
+}  // namespace Impl
+
 /**
  * The engine under AudioSystem: owns the clips and the voices, takes commands from the main thread and fills
  * interleaved stereo f32 buffers from the audio thread. It has no thread of its own and never touches a device,
@@ -186,36 +227,7 @@ public:
     void Mix(Opal::ArrayView<f32> out, const AudioRenderTiming& timing = {});
 
 private:
-    struct Command
-    {
-        enum class Type : u8
-        {
-            None,
-            Play,
-            Stop,
-            StopAll,
-            Pause,
-            Resume,
-            PauseAll,
-            ResumeAll,
-            SetVolume,
-            SetPan,
-            SetPitch,
-            SetLooping,
-            DestroyClip,
-            CreateStream,
-            DestroyStream,
-        };
-
-        Type type = Type::None;
-        SoundHandle sound;
-        /** The clip or, with is_stream, the stream. */
-        u32 source_index = 0;
-        bool is_stream = false;
-        PlaySoundDesc desc;
-        f32 value = 0.0f;
-        bool flag = false;
-    };
+    using Command = Impl::AudioMixerCommand;
 
     struct ClipSlot
     {

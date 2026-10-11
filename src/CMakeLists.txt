@@ -116,13 +116,20 @@ if (${RNDR_AUDIO})
             "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-mixer.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-device.hpp"
             "${PROJECT_SOURCE_DIR}/include/rndr/audio/audio-system.hpp"
-            "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-audio-device.hpp"
             "${PROJECT_SOURCE_DIR}/src/audio/audio-clip.cpp"
             "${PROJECT_SOURCE_DIR}/src/audio/audio-decoders.cpp"
             "${PROJECT_SOURCE_DIR}/src/audio/audio-mixer.cpp"
             "${PROJECT_SOURCE_DIR}/src/audio/audio-device.cpp"
-            "${PROJECT_SOURCE_DIR}/src/audio/audio-system.cpp"
-            "${PROJECT_SOURCE_DIR}/src/platform/windows-audio-device.cpp")
+            "${PROJECT_SOURCE_DIR}/src/audio/audio-system.cpp")
+    if (WIN32)
+        list(APPEND SOURCE_LIST
+                "${PROJECT_SOURCE_DIR}/include/rndr/platform/windows-audio-device.hpp"
+                "${PROJECT_SOURCE_DIR}/src/platform/windows-audio-device.cpp")
+    elseif (ANDROID)
+        list(APPEND SOURCE_LIST
+                "${PROJECT_SOURCE_DIR}/include/rndr/platform/android-audio-device.hpp"
+                "${PROJECT_SOURCE_DIR}/src/platform/android-audio-device.cpp")
+    endif ()
 endif ()
 
 if (WIN32)
@@ -255,10 +262,15 @@ endif ()
 if (${RNDR_AUDIO})
     target_compile_definitions(rndr PUBLIC RNDR_AUDIO)
     # stb_vorbis is only included from rndr's implementation, so like stb_image it is build-only.
-    target_include_directories(rndr PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/stb_vorbis/include>)
-    # WASAPI is reached through COM (Ole32) and the audio thread registers with MMCSS (Avrt). Both are part of
-    # every supported Windows, so nothing needs redistributing.
-    target_link_libraries(rndr PRIVATE Ole32.lib Avrt.lib)
+    target_include_directories(rndr SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/extern/stb_vorbis/include>)
+    if (WIN32)
+        # WASAPI is reached through COM (Ole32) and the audio thread registers with MMCSS (Avrt). Both are part of
+        # every supported Windows, so nothing needs redistributing.
+        target_link_libraries(rndr PRIVATE Ole32.lib Avrt.lib)
+    elseif (ANDROID)
+        # An NDK system library since API 26. Named here: the weak symbols below would otherwise link without it.
+        target_link_libraries(rndr PRIVATE aaudio)
+    endif ()
 endif ()
 
 if (WIN32)

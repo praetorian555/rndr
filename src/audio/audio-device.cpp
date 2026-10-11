@@ -6,6 +6,8 @@
 
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-audio-device.hpp"
+#elif RNDR_ANDROID
+#include "rndr/platform/android-audio-device.hpp"
 #endif
 
 Opal::Expected<Opal::ScopePtr<Rndr::AudioDevice>, Rndr::ErrorCode> Rndr::AudioDevice::Create(const AudioDeviceDesc& desc,
@@ -25,6 +27,19 @@ Opal::Expected<Opal::ScopePtr<Rndr::AudioDevice>, Rndr::ErrorCode> Rndr::AudioDe
         return Result(error);
     }
     // Only now that the stream is running does anything outside get to see it.
+    return Result(Opal::ScopePtr<AudioDevice>(std::move(device)));
+#elif RNDR_ANDROID
+    Opal::ScopePtr<AndroidAudioDevice> device =
+        Opal::MakeScoped<AndroidAudioDevice>(Opal::GetDefaultAllocator(), desc, std::move(callback));
+    if (!device.IsValid())
+    {
+        return Result(ErrorCode::OutOfMemory);
+    }
+    const ErrorCode error = device->Start();
+    if (error != ErrorCode::Success)
+    {
+        return Result(error);
+    }
     return Result(Opal::ScopePtr<AudioDevice>(std::move(device)));
 #else
 #error "Platform not supported!"

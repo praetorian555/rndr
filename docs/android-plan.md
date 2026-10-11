@@ -548,8 +548,7 @@ As built so far (2026-09-25):
 
 ## Out of scope (explicit, so nothing half-lands)
 
-Canvas on Android (GLES against a GL 4.5 API); an AAudio device behind `AudioDevice::Create`
-(`src/audio/audio-device.cpp:7` is where it slots); gamepad (same event stream, two tables); touch as its
+Canvas on Android (GLES against a GL 4.5 API); gamepad (same event stream, two tables); touch as its
 own input primitive (multi-touch, gestures, pressure); an on-screen keyboard's composing text shown while it
 is composed, and a text field's own contents given to the keyboard; `imgui-system` on Android (`imgui_impl_android.cpp` exists upstream); immersive mode behind
 `SetMode(BorderlessFullscreen)` (JNI); HWASan; GameActivity; Slang on the device. Each slots behind the seams above
