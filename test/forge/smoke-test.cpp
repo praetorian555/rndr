@@ -18504,3 +18504,106 @@ TEST_CASE("Forge a video session and its H.264 parameter sets", "[forge]")
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }
+
+TEST_CASE("Forge video coding scopes on the decode queue", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_h264{.decode = Forge::VideoCodecBits::H264};
+    if (!CanCreateDevice({}, k_h264))
+    {
+        SKIP("This device has no queue that decodes H.264.");
+    }
+    ForgeFixture fixture({}, k_h264);
+    const Forge::VideoProfile profile{.codec = Forge::VideoCodec::H264, .codec_profile = 100};
+    const Forge::VideoCapabilities capabilities =
+        ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(fixture.device.GetPhysicalDevice(), profile));
+    constexpr PixelFormat k_nv12 = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    if (!ContainsFormat(capabilities.dpb_formats, k_nv12) || !ContainsFormat(capabilities.output_formats, k_nv12))
+    {
+        SKIP("This device does not decode H.264 into NV12.");
+    }
+    const Forge::VideoSession session = ForgeTest::Unwrap(Forge::VideoSession::Create(
+        fixture.device, {.profile = profile,
+                         .max_dpb_slots = Opal::Min(17u, capabilities.max_dpb_slots),
+                         .max_active_reference_pictures = Opal::Min(16u, capabilities.max_active_reference_pictures)}));
+    const StdVideoH264SequenceParameterSet sps = MakeHdSequenceParameterSet(0);
+    const StdVideoH264PictureParameterSet pps = MakePictureParameterSet(0, 0);
+    const Forge::VideoSessionParameters parameters = ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateH264(
+        fixture.device, session, {.sequence_parameter_sets = {&sps, 1}, .picture_parameter_sets = {&pps, 1}}));
+    Forge::DeviceQueue& decode_queue = fixture.GetQueue(Forge::QueueFamily::Decode);
+
+    SECTION("A scope opened over a session resets it and closes on the decode queue")
+    {
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, decode_queue,
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) ==
+                                                   ErrorCode::Success);
+                                           // One scope at a time.
+                                           REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session}) == ErrorCode::InvalidArgument);
+                                           REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Video commands outside a scope, or on a queue that does not decode, are refused")
+    {
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, decode_queue,
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::InvalidArgument);
+                                           REQUIRE(command_buffer.CmdDecodeVideo({}) == ErrorCode::InvalidArgument);
+                                           REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::InvalidArgument);
+                                       }) == ErrorCode::Success);
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) ==
+                                                   ErrorCode::InvalidArgument);
+                                       }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A decode whose bitstream breaks the session's rules is refused before it reaches the driver")
+    {
+        const u64 size_alignment = session.GetBitstreamSizeAlignment();
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size_alignment * 64, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = profile}));
+        const Forge::Buffer plain = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size_alignment * 64, .usage = Forge::BufferUsageBits::TransferSource}));
+        const u32 slice = 0;
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, decode_queue,
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                        // A buffer that was not made for a bitstream.
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = plain, .bitstream_size = size_alignment, .h264_slice_offsets = {&slice, 1}}) ==
+                                ErrorCode::InvalidArgument);
+                        // An empty range, and one past the end of the buffer.
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream, .h264_slice_offsets = {&slice, 1}}) ==
+                                ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
+                                                               .bitstream_size = size_alignment * 65,
+                                                               .h264_slice_offsets = {&slice, 1}}) == ErrorCode::InvalidArgument);
+                        // A size off the session's alignment, where it has one.
+                        if (size_alignment > 1)
+                        {
+                            REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
+                                                                   .bitstream_size = size_alignment + 1,
+                                                                   .h264_slice_offsets = {&slice, 1}}) == ErrorCode::InvalidArgument);
+                        }
+                        // No slice to decode, and a picture with no view to decode into.
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream, .bitstream_size = size_alignment}) ==
+                                ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
+                                                               .bitstream_size = size_alignment,
+                                                               .h264_slice_offsets = {&slice, 1}}) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}

@@ -12,6 +12,7 @@
 
 #include "render-pass.hpp"
 #include "synchronization2.hpp"
+#include "video-profile.hpp"
 
 Opal::Expected<Rndr::Forge::CommandBuffer, Rndr::ErrorCode> Rndr::Forge::CommandBuffer::Create(const Device& device, DeviceQueue& queue)
 {
@@ -61,8 +62,9 @@ void Rndr::Forge::CommandBuffer::Destroy()
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::Begin(bool submit_one_time) const
 {
     // Beginning resets a recorded buffer, and one being recorded again is not pending, so what it last rendered
-    // into is done with.
+    // into is done with, and no video coding scope is open in it.
     ReleaseFramebuffers();
+    m_video_session = nullptr;
     VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = 0};
     begin_info.flags |= submit_one_time ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
 
@@ -2143,10 +2145,12 @@ Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
     : m_device(std::move(other.m_device)),
       m_queue(std::move(other.m_queue)),
       m_native_command_buffer(other.m_native_command_buffer),
+      m_video_session(other.m_video_session),
       m_framebuffers(std::move(other.m_framebuffers))
 {
     other.m_framebuffers.Clear();
     other.m_native_command_buffer = VK_NULL_HANDLE;
+    other.m_video_session = nullptr;
 }
 
 Rndr::Forge::CommandBuffer& Rndr::Forge::CommandBuffer::operator=(CommandBuffer&& other) noexcept
@@ -2157,9 +2161,233 @@ Rndr::Forge::CommandBuffer& Rndr::Forge::CommandBuffer::operator=(CommandBuffer&
         m_device = std::move(other.m_device);
         m_queue = std::move(other.m_queue);
         m_native_command_buffer = other.m_native_command_buffer;
+        m_video_session = other.m_video_session;
         m_framebuffers = std::move(other.m_framebuffers);
         other.m_native_command_buffer = VK_NULL_HANDLE;
+        other.m_video_session = nullptr;
         other.m_framebuffers.Clear();
     }
     return *this;
+}
+
+
+// Video coding
+
+namespace
+{
+
+/** The picture resource a slot or an output names, checked to be a decode view of a texture. */
+Rndr::ErrorCode ToVkPictureResource(const Rndr::Forge::VideoPicture& picture, VkVideoPictureResourceInfoKHR& out)
+{
+    using namespace Rndr;
+    if (!picture.view.IsValid() || !picture.view->IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: a video picture needs a view of the texture holding it");
+        return ErrorCode::InvalidArgument;
+    }
+    constexpr Forge::TextureUsageBits k_decode_usages = Forge::TextureUsageBits::VideoDecodeDestination | Forge::TextureUsageBits::VideoDecodeDpb;
+    if (!(picture.view->GetDesc().usage & k_decode_usages))
+    {
+        RNDR_LOG_ERROR("Forge: a video picture is seen through a view with VideoDecodeDestination or VideoDecodeDpb in TextureViewDesc::usage");
+        return ErrorCode::InvalidArgument;
+    }
+    if (picture.coded_extent.x <= 0 || picture.coded_extent.y <= 0)
+    {
+        RNDR_LOG_ERROR("Forge: a video picture has an empty coded extent");
+        return ErrorCode::InvalidArgument;
+    }
+    out = {.sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
+           .codedOffset = {.x = 0, .y = 0},
+           .codedExtent = {.width = static_cast<u32>(picture.coded_extent.x), .height = static_cast<u32>(picture.coded_extent.y)},
+           .baseArrayLayer = 0,
+           .imageViewBinding = picture.view->GetNativeImageView()};
+    return ErrorCode::Success;
+}
+
+/** A slot index is -1 where the caller allows it, or one of the session's slots. */
+Rndr::ErrorCode CheckSlotIndex(const Rndr::Forge::VideoSession& session, Rndr::i32 slot_index, bool allow_unassigned)
+{
+    using namespace Rndr;
+    if ((slot_index == -1 && allow_unassigned) ||
+        (slot_index >= 0 && static_cast<u32>(slot_index) < session.GetDesc().max_dpb_slots))
+    {
+        return ErrorCode::Success;
+    }
+    RNDR_LOG_ERROR("Forge: reference slot {} is not one of the session's {}", slot_index, session.GetDesc().max_dpb_slots);
+    return ErrorCode::OutOfBounds;
+}
+
+}  // namespace
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginVideoCoding(const VideoCodingDesc& desc)
+{
+    if (m_video_session != nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: a video coding scope is already open in this command buffer");
+        return ErrorCode::InvalidArgument;
+    }
+    if (!desc.session.IsValid() || !desc.session->IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: CmdBeginVideoCoding needs a video session");
+        return ErrorCode::InvalidArgument;
+    }
+    const VideoSession& session = desc.session.Get();
+    const u32 family = m_queue->GetQueueFamilyIndex();
+    if ((m_device->GetPhysicalDevice().GetVideoCodecOperations(family) & ToVkCodecOperation(session.GetDesc().profile.codec)) == 0)
+    {
+        RNDR_LOG_ERROR("Forge: video coding is recorded on a decode queue that decodes the session's codec, and this command buffer's "
+                       "family {} does not",
+                       family);
+        return ErrorCode::InvalidArgument;
+    }
+    Opal::DynamicArray<VkVideoPictureResourceInfoKHR> pictures(desc.reference_slots.GetSize());
+    Opal::DynamicArray<VkVideoReferenceSlotInfoKHR> slots(desc.reference_slots.GetSize());
+    for (i32 i = 0; i < desc.reference_slots.GetSize(); ++i)
+    {
+        const VideoReferenceSlot& slot = desc.reference_slots[i];
+        RNDR_FORGE_CHECK(CheckSlotIndex(session, slot.slot_index, true));
+        RNDR_FORGE_CHECK(ToVkPictureResource(slot.picture, pictures[i]));
+        slots[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR, .slotIndex = slot.slot_index, .pPictureResource = &pictures[i]};
+    }
+    const VkVideoBeginCodingInfoKHR begin_info{
+        .sType = VK_STRUCTURE_TYPE_VIDEO_BEGIN_CODING_INFO_KHR,
+        .videoSession = session.GetNativeSession(),
+        .videoSessionParameters = desc.parameters.IsValid() ? desc.parameters->GetNativeParameters() : VK_NULL_HANDLE,
+        .referenceSlotCount = static_cast<u32>(slots.GetSize()),
+        .pReferenceSlots = slots.GetData(),
+    };
+    vkCmdBeginVideoCodingKHR(m_native_command_buffer, &begin_info);
+    m_video_session = &session;
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdResetVideoCoding()
+{
+    if (m_video_session == nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: CmdResetVideoCoding is recorded inside a video coding scope");
+        return ErrorCode::InvalidArgument;
+    }
+    const VkVideoCodingControlInfoKHR control_info{.sType = VK_STRUCTURE_TYPE_VIDEO_CODING_CONTROL_INFO_KHR,
+                                                   .flags = VK_VIDEO_CODING_CONTROL_RESET_BIT_KHR};
+    vkCmdControlVideoCodingKHR(m_native_command_buffer, &control_info);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc& desc)
+{
+    if (m_video_session == nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: CmdDecodeVideo is recorded inside a video coding scope");
+        return ErrorCode::InvalidArgument;
+    }
+    const VideoSession& session = *m_video_session;
+    if (session.GetDesc().profile.codec != VideoCodec::H264)
+    {
+        RNDR_LOG_ERROR("Forge: CmdDecodeVideo decodes H.264 only, so far");
+        return ErrorCode::InvalidArgument;
+    }
+
+    // The bitstream: a buffer made for it, a range inside it, both ends on the session's alignments.
+    if (!desc.bitstream.IsValid() || !(desc.bitstream->GetDesc().usage & BufferUsageBits::VideoDecodeSource))
+    {
+        RNDR_LOG_ERROR("Forge: a decode reads its bitstream from a buffer created with BufferUsageBits::VideoDecodeSource");
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.bitstream_size == 0 || desc.bitstream_offset % session.GetBitstreamOffsetAlignment() != 0 ||
+        desc.bitstream_size % session.GetBitstreamSizeAlignment() != 0)
+    {
+        RNDR_LOG_ERROR("Forge: a decode's bitstream offset {} and size {} are multiples of the session's alignments, {} and {}, and the size "
+                       "is not zero",
+                       desc.bitstream_offset, desc.bitstream_size, session.GetBitstreamOffsetAlignment(), session.GetBitstreamSizeAlignment());
+        return ErrorCode::InvalidArgument;
+    }
+    const u64 buffer_size = desc.bitstream->GetSize();
+    if (desc.bitstream_offset > buffer_size || desc.bitstream_size > buffer_size - desc.bitstream_offset)
+    {
+        RNDR_LOG_ERROR("Forge: a decode's bitstream range reaches past the end of its buffer");
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.h264_slice_offsets.IsEmpty())
+    {
+        RNDR_LOG_ERROR("Forge: an H.264 picture has at least one slice, and h264_slice_offsets names none");
+        return ErrorCode::InvalidArgument;
+    }
+    for (const u32 offset : desc.h264_slice_offsets)
+    {
+        if (offset >= desc.bitstream_size)
+        {
+            RNDR_LOG_ERROR("Forge: a slice starts at {}, past the decode's bitstream range of {} bytes", offset, desc.bitstream_size);
+            return ErrorCode::InvalidArgument;
+        }
+    }
+    if (desc.references.GetSize() > static_cast<u64>(session.GetDesc().max_active_reference_pictures))
+    {
+        RNDR_LOG_ERROR("Forge: a decode names {} references, more than the session's {}", desc.references.GetSize(),
+                       session.GetDesc().max_active_reference_pictures);
+        return ErrorCode::InvalidArgument;
+    }
+
+    VkVideoPictureResourceInfoKHR output{};
+    RNDR_FORGE_CHECK(ToVkPictureResource(desc.output, output));
+
+    // The setup slot and each reference carry the codec's reference information beside the picture.
+    const bool has_setup = desc.setup.slot_index >= 0;
+    VkVideoPictureResourceInfoKHR setup_picture{};
+    VkVideoDecodeH264DpbSlotInfoKHR setup_h264{.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR,
+                                               .pStdReferenceInfo = &desc.setup.h264_reference};
+    VkVideoReferenceSlotInfoKHR setup_slot{.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR, .pNext = &setup_h264};
+    if (has_setup)
+    {
+        RNDR_FORGE_CHECK(CheckSlotIndex(session, desc.setup.slot_index, false));
+        RNDR_FORGE_CHECK(ToVkPictureResource(desc.setup.picture, setup_picture));
+        setup_slot.slotIndex = desc.setup.slot_index;
+        setup_slot.pPictureResource = &setup_picture;
+    }
+    const i64 reference_count = desc.references.GetSize();
+    Opal::DynamicArray<VkVideoPictureResourceInfoKHR> reference_pictures(reference_count);
+    Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR> reference_h264(reference_count);
+    Opal::DynamicArray<VkVideoReferenceSlotInfoKHR> reference_slots(reference_count);
+    for (i64 i = 0; i < reference_count; ++i)
+    {
+        const VideoReferenceSlot& reference = desc.references[i];
+        RNDR_FORGE_CHECK(CheckSlotIndex(session, reference.slot_index, false));
+        RNDR_FORGE_CHECK(ToVkPictureResource(reference.picture, reference_pictures[i]));
+        reference_h264[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &reference.h264_reference};
+        reference_slots[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
+                              .pNext = &reference_h264[i],
+                              .slotIndex = reference.slot_index,
+                              .pPictureResource = &reference_pictures[i]};
+    }
+
+    const VkVideoDecodeH264PictureInfoKHR h264_info{.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_PICTURE_INFO_KHR,
+                                                    .pStdPictureInfo = &desc.h264_picture,
+                                                    .sliceCount = static_cast<u32>(desc.h264_slice_offsets.GetSize()),
+                                                    .pSliceOffsets = desc.h264_slice_offsets.GetData()};
+    const VkVideoDecodeInfoKHR decode_info{
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_INFO_KHR,
+        .pNext = &h264_info,
+        .srcBuffer = desc.bitstream->GetNativeBuffer(),
+        .srcBufferOffset = desc.bitstream_offset,
+        .srcBufferRange = desc.bitstream_size,
+        .dstPictureResource = output,
+        .pSetupReferenceSlot = has_setup ? &setup_slot : nullptr,
+        .referenceSlotCount = static_cast<u32>(reference_count),
+        .pReferenceSlots = reference_slots.GetData(),
+    };
+    vkCmdDecodeVideoKHR(m_native_command_buffer, &decode_info);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdEndVideoCoding()
+{
+    if (m_video_session == nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: CmdEndVideoCoding has no video coding scope to close");
+        return ErrorCode::InvalidArgument;
+    }
+    const VkVideoEndCodingInfoKHR end_info{.sType = VK_STRUCTURE_TYPE_VIDEO_END_CODING_INFO_KHR};
+    vkCmdEndVideoCodingKHR(m_native_command_buffer, &end_info);
+    m_video_session = nullptr;
+    return ErrorCode::Success;
 }

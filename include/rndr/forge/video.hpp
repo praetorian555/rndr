@@ -135,13 +135,76 @@ public:
     [[nodiscard]] const VideoSessionDesc& GetDesc() const { return m_desc; }
     /** How much memory the device asked for and the session holds, in bytes. */
     [[nodiscard]] u64 GetMemorySize() const { return m_memory_size; }
+    /** What the offset and the size of the bitstream of one decode have to be multiples of. */
+    [[nodiscard]] u64 GetBitstreamOffsetAlignment() const { return m_bitstream_offset_alignment; }
+    [[nodiscard]] u64 GetBitstreamSizeAlignment() const { return m_bitstream_size_alignment; }
 
 private:
     Opal::Ref<const Device> m_device;
     VkVideoSessionKHR m_session = VK_NULL_HANDLE;
     Opal::DynamicArray<VmaAllocation> m_allocations;
     u64 m_memory_size = 0;
+    u64 m_bitstream_offset_alignment = 1;
+    u64 m_bitstream_size_alignment = 1;
     VideoSessionDesc m_desc;
+};
+
+/** A picture a video decode reads or writes: the texture holding it, seen through a view with a decode usage. */
+struct VideoPicture
+{
+    /**
+     * A view of the texture, made with TextureUsageBits::VideoDecodeDestination or VideoDecodeDpb in TextureViewDesc::usage,
+     * which is what a YCbCr texture can be seen as without a conversion.
+     */
+    Opal::Ref<const TextureView> view;
+    /** The size of the picture in the texture: the stream's coded size, which may be smaller than the texture. */
+    Vector2i coded_extent;
+};
+
+/** A reference picture slot of a session, with the picture it holds. */
+struct VideoReferenceSlot
+{
+    /**
+     * The slot's index in the session, below VideoSessionDesc::max_dpb_slots. In CmdBeginVideoCoding, -1 for the slot a decode
+     * in the scope is about to fill for the first time.
+     */
+    i32 slot_index = -1;
+    VideoPicture picture;
+    /** H.264: what the stream says of the picture as a reference - its frame number, its picture order counts. */
+    StdVideoDecodeH264ReferenceInfo h264_reference{};
+};
+
+/** What a video coding scope is over, from CmdBeginVideoCoding to CmdEndVideoCoding. */
+struct VideoCodingDesc
+{
+    Opal::Ref<const VideoSession> session;
+    /** The stream's parameter sets. May be empty for a scope that only resets the session. */
+    Opal::Ref<const VideoSessionParameters> parameters;
+    /** Every slot the decodes in the scope read or fill, with the picture each holds or is about to. */
+    Opal::ArrayView<const VideoReferenceSlot> reference_slots;
+};
+
+/** One picture to decode, inside a video coding scope. */
+struct VideoDecodeDesc
+{
+    /** The buffer holding the picture's bitstream, a BufferUsageBits::VideoDecodeSource one created for the session's profile. */
+    Opal::Ref<const Buffer> bitstream;
+    /** Where the picture's bitstream starts and how long it is, multiples of the session's bitstream alignments. */
+    u64 bitstream_offset = 0;
+    u64 bitstream_size = 0;
+    /** Where the decoded picture is written. */
+    VideoPicture output;
+    /**
+     * The slot the picture is kept in as a reference for later ones, with the picture as it will be referred to; a
+     * slot_index of -1 for a picture nothing refers to. Where the device's output and reference pictures coincide, its
+     * picture is the output's.
+     */
+    VideoReferenceSlot setup;
+    /** The reference pictures this one is predicted from, each in the slot it was kept in. */
+    Opal::ArrayView<const VideoReferenceSlot> references;
+    /** H.264: the picture's parameters from its slice header, and where each of its slices starts in the bitstream range. */
+    StdVideoDecodeH264PictureInfo h264_picture{};
+    Opal::ArrayView<const u32> h264_slice_offsets;
 };
 
 /**

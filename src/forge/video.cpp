@@ -303,6 +303,8 @@ Opal::Expected<Rndr::Forge::VideoSession, Rndr::ErrorCode> Rndr::Forge::VideoSes
     VideoSession session;
     session.m_device = device;
     session.m_desc = desc;
+    session.m_bitstream_offset_alignment = capabilities.bitstream_offset_alignment;
+    session.m_bitstream_size_alignment = capabilities.bitstream_size_alignment;
     const VideoProfileChain chain(desc.profile);
     const VkVideoSessionCreateInfoKHR create_info{
         .sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_CREATE_INFO_KHR,
@@ -368,6 +370,8 @@ Rndr::Forge::VideoSession::VideoSession(VideoSession&& other) noexcept
       m_session(other.m_session),
       m_allocations(std::move(other.m_allocations)),
       m_memory_size(other.m_memory_size),
+      m_bitstream_offset_alignment(other.m_bitstream_offset_alignment),
+      m_bitstream_size_alignment(other.m_bitstream_size_alignment),
       m_desc(other.m_desc)
 {
     other.m_session = VK_NULL_HANDLE;
@@ -385,6 +389,8 @@ Rndr::Forge::VideoSession& Rndr::Forge::VideoSession::operator=(VideoSession&& o
         m_session = other.m_session;
         m_allocations = std::move(other.m_allocations);
         m_memory_size = other.m_memory_size;
+        m_bitstream_offset_alignment = other.m_bitstream_offset_alignment;
+        m_bitstream_size_alignment = other.m_bitstream_size_alignment;
         m_desc = other.m_desc;
         other.m_session = VK_NULL_HANDLE;
         other.m_allocations.Clear();

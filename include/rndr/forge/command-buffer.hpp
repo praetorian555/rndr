@@ -13,6 +13,7 @@
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/forge/video.hpp"
 
 namespace Rndr::Forge
 {
@@ -784,6 +785,32 @@ public:
     ErrorCode CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index,
                                 PipelineStageBits stage = PipelineStageBits::AllCommands);
 
+    /**
+     * Open a video coding scope over a session, which every decode is recorded inside. Only on a command buffer of a
+     * decode queue whose family decodes the session's codec, and not inside another scope.
+     * @param desc The session, the stream's parameters, and every reference slot the scope's decodes read or fill.
+     * @return ErrorCode::InvalidArgument for an empty session, parameters of another session, a slot past the session's,
+     *         a picture without a decode view, a queue that does not decode the codec, or a scope already open.
+     */
+    ErrorCode CmdBeginVideoCoding(const VideoCodingDesc& desc);
+
+    /**
+     * Reset the session, which a session needs before its first decode and a stream after a seek to start over: every
+     * reference slot is let go.
+     */
+    ErrorCode CmdResetVideoCoding();
+
+    /**
+     * Decode one picture. H.264 only, so far.
+     * @return ErrorCode::InvalidArgument outside a scope, for a bitstream buffer without BufferUsageBits::VideoDecodeSource,
+     *         a bitstream range that breaks the session's alignments or reaches past the buffer, no slice, a picture
+     *         without a decode view, or more references than the session takes; OutOfBounds for a slot past the session's.
+     */
+    ErrorCode CmdDecodeVideo(const VideoDecodeDesc& desc);
+
+    /** Close the video coding scope CmdBeginVideoCoding opened. */
+    ErrorCode CmdEndVideoCoding();
+
 private:
     /** Destroy the framebuffers made for the last recording. Only while the buffer is not pending. */
     void ReleaseFramebuffers() const;
@@ -791,6 +818,8 @@ private:
     Opal::Ref<const Device> m_device;
     Opal::Ref<DeviceQueue> m_queue;
     VkCommandBuffer m_native_command_buffer = VK_NULL_HANDLE;
+    /** The session of the open video coding scope, or null outside one. Mutable since Begin, which is const, clears it. */
+    mutable const VideoSession* m_video_session = nullptr;
     /**
      * On a device that records passes as render passes (Device::UsesRenderPasses), the framebuffer each pass of this
      * recording was made with. Kept until the buffer is recorded again, reset or freed, which Vulkan only allows once
