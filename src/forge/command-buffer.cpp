@@ -2311,9 +2311,10 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         return ErrorCode::InvalidArgument;
     }
     const VideoSession& session = *m_video_session;
-    if (session.GetDesc().profile.codec != VideoCodec::H264)
+    const VideoCodec codec = session.GetDesc().profile.codec;
+    if (codec != VideoCodec::H264 && codec != VideoCodec::H265)
     {
-        RNDR_LOG_ERROR("Forge: CmdDecodeVideo decodes H.264 only, so far");
+        RNDR_LOG_ERROR("Forge: CmdDecodeVideo decodes H.264 and H.265 only, so far");
         return ErrorCode::InvalidArgument;
     }
 
@@ -2337,12 +2338,12 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         RNDR_LOG_ERROR("Forge: a decode's bitstream range reaches past the end of its buffer");
         return ErrorCode::InvalidArgument;
     }
-    if (desc.h264_slice_offsets.IsEmpty())
+    if (desc.slice_offsets.IsEmpty())
     {
-        RNDR_LOG_ERROR("Forge: an H.264 picture has at least one slice, and h264_slice_offsets names none");
+        RNDR_LOG_ERROR("Forge: a picture has at least one slice, and slice_offsets names none");
         return ErrorCode::InvalidArgument;
     }
-    for (const u32 offset : desc.h264_slice_offsets)
+    for (const u32 offset : desc.slice_offsets)
     {
         if (offset >= desc.bitstream_size)
         {
@@ -2355,6 +2356,32 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         RNDR_LOG_ERROR("Forge: a decode names {} references, more than the session's {}", desc.references.GetSize(),
                        session.GetDesc().max_active_reference_pictures);
         return ErrorCode::InvalidArgument;
+    }
+    if (codec == VideoCodec::H265)
+    {
+        // Each slot the reference picture set names is one of the references.
+        for (const u8* list :
+             {desc.h265_picture.RefPicSetStCurrBefore, desc.h265_picture.RefPicSetStCurrAfter, desc.h265_picture.RefPicSetLtCurr})
+        {
+            for (u32 i = 0; i < STD_VIDEO_DECODE_H265_REF_PIC_SET_LIST_SIZE; ++i)
+            {
+                if (list[i] == STD_VIDEO_H265_NO_REFERENCE_PICTURE)
+                {
+                    continue;
+                }
+                bool found = false;
+                for (const VideoReferenceSlot& reference : desc.references)
+                {
+                    found = found || reference.slot_index == static_cast<i32>(list[i]);
+                }
+                if (!found)
+                {
+                    RNDR_LOG_ERROR("Forge: an H.265 reference picture set names slot {}, which is not among the decode's references",
+                                   list[i]);
+                    return ErrorCode::InvalidArgument;
+                }
+            }
+        }
     }
 
     const bool has_status_query = desc.status_query_pool.IsValid();
@@ -2388,40 +2415,86 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
     {
         RNDR_FORGE_CHECK(CheckSlotIndex(session, desc.setup.slot_index, false));
         RNDR_FORGE_CHECK(ToVkPictureResource(desc.setup.picture, r.setup_picture));
-        r.setup_reference = desc.setup.h264_reference;
-        r.setup_h264 = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.setup_reference};
+        const void* codec_info = nullptr;
+        if (codec == VideoCodec::H264)
+        {
+            r.setup_h264_reference = desc.setup.h264_reference;
+            r.setup_h264 = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.setup_h264_reference};
+            codec_info = &r.setup_h264;
+        }
+        else
+        {
+            r.setup_h265_reference = desc.setup.h265_reference;
+            r.setup_h265 = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.setup_h265_reference};
+            codec_info = &r.setup_h265;
+        }
         r.setup_slot = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
-                        .pNext = &r.setup_h264,
+                        .pNext = codec_info,
                         .slotIndex = desc.setup.slot_index,
                         .pPictureResource = &r.setup_picture};
     }
     const i64 reference_count = desc.references.GetSize();
     r.reference_pictures = Opal::DynamicArray<VkVideoPictureResourceInfoKHR>(reference_count);
-    r.reference_h264 = Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR>(reference_count);
-    r.reference_infos = Opal::DynamicArray<StdVideoDecodeH264ReferenceInfo>(reference_count);
     r.reference_slots = Opal::DynamicArray<VkVideoReferenceSlotInfoKHR>(reference_count);
+    if (codec == VideoCodec::H264)
+    {
+        r.reference_h264 = Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR>(reference_count);
+        r.reference_h264_infos = Opal::DynamicArray<StdVideoDecodeH264ReferenceInfo>(reference_count);
+    }
+    else
+    {
+        r.reference_h265 = Opal::DynamicArray<VkVideoDecodeH265DpbSlotInfoKHR>(reference_count);
+        r.reference_h265_infos = Opal::DynamicArray<StdVideoDecodeH265ReferenceInfo>(reference_count);
+    }
     for (i64 i = 0; i < reference_count; ++i)
     {
         const VideoReferenceSlot& reference = desc.references[i];
         RNDR_FORGE_CHECK(CheckSlotIndex(session, reference.slot_index, false));
         RNDR_FORGE_CHECK(ToVkPictureResource(reference.picture, r.reference_pictures[i]));
-        r.reference_infos[i] = reference.h264_reference;
-        r.reference_h264[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.reference_infos[i]};
+        const void* codec_info = nullptr;
+        if (codec == VideoCodec::H264)
+        {
+            r.reference_h264_infos[i] = reference.h264_reference;
+            r.reference_h264[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR,
+                                   .pStdReferenceInfo = &r.reference_h264_infos[i]};
+            codec_info = &r.reference_h264[i];
+        }
+        else
+        {
+            r.reference_h265_infos[i] = reference.h265_reference;
+            r.reference_h265[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_DPB_SLOT_INFO_KHR,
+                                   .pStdReferenceInfo = &r.reference_h265_infos[i]};
+            codec_info = &r.reference_h265[i];
+        }
         r.reference_slots[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
-                                .pNext = &r.reference_h264[i],
+                                .pNext = codec_info,
                                 .slotIndex = reference.slot_index,
                                 .pPictureResource = &r.reference_pictures[i]};
     }
 
-    r.h264_picture = desc.h264_picture;
-    r.slice_offsets = Opal::DynamicArray<u32>(desc.h264_slice_offsets.GetData(), desc.h264_slice_offsets.GetSize());
-    r.h264_info = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_PICTURE_INFO_KHR,
-                   .pStdPictureInfo = &r.h264_picture,
-                   .sliceCount = static_cast<u32>(r.slice_offsets.GetSize()),
-                   .pSliceOffsets = r.slice_offsets.GetData()};
+    r.slice_offsets = Opal::DynamicArray<u32>(desc.slice_offsets.GetData(), desc.slice_offsets.GetSize());
+    const void* picture_info = nullptr;
+    if (codec == VideoCodec::H264)
+    {
+        r.h264_picture = desc.h264_picture;
+        r.h264_info = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_PICTURE_INFO_KHR,
+                       .pStdPictureInfo = &r.h264_picture,
+                       .sliceCount = static_cast<u32>(r.slice_offsets.GetSize()),
+                       .pSliceOffsets = r.slice_offsets.GetData()};
+        picture_info = &r.h264_info;
+    }
+    else
+    {
+        r.h265_picture = desc.h265_picture;
+        r.h265_info = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_PICTURE_INFO_KHR,
+                       .pStdPictureInfo = &r.h265_picture,
+                       .sliceSegmentCount = static_cast<u32>(r.slice_offsets.GetSize()),
+                       .pSliceSegmentOffsets = r.slice_offsets.GetData()};
+        picture_info = &r.h265_info;
+    }
     r.decode_info = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_INFO_KHR,
-        .pNext = &r.h264_info,
+        .pNext = picture_info,
         .srcBuffer = desc.bitstream->GetNativeBuffer(),
         .srcBufferOffset = desc.bitstream_offset,
         .srcBufferRange = desc.bitstream_size,

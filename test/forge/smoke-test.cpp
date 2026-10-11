@@ -18507,6 +18507,133 @@ TEST_CASE("Forge a video session and its H.264 parameter sets", "[forge]")
     }
 }
 
+namespace
+{
+
+/** What an H.265 VPS and SPS point at, kept together so that the sets built from it stay valid. */
+struct H265SetStorage
+{
+    StdVideoH265ProfileTierLevel profile_tier_level{.general_profile_idc = STD_VIDEO_H265_PROFILE_IDC_MAIN,
+                                                    .general_level_idc = STD_VIDEO_H265_LEVEL_IDC_5_1};
+    StdVideoH265DecPicBufMgr dec_pic_buf_mgr{};
+};
+
+StdVideoH265VideoParameterSet MakeH265VideoParameterSet(const H265SetStorage& storage, u8 id)
+{
+    StdVideoH265VideoParameterSet vps{};
+    vps.vps_video_parameter_set_id = id;
+    vps.pDecPicBufMgr = &storage.dec_pic_buf_mgr;
+    vps.pProfileTierLevel = &storage.profile_tier_level;
+    return vps;
+}
+
+/** A 1080p Main SPS: 64x64 coding tree blocks down to 8x8, transforms from 4x4 to 32x32. */
+StdVideoH265SequenceParameterSet MakeH265SequenceParameterSet(const H265SetStorage& storage, u8 vps_id, u8 id)
+{
+    StdVideoH265SequenceParameterSet sps{};
+    sps.chroma_format_idc = STD_VIDEO_H265_CHROMA_FORMAT_IDC_420;
+    sps.pic_width_in_luma_samples = 1920;
+    sps.pic_height_in_luma_samples = 1088;
+    sps.sps_video_parameter_set_id = vps_id;
+    sps.sps_seq_parameter_set_id = id;
+    sps.log2_max_pic_order_cnt_lsb_minus4 = 4;
+    sps.log2_diff_max_min_luma_coding_block_size = 3;
+    sps.log2_diff_max_min_luma_transform_block_size = 3;
+    sps.pProfileTierLevel = &storage.profile_tier_level;
+    sps.pDecPicBufMgr = &storage.dec_pic_buf_mgr;
+    return sps;
+}
+
+StdVideoH265PictureParameterSet MakeH265PictureParameterSet(u8 vps_id, u8 sps_id, u8 id)
+{
+    StdVideoH265PictureParameterSet pps{};
+    pps.sps_video_parameter_set_id = vps_id;
+    pps.pps_seq_parameter_set_id = sps_id;
+    pps.pps_pic_parameter_set_id = id;
+    return pps;
+}
+
+}  // namespace
+
+TEST_CASE("Forge a video session and its H.265 parameter sets", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_h265{.decode = Forge::VideoCodecBits::H265};
+    if (!CanCreateDevice({}, k_h265))
+    {
+        SKIP("This device has no queue that decodes H.265.");
+    }
+    ForgeFixture fixture({}, k_h265);
+    const Forge::VideoProfile profile{.codec = Forge::VideoCodec::H265, .codec_profile = 1};
+    const Forge::VideoCapabilities capabilities =
+        ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(fixture.device.GetPhysicalDevice(), profile));
+    constexpr PixelFormat k_nv12 = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    if (!ContainsFormat(capabilities.dpb_formats, k_nv12) || !ContainsFormat(capabilities.output_formats, k_nv12))
+    {
+        SKIP("This device does not decode H.265 Main into NV12.");
+    }
+    const Forge::VideoSession session = ForgeTest::Unwrap(Forge::VideoSession::Create(
+        fixture.device, {.profile = profile,
+                         .max_coded_extent = {1920, 1088},
+                         .max_dpb_slots = Opal::Min(17u, capabilities.max_dpb_slots),
+                         .max_active_reference_pictures = Opal::Min(16u, capabilities.max_active_reference_pictures)}));
+    const H265SetStorage storage;
+    const StdVideoH265VideoParameterSet vps = MakeH265VideoParameterSet(storage, 0);
+    const StdVideoH265SequenceParameterSet sps = MakeH265SequenceParameterSet(storage, 0, 0);
+    const StdVideoH265PictureParameterSet pps = MakeH265PictureParameterSet(0, 0, 0);
+
+    SECTION("H.265 parameters take the stream's VPS, SPS and PPS, each set named by its ids and those of the sets above it")
+    {
+        Forge::VideoSessionParameters parameters = ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateH265(
+            fixture.device, session,
+            {.video_parameter_sets = {&vps, 1}, .sequence_parameter_sets = {&sps, 1}, .picture_parameter_sets = {&pps, 1}}));
+        REQUIRE(parameters.IsValid());
+        // The same PPS id under another SPS is another set; under the same one it is given twice.
+        const StdVideoH265SequenceParameterSet second_sps = MakeH265SequenceParameterSet(storage, 0, 1);
+        const StdVideoH265PictureParameterSet other_sps_pps = MakeH265PictureParameterSet(0, 1, 0);
+        REQUIRE(parameters.AddH265({.sequence_parameter_sets = {&second_sps, 1}, .picture_parameter_sets = {&other_sps_pps, 1}}) ==
+                ErrorCode::Success);
+        REQUIRE(parameters.AddH265({.picture_parameter_sets = {&pps, 1}}) == ErrorCode::InvalidArgument);
+        const StdVideoH265PictureParameterSet past_the_last = MakeH265PictureParameterSet(0, 0, 64);
+        REQUIRE(parameters.AddH265({.picture_parameter_sets = {&past_the_last, 1}}) == ErrorCode::InvalidArgument);
+        // H.264 sets have no place in H.265 parameters, nor H.265 ones in an H.264 session's.
+        REQUIRE(Forge::VideoSessionParameters::CreateH264(fixture.device, session).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("An H.265 decode whose reference picture set names a slot that is not among its references is refused")
+    {
+        const Forge::VideoSessionParameters parameters = ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateH265(
+            fixture.device, session,
+            {.video_parameter_sets = {&vps, 1}, .sequence_parameter_sets = {&sps, 1}, .picture_parameter_sets = {&pps, 1}}));
+        const u64 size_alignment = session.GetBitstreamSizeAlignment();
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size_alignment, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = profile}));
+        const u32 slice = 0;
+        Forge::VideoDecodeDesc decode{.bitstream = bitstream, .bitstream_size = size_alignment, .slice_offsets = {&slice, 1}};
+        for (u32 i = 0; i < STD_VIDEO_DECODE_H265_REF_PIC_SET_LIST_SIZE; ++i)
+        {
+            decode.h265_picture.RefPicSetStCurrBefore[i] = STD_VIDEO_H265_NO_REFERENCE_PICTURE;
+            decode.h265_picture.RefPicSetStCurrAfter[i] = STD_VIDEO_H265_NO_REFERENCE_PICTURE;
+            decode.h265_picture.RefPicSetLtCurr[i] = STD_VIDEO_H265_NO_REFERENCE_PICTURE;
+        }
+        decode.h265_picture.RefPicSetStCurrBefore[0] = 3;
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(Forge::QueueFamily::Decode),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
+
 TEST_CASE("Forge video coding scopes on the decode queue", "[forge]")
 {
     if (!IsForgeAvailable())
@@ -18583,27 +18710,28 @@ TEST_CASE("Forge video coding scopes on the decode queue", "[forge]")
                         REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) == ErrorCode::Success);
                         REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
                         // A buffer that was not made for a bitstream.
-                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = plain, .bitstream_size = size_alignment, .h264_slice_offsets = {&slice, 1}}) ==
+                        REQUIRE(command_buffer.CmdDecodeVideo(
+                                    {.bitstream = plain, .bitstream_size = size_alignment, .slice_offsets = {&slice, 1}}) ==
                                 ErrorCode::InvalidArgument);
                         // An empty range, and one past the end of the buffer.
-                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream, .h264_slice_offsets = {&slice, 1}}) ==
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream, .slice_offsets = {&slice, 1}}) ==
                                 ErrorCode::InvalidArgument);
-                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
-                                                               .bitstream_size = size_alignment * 65,
-                                                               .h264_slice_offsets = {&slice, 1}}) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdDecodeVideo(
+                                    {.bitstream = bitstream, .bitstream_size = size_alignment * 65, .slice_offsets = {&slice, 1}}) ==
+                                ErrorCode::InvalidArgument);
                         // A size off the session's alignment, where it has one.
                         if (size_alignment > 1)
                         {
-                            REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
-                                                                   .bitstream_size = size_alignment + 1,
-                                                                   .h264_slice_offsets = {&slice, 1}}) == ErrorCode::InvalidArgument);
+                            REQUIRE(command_buffer.CmdDecodeVideo(
+                                        {.bitstream = bitstream, .bitstream_size = size_alignment + 1, .slice_offsets = {&slice, 1}}) ==
+                                    ErrorCode::InvalidArgument);
                         }
                         // No slice to decode, and a picture with no view to decode into.
                         REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream, .bitstream_size = size_alignment}) ==
                                 ErrorCode::InvalidArgument);
-                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
-                                                               .bitstream_size = size_alignment,
-                                                               .h264_slice_offsets = {&slice, 1}}) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdDecodeVideo(
+                                    {.bitstream = bitstream, .bitstream_size = size_alignment, .slice_offsets = {&slice, 1}}) ==
+                                ErrorCode::InvalidArgument);
                         REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
                     }) == ErrorCode::Success);
         REQUIRE_NO_VALIDATION_ERROR(fixture);
@@ -18681,7 +18809,7 @@ TEST_CASE("Forge video status queries", "[forge]")
                                       .bitstream_size = size_alignment * 64,
                                       .output = {.view = coincide ? dpb_view : output_view, .coded_extent = extent},
                                       .setup = {.slot_index = 0, .picture = {.view = dpb_view, .coded_extent = extent}},
-                                      .h264_slice_offsets = {&slice, 1},
+                                      .slice_offsets = {&slice, 1},
                                       .status_query_pool = pool,
                                       .status_query = 1};
         decode.h264_picture.flags.IdrPicFlag = 1;
@@ -18736,11 +18864,11 @@ TEST_CASE("Forge video status queries", "[forge]")
                         REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
                         REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
                                                                .bitstream_size = size_alignment,
-                                                               .h264_slice_offsets = {&slice, 1},
+                                                               .slice_offsets = {&slice, 1},
                                                                .status_query_pool = main_pool}) == ErrorCode::InvalidArgument);
                         REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
                                                                .bitstream_size = size_alignment,
-                                                               .h264_slice_offsets = {&slice, 1},
+                                                               .slice_offsets = {&slice, 1},
                                                                .status_query_pool = pool,
                                                                .status_query = 2}) == ErrorCode::OutOfBounds);
                         REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);

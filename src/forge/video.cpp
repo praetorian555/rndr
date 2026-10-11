@@ -417,41 +417,146 @@ void Rndr::Forge::VideoSession::Destroy()
 
 // VideoSessionParameters
 
+namespace
+{
+
+/** The kinds of set a key names, in its top byte. */
+enum class SetKind : Rndr::u32
+{
+    H264Sps = 1,
+    H264Pps,
+    H265Vps,
+    H265Sps,
+    H265Pps,
+};
+
+Rndr::u32 MakeKey(SetKind kind, Rndr::u32 a, Rndr::u32 b = 0, Rndr::u32 c = 0)
+{
+    return (static_cast<Rndr::u32>(kind) << 24) | (a << 16) | (b << 8) | c;
+}
+
+bool Contains(const Opal::DynamicArray<Rndr::u32>& keys, Rndr::u32 key)
+{
+    for (const Rndr::u32 held : keys)
+    {
+        if (held == key)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** How many keys of a kind are held. */
+Rndr::u32 CountKind(const Opal::DynamicArray<Rndr::u32>& keys, SetKind kind)
+{
+    Rndr::u32 count = 0;
+    for (const Rndr::u32 key : keys)
+    {
+        count += (key >> 24) == static_cast<Rndr::u32>(kind) ? 1 : 0;
+    }
+    return count;
+}
+
+}  // namespace
+
 Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::TakeIds(const H264ParameterSets& sets)
 {
-    u32 sps_ids = m_sps_ids;
-    u32 pps_ids[k_max_h264_picture_parameter_sets / 32] = {};
-    for (u32 i = 0; i < k_max_h264_picture_parameter_sets / 32; ++i)
+    Opal::Expected<Opal::DynamicArray<u32>, Opal::ErrorCode> held_copy = m_held.TryClone();
+    if (!held_copy.HasValue())
     {
-        pps_ids[i] = m_pps_ids[i];
+        return ErrorCode::OutOfMemory;
     }
+    Opal::DynamicArray<u32> held = std::move(held_copy.GetValue());
     for (const StdVideoH264SequenceParameterSet& sps : sets.sequence_parameter_sets)
     {
         const u32 id = sps.seq_parameter_set_id;
-        if (id >= k_max_h264_sequence_parameter_sets || (sps_ids & (1u << id)) != 0)
+        const u32 key = MakeKey(SetKind::H264Sps, id);
+        if (id >= k_max_h264_sequence_parameter_sets || Contains(held, key))
         {
             RNDR_LOG_ERROR("Forge: sequence parameter set {} is past what H.264 allows or already held; a changed set needs parameters of its own",
                            id);
             return ErrorCode::InvalidArgument;
         }
-        sps_ids |= 1u << id;
+        held.PushBack(key);
     }
     for (const StdVideoH264PictureParameterSet& pps : sets.picture_parameter_sets)
     {
         const u32 id = pps.pic_parameter_set_id;
-        if (id >= k_max_h264_picture_parameter_sets || (pps_ids[id / 32] & (1u << (id % 32))) != 0)
+        const u32 key = MakeKey(SetKind::H264Pps, id);
+        if (id >= k_max_h264_picture_parameter_sets || Contains(held, key))
         {
             RNDR_LOG_ERROR("Forge: picture parameter set {} is past what H.264 allows or already held; a changed set needs parameters of its own",
                            id);
             return ErrorCode::InvalidArgument;
         }
-        pps_ids[id / 32] |= 1u << (id % 32);
+        held.PushBack(key);
     }
-    m_sps_ids = sps_ids;
-    for (u32 i = 0; i < k_max_h264_picture_parameter_sets / 32; ++i)
+    m_held = std::move(held);
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::TakeIds(const H265ParameterSets& sets)
+{
+    Opal::Expected<Opal::DynamicArray<u32>, Opal::ErrorCode> held_copy = m_held.TryClone();
+    if (!held_copy.HasValue())
     {
-        m_pps_ids[i] = pps_ids[i];
+        return ErrorCode::OutOfMemory;
     }
+    Opal::DynamicArray<u32> held = std::move(held_copy.GetValue());
+    for (const StdVideoH265VideoParameterSet& vps : sets.video_parameter_sets)
+    {
+        const u32 id = vps.vps_video_parameter_set_id;
+        const u32 key = MakeKey(SetKind::H265Vps, id);
+        if (id >= k_max_h265_video_parameter_sets || Contains(held, key))
+        {
+            RNDR_LOG_ERROR(
+                "Forge: video parameter set {} is past what H.265 allows or already held; a changed set needs parameters of its own", id);
+            return ErrorCode::InvalidArgument;
+        }
+        held.PushBack(key);
+    }
+    for (const StdVideoH265SequenceParameterSet& sps : sets.sequence_parameter_sets)
+    {
+        const u32 vps_id = sps.sps_video_parameter_set_id;
+        const u32 id = sps.sps_seq_parameter_set_id;
+        const u32 key = MakeKey(SetKind::H265Sps, vps_id, id);
+        if (vps_id >= k_max_h265_video_parameter_sets || id >= k_max_h265_sequence_parameter_sets || Contains(held, key))
+        {
+            RNDR_LOG_ERROR(
+                "Forge: sequence parameter set {} of video parameter set {} is past what H.265 allows or already held; a changed "
+                "set needs parameters of its own",
+                id, vps_id);
+            return ErrorCode::InvalidArgument;
+        }
+        held.PushBack(key);
+    }
+    for (const StdVideoH265PictureParameterSet& pps : sets.picture_parameter_sets)
+    {
+        const u32 vps_id = pps.sps_video_parameter_set_id;
+        const u32 sps_id = pps.pps_seq_parameter_set_id;
+        const u32 id = pps.pps_pic_parameter_set_id;
+        const u32 key = MakeKey(SetKind::H265Pps, vps_id, sps_id, id);
+        if (vps_id >= k_max_h265_video_parameter_sets || sps_id >= k_max_h265_sequence_parameter_sets ||
+            id >= k_max_h265_picture_parameter_sets || Contains(held, key))
+        {
+            RNDR_LOG_ERROR(
+                "Forge: picture parameter set {} of sequence parameter set {} is past what H.265 allows or already held; a "
+                "changed set needs parameters of its own",
+                id, sps_id);
+            return ErrorCode::InvalidArgument;
+        }
+        held.PushBack(key);
+    }
+    if (CountKind(held, SetKind::H265Vps) > k_max_h265_video_parameter_sets ||
+        CountKind(held, SetKind::H265Sps) > k_h265_sequence_parameter_set_room ||
+        CountKind(held, SetKind::H265Pps) > k_h265_picture_parameter_set_room)
+    {
+        RNDR_LOG_ERROR("Forge: more H.265 parameter sets than the parameters make room for: {} VPS, {} SPS, {} PPS",
+                       k_max_h265_video_parameter_sets, k_h265_sequence_parameter_set_room, k_h265_picture_parameter_set_room);
+        return ErrorCode::InvalidArgument;
+    }
+    m_held = std::move(held);
     return ErrorCode::Success;
 }
 
@@ -490,6 +595,56 @@ Opal::Expected<Rndr::Forge::VideoSessionParameters, Rndr::ErrorCode> Rndr::Forge
     return Result(std::move(parameters));
 }
 
+Opal::Expected<Rndr::Forge::VideoSessionParameters, Rndr::ErrorCode> Rndr::Forge::VideoSessionParameters::CreateH265(
+    const Device& device, const VideoSession& session, const H265ParameterSets& sets)
+{
+    using Result = Opal::Expected<VideoSessionParameters, ErrorCode>;
+
+    if (!session.IsValid() || session.GetDesc().profile.codec != VideoCodec::H265)
+    {
+        RNDR_LOG_ERROR("Forge: H.265 session parameters need an H.265 video session");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    VideoSessionParameters parameters;
+    parameters.m_device = device;
+    RNDR_FORGE_CHECK_EXPECTED(parameters.TakeIds(sets), Result);
+
+    const VkVideoDecodeH265SessionParametersAddInfoKHR add_info{
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_SESSION_PARAMETERS_ADD_INFO_KHR,
+        .stdVPSCount = static_cast<u32>(sets.video_parameter_sets.GetSize()),
+        .pStdVPSs = sets.video_parameter_sets.GetData(),
+        .stdSPSCount = static_cast<u32>(sets.sequence_parameter_sets.GetSize()),
+        .pStdSPSs = sets.sequence_parameter_sets.GetData(),
+        .stdPPSCount = static_cast<u32>(sets.picture_parameter_sets.GetSize()),
+        .pStdPPSs = sets.picture_parameter_sets.GetData(),
+    };
+    const VkVideoDecodeH265SessionParametersCreateInfoKHR h265_info{
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_SESSION_PARAMETERS_CREATE_INFO_KHR,
+        .maxStdVPSCount = k_max_h265_video_parameter_sets,
+        .maxStdSPSCount = k_h265_sequence_parameter_set_room,
+        .maxStdPPSCount = k_h265_picture_parameter_set_room,
+        .pParametersAddInfo = &add_info,
+    };
+    const VkVideoSessionParametersCreateInfoKHR create_info{.sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_PARAMETERS_CREATE_INFO_KHR,
+                                                            .pNext = &h265_info,
+                                                            .videoSession = session.GetNativeSession()};
+    RNDR_FORGE_VK_CHECK_EXPECTED(
+        vkCreateVideoSessionParametersKHR(device.GetNativeDevice(), &create_info, nullptr, &parameters.m_parameters),
+        "vkCreateVideoSessionParametersKHR", Result);
+    return Result(std::move(parameters));
+}
+
+Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::Update(const void* add_info)
+{
+    // Each update counts on by one from the last, starting at one.
+    const VkVideoSessionParametersUpdateInfoKHR update_info{
+        .sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_PARAMETERS_UPDATE_INFO_KHR, .pNext = add_info, .updateSequenceCount = m_update_count + 1};
+    RNDR_FORGE_VK_CHECK(vkUpdateVideoSessionParametersKHR(m_device->GetNativeDevice(), m_parameters, &update_info),
+                        "vkUpdateVideoSessionParametersKHR");
+    ++m_update_count;
+    return ErrorCode::Success;
+}
+
 Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::AddH264(const H264ParameterSets& sets)
 {
     if (!IsValid())
@@ -505,13 +660,27 @@ Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::AddH264(const H264Parameter
         .stdPPSCount = static_cast<u32>(sets.picture_parameter_sets.GetSize()),
         .pStdPPSs = sets.picture_parameter_sets.GetData(),
     };
-    // Each update counts on by one from the last, starting at one.
-    const VkVideoSessionParametersUpdateInfoKHR update_info{
-        .sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_PARAMETERS_UPDATE_INFO_KHR, .pNext = &add_info, .updateSequenceCount = m_update_count + 1};
-    RNDR_FORGE_VK_CHECK(vkUpdateVideoSessionParametersKHR(m_device->GetNativeDevice(), m_parameters, &update_info),
-                        "vkUpdateVideoSessionParametersKHR");
-    ++m_update_count;
-    return ErrorCode::Success;
+    return Update(&add_info);
+}
+
+Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::AddH265(const H265ParameterSets& sets)
+{
+    if (!IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: AddH265 on empty session parameters");
+        return ErrorCode::InvalidArgument;
+    }
+    RNDR_FORGE_CHECK(TakeIds(sets));
+    const VkVideoDecodeH265SessionParametersAddInfoKHR add_info{
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_SESSION_PARAMETERS_ADD_INFO_KHR,
+        .stdVPSCount = static_cast<u32>(sets.video_parameter_sets.GetSize()),
+        .pStdVPSs = sets.video_parameter_sets.GetData(),
+        .stdSPSCount = static_cast<u32>(sets.sequence_parameter_sets.GetSize()),
+        .pStdSPSs = sets.sequence_parameter_sets.GetData(),
+        .stdPPSCount = static_cast<u32>(sets.picture_parameter_sets.GetSize()),
+        .pStdPPSs = sets.picture_parameter_sets.GetData(),
+    };
+    return Update(&add_info);
 }
 
 Rndr::Forge::VideoSessionParameters::~VideoSessionParameters()
@@ -520,14 +689,14 @@ Rndr::Forge::VideoSessionParameters::~VideoSessionParameters()
 }
 
 Rndr::Forge::VideoSessionParameters::VideoSessionParameters(VideoSessionParameters&& other) noexcept
-    : m_device(std::move(other.m_device)), m_parameters(other.m_parameters), m_update_count(other.m_update_count), m_sps_ids(other.m_sps_ids)
+    : m_device(std::move(other.m_device)),
+      m_parameters(other.m_parameters),
+      m_update_count(other.m_update_count),
+      m_held(std::move(other.m_held))
 {
-    for (u32 i = 0; i < k_max_h264_picture_parameter_sets / 32; ++i)
-    {
-        m_pps_ids[i] = other.m_pps_ids[i];
-    }
     other.m_parameters = VK_NULL_HANDLE;
     other.m_device = nullptr;
+    other.m_held.Clear();
 }
 
 Rndr::Forge::VideoSessionParameters& Rndr::Forge::VideoSessionParameters::operator=(VideoSessionParameters&& other) noexcept
@@ -538,13 +707,10 @@ Rndr::Forge::VideoSessionParameters& Rndr::Forge::VideoSessionParameters::operat
         m_device = std::move(other.m_device);
         m_parameters = other.m_parameters;
         m_update_count = other.m_update_count;
-        m_sps_ids = other.m_sps_ids;
-        for (u32 i = 0; i < k_max_h264_picture_parameter_sets / 32; ++i)
-        {
-            m_pps_ids[i] = other.m_pps_ids[i];
-        }
+        m_held = std::move(other.m_held);
         other.m_parameters = VK_NULL_HANDLE;
         other.m_device = nullptr;
+        other.m_held.Clear();
     }
     return *this;
 }
@@ -557,11 +723,7 @@ void Rndr::Forge::VideoSessionParameters::Destroy()
         m_parameters = VK_NULL_HANDLE;
     }
     m_update_count = 0;
-    m_sps_ids = 0;
-    for (u32& word : m_pps_ids)
-    {
-        word = 0;
-    }
+    m_held.Clear();
 }
 
 // VideoStatusQueryPool

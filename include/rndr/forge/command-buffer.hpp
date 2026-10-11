@@ -808,11 +808,12 @@ public:
     ErrorCode CmdResetVideoCoding();
 
     /**
-     * Decode one picture. H.264 only, so far. With VideoDecodeDesc::status_query_pool set, the decode writes whether it
-     * succeeded into that query.
+     * Decode one picture of an H.264 or H.265 session. With VideoDecodeDesc::status_query_pool set, the decode writes
+     * whether it succeeded into that query.
      * @return ErrorCode::InvalidArgument outside a scope, for a bitstream buffer without BufferUsageBits::VideoDecodeSource,
      *         a bitstream range that breaks the session's alignments or reaches past the buffer, no slice, a picture
-     *         without a decode view, more references than the session takes, or a status query pool for another profile;
+     *         without a decode view, more references than the session takes, an H.265 reference picture set naming a slot
+     *         that is not among the references, or a status query pool for another profile;
      *         OutOfBounds for a slot past the session's or a status query past its pool.
      */
     ErrorCode CmdDecodeVideo(const VideoDecodeDesc& desc);
@@ -841,17 +842,25 @@ private:
     struct VideoDecodeRecord
     {
         VkVideoDecodeInfoKHR decode_info{};
-        VkVideoDecodeH264PictureInfoKHR h264_info{};
-        StdVideoDecodeH264PictureInfo h264_picture{};
         Opal::DynamicArray<u32> slice_offsets;
         VkVideoReferenceSlotInfoKHR setup_slot{};
         VkVideoPictureResourceInfoKHR setup_picture{};
-        VkVideoDecodeH264DpbSlotInfoKHR setup_h264{};
-        StdVideoDecodeH264ReferenceInfo setup_reference{};
         Opal::DynamicArray<VkVideoReferenceSlotInfoKHR> reference_slots;
         Opal::DynamicArray<VkVideoPictureResourceInfoKHR> reference_pictures;
+        // H.264
+        VkVideoDecodeH264PictureInfoKHR h264_info{};
+        StdVideoDecodeH264PictureInfo h264_picture{};
+        VkVideoDecodeH264DpbSlotInfoKHR setup_h264{};
+        StdVideoDecodeH264ReferenceInfo setup_h264_reference{};
         Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR> reference_h264;
-        Opal::DynamicArray<StdVideoDecodeH264ReferenceInfo> reference_infos;
+        Opal::DynamicArray<StdVideoDecodeH264ReferenceInfo> reference_h264_infos;
+        // H.265
+        VkVideoDecodeH265PictureInfoKHR h265_info{};
+        StdVideoDecodeH265PictureInfo h265_picture{};
+        VkVideoDecodeH265DpbSlotInfoKHR setup_h265{};
+        StdVideoDecodeH265ReferenceInfo setup_h265_reference{};
+        Opal::DynamicArray<VkVideoDecodeH265DpbSlotInfoKHR> reference_h265;
+        Opal::DynamicArray<StdVideoDecodeH265ReferenceInfo> reference_h265_infos;
     };
     /**
      * What each CmdDecodeVideo of this recording handed to Vulkan, kept like the framebuffers until the buffer is recorded

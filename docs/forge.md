@@ -305,9 +305,9 @@ Space switching between them.
 
 Forge decodes video through Vulkan Video on a decode queue: it wraps the objects and commands, and checks what Vulkan
 requires of them. Reading a codec's bitstream is the caller's - parameter sets and slice headers arrive already parsed,
-as the `StdVideo*` structures Vulkan defines - and so is deciding which reference picture goes in which slot. H.264 is
-the codec with session parameters and a decode command so far; H.265 and AV1 have the profile, the capabilities and the
-resources, and get the rest the same way.
+as the `StdVideo*` structures Vulkan defines - and so is deciding which reference picture goes in which slot. H.264 and
+H.265 have session parameters and a decode command; AV1 has the profile, the capabilities and the resources, and gets the
+rest the same way.
 
 **The device.** `DeviceDesc::use_decode_queue` takes a decode queue and `decode_codecs` names the codecs it has to
 decode, all on one family: the video extensions and one per codec are enabled with it, and a device whose decode queues
@@ -328,13 +328,18 @@ layouts, and `PipelineStageBits::VideoDecode` with `VideoDecodeRead` and `VideoD
 
 **Session and parameters.** A `VideoSession` holds the decoder's state for one stream, in memory the device asks for and
 Forge binds; its desc is refused when it asks for more than the capabilities allow. `VideoSessionParameters::CreateH264`
-keeps the stream's SPS and PPS, and `AddH264` takes those a stream brings later. An id is given once: a changed set needs
-parameters of their own.
+keeps the stream's SPS and PPS, and `AddH264` takes those a stream brings later; `CreateH265` and `AddH265` do the same with
+VPS, SPS and PPS. A set is given once: a changed set needs parameters of their own. An H.264 set is named by its id, an
+H.265 SPS by its VPS id and its own and an H.265 PPS by those and its own, as Vulkan keys them.
 
 **Decoding.** On a command buffer of the decode queue, `CmdBeginVideoCoding` opens a scope over the session, the
 parameters and every reference slot its decodes touch; `CmdResetVideoCoding` resets the session, which its first scope
 has to; `CmdDecodeVideo` decodes one picture from a bitstream range into an output, keeping it in a setup slot when
-later pictures refer to it; `CmdEndVideoCoding` closes the scope. A decode outside a scope, on a queue that does not
+later pictures refer to it; `CmdEndVideoCoding` closes the scope. `VideoDecodeDesc::slice_offsets` says where each H.264
+slice or H.265 slice segment starts, and the codec's picture information and each slot's reference information go beside
+it (`h264_picture` and `h264_reference`, `h265_picture` and `h265_reference`). An H.265 picture's reference picture set
+names DPB slots, so each slot in `RefPicSetStCurrBefore`, `RefPicSetStCurrAfter` and `RefPicSetLtCurr` has to be one of the
+decode's references, which `CmdDecodeVideo` checks. A decode outside a scope, on a queue that does not
 decode the codec, from a buffer or a range that breaks the session's rules, or with more references than it takes, is
 refused. The decoded picture moves to the graphics queue by a queue family ownership transfer: a barrier with
 `source_queue_family` and `destination_queue_family` set, recorded on both queues. Read or copy it there: on NVIDIA's
@@ -379,7 +384,7 @@ reports:
   bit, so it is the Vulkan driver and not the decoder. Long-term references are rare outside conferencing streams; x264
   does not write them unless asked.
 
-What is not there yet: H.265 and AV1 parameters and decode, and reference pictures as layers of one texture.
+What is not there yet: AV1 parameters and decode, and reference pictures as layers of one texture.
 
 ---
 

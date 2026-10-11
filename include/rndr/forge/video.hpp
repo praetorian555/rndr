@@ -254,6 +254,8 @@ struct VideoReferenceSlot
     VideoPicture picture;
     /** H.264: what the stream says of the picture as a reference - its frame number, its picture order counts. */
     StdVideoDecodeH264ReferenceInfo h264_reference{};
+    /** H.265: the same - its picture order count, and whether it is a long-term reference. */
+    StdVideoDecodeH265ReferenceInfo h265_reference{};
 };
 
 /** What a video coding scope is over, from CmdBeginVideoCoding to CmdEndVideoCoding. */
@@ -284,9 +286,15 @@ struct VideoDecodeDesc
     VideoReferenceSlot setup;
     /** The reference pictures this one is predicted from, each in the slot it was kept in. */
     Opal::ArrayView<const VideoReferenceSlot> references;
-    /** H.264: the picture's parameters from its slice header, and where each of its slices starts in the bitstream range. */
+    /** Where each slice (H.264) or slice segment (H.265) of the picture starts in the bitstream range. */
+    Opal::ArrayView<const u32> slice_offsets;
+    /** H.264: the picture's parameters from its slice header. */
     StdVideoDecodeH264PictureInfo h264_picture{};
-    Opal::ArrayView<const u32> h264_slice_offsets;
+    /**
+     * H.265: the picture's parameters from its slice segment header, its reference picture set as the slot indices of
+     * pictures among `references` - STD_VIDEO_H265_NO_REFERENCE_PICTURE past the end of each list.
+     */
+    StdVideoDecodeH265PictureInfo h265_picture{};
     /**
      * Where the decode writes whether it succeeded, or empty for nowhere: a pool for the session's profile, and a query
      * of it that has been reset since it was last written.
@@ -305,9 +313,18 @@ struct H264ParameterSets
     Opal::ArrayView<const StdVideoH264PictureParameterSet> picture_parameter_sets;
 };
 
+/** H.265 parameter sets, the same way: each with what its pointers point at, which need only last until the call returns. */
+struct H265ParameterSets
+{
+    Opal::ArrayView<const StdVideoH265VideoParameterSet> video_parameter_sets;
+    Opal::ArrayView<const StdVideoH265SequenceParameterSet> sequence_parameter_sets;
+    Opal::ArrayView<const StdVideoH265PictureParameterSet> picture_parameter_sets;
+};
+
 /**
  * The parameter sets a stream carries, kept by the device for one session so that a decode names them by id. A stream
- * may bring new ones as it goes, which Add hands over; one id is given once. H.264 only, so far.
+ * may bring new ones as it goes, which Add hands over; one id is given once - for H.265 an SPS is named by its VPS id and
+ * its own, and a PPS by those and its own.
  */
 class VideoSessionParameters
 {
@@ -318,6 +335,12 @@ public:
     /** The most sequence and picture parameter sets an H.264 stream has, which is what the parameters make room for. */
     static constexpr u32 k_max_h264_sequence_parameter_sets = 32;
     static constexpr u32 k_max_h264_picture_parameter_sets = 256;
+    /** The ids H.265 allows, and how many sets of each kind H.265 parameters make room for. */
+    static constexpr u32 k_max_h265_video_parameter_sets = 16;
+    static constexpr u32 k_max_h265_sequence_parameter_sets = 16;
+    static constexpr u32 k_max_h265_picture_parameter_sets = 64;
+    static constexpr u32 k_h265_sequence_parameter_set_room = 32;
+    static constexpr u32 k_h265_picture_parameter_set_room = 256;
 
     /**
      * @param session The session the parameters are for, an H.264 one. It has to outlive them.
@@ -327,6 +350,15 @@ public:
      */
     [[nodiscard]] static Opal::Expected<VideoSessionParameters, ErrorCode> CreateH264(const Device& device, const VideoSession& session,
                                                                                       const H264ParameterSets& sets = {});
+
+    /**
+     * @param session The session the parameters are for, an H.265 one. It has to outlive them.
+     * @param sets The parameter sets the stream starts with; may be empty.
+     * @return The parameters, ErrorCode::InvalidArgument for a session that is empty or not H.265, a set given twice, an id
+     *         past what H.265 allows or more sets than the parameters make room for, or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<VideoSessionParameters, ErrorCode> CreateH265(const Device& device, const VideoSession& session,
+                                                                                      const H265ParameterSets& sets = {});
 
     VideoSessionParameters(const VideoSessionParameters&) = delete;
     VideoSessionParameters& operator=(const VideoSessionParameters&) = delete;
@@ -340,6 +372,9 @@ public:
      */
     ErrorCode AddH264(const H264ParameterSets& sets);
 
+    /** AddH264 for H.265 parameters, refusing what CreateH265 does. */
+    ErrorCode AddH265(const H265ParameterSets& sets);
+
     void Destroy();
 
     [[nodiscard]] bool IsValid() const { return m_parameters != VK_NULL_HANDLE; }
@@ -348,14 +383,16 @@ public:
 private:
     /** Check the ids of `sets` against those held and each other, and note them as held. */
     ErrorCode TakeIds(const H264ParameterSets& sets);
+    ErrorCode TakeIds(const H265ParameterSets& sets);
+    /** Send an update, counting on from the last one. */
+    ErrorCode Update(const void* add_info);
 
     Opal::Ref<const Device> m_device;
     VkVideoSessionParametersKHR m_parameters = VK_NULL_HANDLE;
     /** How many updates have been made, which each update has to count on from. */
     u32 m_update_count = 0;
-    /** Which sequence and picture parameter set ids are held, one bit each. */
-    u32 m_sps_ids = 0;
-    u32 m_pps_ids[k_max_h264_picture_parameter_sets / 32] = {};
+    /** The sets held, each as a key of its kind and ids, so that none is given twice. */
+    Opal::DynamicArray<u32> m_held;
 };
 
 }  // namespace Rndr::Forge
