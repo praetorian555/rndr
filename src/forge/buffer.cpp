@@ -10,6 +10,7 @@
 #include "rndr/log.hpp"
 
 #include "memory-info.hpp"
+#include "video-profile.hpp"
 
 Opal::Expected<Rndr::Forge::Buffer, Rndr::ErrorCode> Rndr::Forge::Buffer::Create(const Device& device, const BufferDesc& desc,
                                                                                  Opal::ArrayView<const u8> initial_data)
@@ -30,8 +31,17 @@ Opal::Expected<Rndr::Forge::Buffer, Rndr::ErrorCode> Rndr::Forge::Buffer::Create
     buffer.m_device = device;
     buffer.m_desc = desc;
     // The values of BufferUsageBits mirror VkBufferUsageFlagBits, so the mask translates as a cast.
-    VkBufferCreateInfo create_info{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = desc.size, .usage = static_cast<VkBufferUsageFlags>(desc.usage)};
+    // A bitstream buffer is created for the stream it holds, which the profile list names.
+    const bool is_bitstream = !!(desc.usage & BufferUsageBits::VideoDecodeSource);
+    if (is_bitstream)
+    {
+        RNDR_FORGE_CHECK_EXPECTED(CheckVideoUsage(device, desc.video_profile, "a VideoDecodeSource buffer"), Result);
+    }
+    const VideoProfileChain profile_chain(desc.video_profile);
+    VkBufferCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                   .pNext = is_bitstream ? &profile_chain.list : nullptr,
+                                   .size = desc.size,
+                                   .usage = static_cast<VkBufferUsageFlags>(desc.usage)};
     if (desc.use_device_address)
     {
         create_info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;

@@ -38,4 +38,12 @@ struct VideoProfileChain
  */
 [[nodiscard]] ErrorCode CheckVideoProfile(const VideoProfile& profile);
 
+/**
+ * Check what a buffer or texture created for video decode needs beyond its profile: a device created with a decode queue,
+ * which is what enables the video extensions, and the codec's extension among them.
+ * @param what What is being created, for the log: "a VideoDecodeSource buffer".
+ * @return ErrorCode::InvalidArgument, with the reason logged, when either is missing.
+ */
+[[nodiscard]] ErrorCode CheckVideoUsage(const Device& device, const VideoProfile& profile, const char* what);
+
 }  // namespace Rndr::Forge

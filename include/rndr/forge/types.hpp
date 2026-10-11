@@ -42,7 +42,9 @@ enum class BufferUsageBits : u32
     /** Bound with CmdBindVertexBuffer. */
     VertexBuffer = 0x00000080,
     /** Holds the arguments of an indirect draw or dispatch. */
-    IndirectBuffer = 0x00000100
+    IndirectBuffer = 0x00000100,
+    /** Holds the bitstream a video decode reads. Needs BufferDesc::video_profile. */
+    VideoDecodeSource = 0x00002000
 };
 OPAL_ENUM_CLASS_FLAGS(BufferUsageBits);
 
@@ -128,7 +130,11 @@ enum class TextureUsageBits : u32
      */
     TransientAttachment = 0x00000040,
     /** Read in a fragment shader at the fragment being written, within the same render pass. */
-    InputAttachment = 0x00000080
+    InputAttachment = 0x00000080,
+    /** Written by a video decode as its output picture. Needs TextureDesc::video_profile. */
+    VideoDecodeDestination = 0x00000400,
+    /** Holds reference pictures of a video decode, which reads and writes them. Needs TextureDesc::video_profile. */
+    VideoDecodeDpb = 0x00001000
 };
 OPAL_ENUM_CLASS_FLAGS(TextureUsageBits);
 
@@ -380,6 +386,10 @@ enum class ImageLayout
     TransferDestination = 7,
     // When image is a swap chain image that is to be presented to the screen.
     Present = 1000001002,
+    // When image is the output picture a video decode writes.
+    VideoDecodeDestination = 1000024000,
+    // When image holds the reference pictures a video decode reads and writes.
+    VideoDecodeDpb = 1000024002,
 };
 
 /** The name of a layout, for the lines the layout tracking logs. */
@@ -405,6 +415,10 @@ enum class ImageLayout
             return "TransferDestination";
         case ImageLayout::Present:
             return "Present";
+        case ImageLayout::VideoDecodeDestination:
+            return "VideoDecodeDestination";
+        case ImageLayout::VideoDecodeDpb:
+            return "VideoDecodeDpb";
     }
     return "an unknown layout";
 }
@@ -523,7 +537,9 @@ enum class PipelineStageBits : u64
     IndexInput = 0x1000000000ull,
     VertexAttributeInput = 0x2000000000ull,
     /** Every stage before rasterization: vertex, tessellation, geometry, and task and mesh where they run. */
-    PreRasterizationShaders = 0x4000000000ull
+    PreRasterizationShaders = 0x4000000000ull,
+    /** A video decode, on a decode queue. */
+    VideoDecode = 0x04000000ull
 };
 OPAL_ENUM_CLASS_FLAGS(PipelineStageBits);
 
@@ -560,7 +576,11 @@ enum class PipelineStageAccessBits : u64
     Write = 0x10000ull,
     ShaderSampledRead = 0x100000000ull,
     ShaderStorageRead = 0x200000000ull,
-    ShaderStorageWrite = 0x400000000ull
+    ShaderStorageWrite = 0x400000000ull,
+    /** A video decode reading its bitstream or its reference pictures. */
+    VideoDecodeRead = 0x800000000ull,
+    /** A video decode writing its output or its reference pictures. */
+    VideoDecodeWrite = 0x1000000000ull
 };
 OPAL_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
 

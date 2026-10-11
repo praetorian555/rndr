@@ -1,5 +1,6 @@
 #include "rndr/forge/video.hpp"
 
+#include "rndr/forge/device.hpp"
 #include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/vulkan-result.hpp"
 #include "rndr/log.hpp"
@@ -73,6 +74,23 @@ Rndr::ErrorCode Rndr::Forge::CheckVideoProfile(const VideoProfile& profile)
     if (profile.bit_depth != 8 && profile.bit_depth != 10)
     {
         RNDR_LOG_ERROR("Forge: a video profile has 8 or 10 bits per sample, and this one {}", profile.bit_depth);
+        return ErrorCode::InvalidArgument;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::CheckVideoUsage(const Device& device, const VideoProfile& profile, const char* what)
+{
+    RNDR_FORGE_CHECK(CheckVideoProfile(profile));
+    if (!device.IsExtensionEnabled(VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME))
+    {
+        RNDR_LOG_ERROR("Forge: {} needs the device created with DeviceDesc::use_decode_queue", what);
+        return ErrorCode::InvalidArgument;
+    }
+    if (!device.IsExtensionEnabled(GetDecodeExtensionName(profile.codec)))
+    {
+        RNDR_LOG_ERROR("Forge: {} is for a codec the device was not created to decode: DeviceDesc::decode_codecs leaves out {}", what,
+                       GetDecodeExtensionName(profile.codec));
         return ErrorCode::InvalidArgument;
     }
     return ErrorCode::Success;

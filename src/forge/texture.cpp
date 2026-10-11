@@ -13,6 +13,7 @@
 #include "rndr/log.hpp"
 
 #include "memory-info.hpp"
+#include "video-profile.hpp"
 
 static VkFilter ToVkFilter(Rndr::ImageFilter filter)
 {
@@ -306,10 +307,11 @@ static Rndr::ErrorCode CheckYcbcrTexture(const Rndr::Forge::Device& device, cons
         RNDR_LOG_ERROR("Forge: a texture of a 4:2:0 format has an even width and height, and is {}x{}", desc.width, desc.height);
         return ErrorCode::InvalidArgument;
     }
-    constexpr TextureUsageBits k_allowed = TextureUsageBits::Sampled | TextureUsageBits::TransferSource | TextureUsageBits::TransferDestination;
+    constexpr TextureUsageBits k_allowed = TextureUsageBits::Sampled | TextureUsageBits::TransferSource | TextureUsageBits::TransferDestination |
+                                           TextureUsageBits::VideoDecodeDestination | TextureUsageBits::VideoDecodeDpb;
     if (!!(desc.usage & ~k_allowed))
     {
-        RNDR_LOG_ERROR("Forge: a texture of a YCbCr format can only be sampled or copied");
+        RNDR_LOG_ERROR("Forge: a texture of a YCbCr format can only be sampled, copied or written by a video decode");
         return ErrorCode::InvalidArgument;
     }
     const Forge::YcbcrFormatSupport support = device.GetPhysicalDevice().GetYcbcrFormatSupport(desc.format);
@@ -390,10 +392,19 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
         RNDR_FORGE_CHECK(CheckYcbcrTexture(device, m_desc));
     }
 
+    // A picture a video decode writes or keeps is created for the stream it belongs to, which the profile list names.
+    const bool is_video = !!(m_desc.usage & (TextureUsageBits::VideoDecodeDestination | TextureUsageBits::VideoDecodeDpb));
+    if (is_video)
+    {
+        RNDR_FORGE_CHECK(CheckVideoUsage(device, m_desc.video_profile, "a VideoDecodeDestination or VideoDecodeDpb texture"));
+    }
+    const VideoProfileChain profile_chain(m_desc.video_profile);
+
     RNDR_FORGE_TRANSLATE(image_type, ToVkImageType(m_desc.dimension), "TextureDesc::dimension");
     RNDR_FORGE_TRANSLATE(sample_count, ToVkSampleCount(m_desc.sample_count), "TextureDesc::sample_count");
     const VkImageCreateInfo image_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext = is_video ? &profile_chain.list : nullptr,
         .flags = wants_cube_view ? static_cast<VkImageCreateFlags>(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) : 0u,
         .imageType = image_type,
         .format = ToVkFormat(m_desc.format),
@@ -628,9 +639,12 @@ Rndr::ErrorCode Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRan
 Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureView::Create(const Device& device, const Texture& texture,
                                                                                            const TextureViewDesc& desc)
 {
-    if (texture.IsValid() && IsYcbcrFormat(texture.GetDesc().format))
+    // Only a view that is sampled reads through a conversion; one a video decode writes does not.
+    const TextureUsageBits view_usage = desc.usage != TextureUsageBits::None ? desc.usage : texture.GetDesc().usage;
+    if (texture.IsValid() && IsYcbcrFormat(texture.GetDesc().format) && !!(view_usage & TextureUsageBits::Sampled))
     {
-        RNDR_LOG_ERROR("Forge: a view of a YCbCr texture needs a SamplerYcbcrConversion, which the other TextureView::Create takes");
+        RNDR_LOG_ERROR("Forge: a sampled view of a YCbCr texture needs a SamplerYcbcrConversion, which the other TextureView::Create takes; "
+                       "a view that is not sampled says so in TextureViewDesc::usage");
         return Opal::Expected<TextureView, ErrorCode>(ErrorCode::InvalidArgument);
     }
     return CreateView(device, texture, nullptr, desc);
@@ -674,6 +688,11 @@ Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureVi
         return Result(ErrorCode::InvalidArgument);
     }
     RNDR_FORGE_CHECK_EXPECTED(texture.CheckRange(desc.subresource_range), Result);
+    if (!!(desc.usage & ~texture_desc.usage))
+    {
+        RNDR_LOG_ERROR("Forge: TextureViewDesc::usage names a usage the texture was not created with");
+        return Result(ErrorCode::InvalidArgument);
+    }
 
     // What the image can be seen as is decided when it was created, so each view type is checked against that
     // rather than left for the layer to name.
@@ -731,11 +750,20 @@ Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureVi
     view.m_desc = desc;
     view.m_conversion = conversion != nullptr ? conversion->GetNativeConversion() : VK_NULL_HANDLE;
     RNDR_FORGE_TRANSLATE_EXPECTED(view_type, ToVkImageViewType(desc.view_type), "TextureViewDesc::view_type", Result);
+    // Either structure is chained only when it says something, and the conversion goes behind the usage.
     const VkSamplerYcbcrConversionInfo conversion_info{.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO,
                                                        .conversion = view.m_conversion};
+    const VkImageViewUsageCreateInfo usage_info{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO,
+                                                .pNext = conversion != nullptr ? &conversion_info : nullptr,
+                                                .usage = static_cast<VkImageUsageFlags>(desc.usage)};
+    const void* view_next = conversion != nullptr ? static_cast<const void*>(&conversion_info) : nullptr;
+    if (desc.usage != TextureUsageBits::None)
+    {
+        view_next = &usage_info;
+    }
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .pNext = conversion != nullptr ? &conversion_info : nullptr,
+        .pNext = view_next,
         .image = texture.GetNativeImage(),
         .viewType = view_type,
         .format = ToVkFormat(texture_desc.format),

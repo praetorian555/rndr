@@ -18297,3 +18297,103 @@ TEST_CASE("Forge video decode queues and what a profile decodes", "[forge]")
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }
+
+TEST_CASE("Forge buffers and textures created for a video profile", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_h264{.decode = Forge::VideoCodecBits::H264};
+    if (!CanCreateDevice({}, k_h264))
+    {
+        SKIP("This device has no queue that decodes H.264.");
+    }
+    ForgeFixture fixture({}, k_h264);
+    const Forge::VideoProfile profile{.codec = Forge::VideoCodec::H264, .codec_profile = 100};
+    const Forge::VideoCapabilities capabilities =
+        ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(fixture.device.GetPhysicalDevice(), profile));
+    constexpr PixelFormat k_nv12 = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    if (!ContainsFormat(capabilities.dpb_formats, k_nv12) || !ContainsFormat(capabilities.output_formats, k_nv12))
+    {
+        SKIP("This device does not decode H.264 into NV12.");
+    }
+    // A picture size every device decoding HD can hold, rounded to whole macroblocks as a stream's is.
+    constexpr u32 k_width = 1920;
+    constexpr u32 k_height = 1088;
+
+    SECTION("A bitstream buffer is created for its profile")
+    {
+        const u64 size = ((1u << 20) + capabilities.bitstream_size_alignment - 1) / capabilities.bitstream_size_alignment *
+                         capabilities.bitstream_size_alignment;
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = profile}));
+        REQUIRE(bitstream.IsValid());
+        // A profile for a codec the device was not created to decode is refused.
+        REQUIRE(Forge::Buffer::Create(fixture.device, {.size = size,
+                                                       .usage = Forge::BufferUsageBits::VideoDecodeSource,
+                                                       .video_profile = {.codec = Forge::VideoCodec::H265, .codec_profile = 1}})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("Reference pictures and an output picture are textures with decode views, moved into place on the decode queue")
+    {
+        // Where the two coincide the reference picture image is also what is sampled; otherwise the output is a texture of
+        // its own, and the reference picture image is only ever the decoder's.
+        const bool coincide = !capabilities.dpb_and_output_distinct;
+        const Forge::TextureUsageBits dpb_usage =
+            coincide ? Forge::TextureUsageBits::VideoDecodeDpb | Forge::TextureUsageBits::VideoDecodeDestination | Forge::TextureUsageBits::Sampled
+                     : Forge::TextureUsageBits::VideoDecodeDpb;
+        Forge::Texture dpb = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_nv12, .width = k_width, .height = k_height, .usage = dpb_usage, .video_profile = profile}));
+        const Forge::TextureView dpb_view = ForgeTest::Unwrap(
+            Forge::TextureView::Create(fixture.device, dpb, {.usage = Forge::TextureUsageBits::VideoDecodeDpb}));
+        REQUIRE(dpb_view.GetNativeConversion() == VK_NULL_HANDLE);
+
+        Forge::Texture output;
+        if (!coincide)
+        {
+            output = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_nv12,
+                                                                               .width = k_width,
+                                                                               .height = k_height,
+                                                                               .usage = Forge::TextureUsageBits::VideoDecodeDestination |
+                                                                                        Forge::TextureUsageBits::Sampled,
+                                                                               .video_profile = profile}));
+            const Forge::TextureView output_view = ForgeTest::Unwrap(
+                Forge::TextureView::Create(fixture.device, output, {.usage = Forge::TextureUsageBits::VideoDecodeDestination}));
+            REQUIRE(output_view.IsValid());
+            // Sampled, the same picture needs its conversion.
+            REQUIRE(Forge::TextureView::Create(fixture.device, output).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        }
+
+        Forge::DeviceQueue& decode_queue = fixture.GetQueue(Forge::QueueFamily::Decode);
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, decode_queue,
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdTextureBarrier(ForgeTest::Unwrap(
+                                                       Forge::TextureBarrier::ToVideoDecodeDpb(dpb))) == ErrorCode::Success);
+                                           if (!coincide)
+                                           {
+                                               REQUIRE(command_buffer.CmdTextureBarrier(ForgeTest::Unwrap(
+                                                           Forge::TextureBarrier::ToVideoDecodeDestination(output))) == ErrorCode::Success);
+                                           }
+                                       }) == ErrorCode::Success);
+        REQUIRE(ForgeTest::Unwrap(dpb.GetCurrentLayout()) == Forge::ImageLayout::VideoDecodeDpb);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A video texture is refused without its profile's codec, and a view cannot ask for a usage its texture lacks")
+    {
+        REQUIRE(Forge::Texture::Create(fixture.device, {.format = k_nv12,
+                                                        .width = k_width,
+                                                        .height = k_height,
+                                                        .usage = Forge::TextureUsageBits::VideoDecodeDpb,
+                                                        .video_profile = {.codec = Forge::VideoCodec::Av1, .codec_profile = 0}})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        const Forge::Texture dpb = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device,
+            {.format = k_nv12, .width = k_width, .height = k_height, .usage = Forge::TextureUsageBits::VideoDecodeDpb, .video_profile = profile}));
+        REQUIRE(Forge::TextureView::Create(fixture.device, dpb, {.usage = Forge::TextureUsageBits::VideoDecodeDestination})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}

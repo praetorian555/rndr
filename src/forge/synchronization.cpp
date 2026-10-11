@@ -165,6 +165,10 @@ SourceScope ScopeOfLayout(Rndr::Forge::ImageLayout layout)
             return {PipelineStageBits::Transfer, PipelineStageAccessBits::TransferRead};
         case ImageLayout::TransferDestination:
             return {PipelineStageBits::Transfer, PipelineStageAccessBits::TransferWrite};
+        case ImageLayout::VideoDecodeDestination:
+            return {PipelineStageBits::VideoDecode, PipelineStageAccessBits::VideoDecodeWrite};
+        case ImageLayout::VideoDecodeDpb:
+            return {PipelineStageBits::VideoDecode, PipelineStageAccessBits::VideoDecodeWrite};
         default:
             // General and Present, plus anything added later, can have been touched by anything.
             return {PipelineStageBits::AllCommands, PipelineStageAccessBits::Read | PipelineStageAccessBits::Write};
@@ -294,6 +298,30 @@ Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToTransferSource(Textur
             .texture = texture};
 }
 
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToVideoDecodeDestination(Texture& texture, ImageLayout old_layout)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = PipelineStageBits::VideoDecode,
+            .before_stages_start_access = PipelineStageAccessBits::VideoDecodeWrite,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::VideoDecodeDestination,
+            .texture = texture};
+}
+
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToVideoDecodeDpb(Texture& texture, ImageLayout old_layout)
+{
+    const SourceScope source = ScopeOfLayout(old_layout);
+    return {.stages_must_finish = source.stages,
+            .stages_must_finish_access = source.access,
+            .before_stages_start = PipelineStageBits::VideoDecode,
+            .before_stages_start_access = PipelineStageAccessBits::VideoDecodeRead | PipelineStageAccessBits::VideoDecodeWrite,
+            .old_layout = old_layout,
+            .new_layout = ImageLayout::VideoDecodeDpb,
+            .texture = texture};
+}
+
 Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToPresent(Texture& texture, ImageLayout old_layout)
 {
     const SourceScope source = ScopeOfLayout(old_layout);
@@ -341,6 +369,16 @@ Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::Textur
     return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToTransferSource(t, layout); });
 }
 
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToVideoDecodeDestination(Texture& texture)
+{
+    return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToVideoDecodeDestination(t, layout); });
+}
+
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToVideoDecodeDpb(Texture& texture)
+{
+    return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToVideoDecodeDpb(t, layout); });
+}
+
 Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToPresent(Texture& texture)
 {
     return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToPresent(t, layout); });
@@ -367,6 +405,10 @@ Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::Textur
             return Result(ToGeneral(texture, old_layout));
         case ImageLayout::Present:
             return Result(ToPresent(texture, old_layout));
+        case ImageLayout::VideoDecodeDestination:
+            return Result(ToVideoDecodeDestination(texture, old_layout));
+        case ImageLayout::VideoDecodeDpb:
+            return Result(ToVideoDecodeDpb(texture, old_layout));
         default:
             RNDR_LOG_ERROR("Forge: no barrier preset transitions a texture into {}", ImageLayoutToString(new_layout));
             return Result(ErrorCode::InvalidArgument);

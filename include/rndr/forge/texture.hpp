@@ -11,6 +11,7 @@
 #include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/forge/video.hpp"
 #include "rndr/graphics-types.hpp"
 #include "rndr/types.hpp"
 
@@ -36,6 +37,11 @@ struct TextureDesc
     // Image view
     TextureViewType view_type = TextureViewType::Texture2D;
     ImageSubresourceRange subresource_range;
+    /**
+     * The stream a texture with TextureUsageBits::VideoDecodeDestination or VideoDecodeDpb is decoded for. Only read with
+     * one of those usages.
+     */
+    VideoProfile video_profile;
 };
 
 class Texture
@@ -246,6 +252,11 @@ private:
 struct TextureViewDesc
 {
     TextureViewType view_type = TextureViewType::Texture2D;
+    /**
+     * What the view is used for, a subset of the texture's usage; None for all of it. A view of a YCbCr texture that is
+     * not sampled - the picture a video decode writes - needs no conversion.
+     */
+    TextureUsageBits usage = TextureUsageBits::None;
     /**
      * The mip levels, array layers and aspect the view covers - every one of them by default. A view of a
      * combined depth-stencil format that a shader samples has to name one of the two aspects.

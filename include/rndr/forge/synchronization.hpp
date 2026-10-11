@@ -286,6 +286,14 @@ struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
     [[nodiscard]] static TextureBarrier ToGeneral(Texture& texture, ImageLayout old_layout,
                                                   PipelineStageBits accessor = PipelineStageBits::ComputeShader);
 
+    /** Written by a video decode as its output picture, on the decode queue. */
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToVideoDecodeDestination(Texture& texture);
+    [[nodiscard]] static TextureBarrier ToVideoDecodeDestination(Texture& texture, ImageLayout old_layout);
+
+    /** Holding reference pictures a video decode reads and writes, on the decode queue. */
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToVideoDecodeDpb(Texture& texture);
+    [[nodiscard]] static TextureBarrier ToVideoDecodeDpb(Texture& texture, ImageLayout old_layout);
+
     /** Handed to the presentation engine. */
     [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ToPresent(Texture& texture);
     [[nodiscard]] static TextureBarrier ToPresent(Texture& texture, ImageLayout old_layout);

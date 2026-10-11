@@ -10,6 +10,7 @@
 #include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
 #include "rndr/forge/types.hpp"
+#include "rndr/forge/video.hpp"
 #include "rndr/types.hpp"
 
 // Forward declare handle to avoid vma includes in headers.
@@ -35,6 +36,8 @@ struct BufferDesc
      * and the heap is full.
      */
     bool require_device_local = false;
+    /** The stream a BufferUsageBits::VideoDecodeSource buffer holds the bitstream of. Only read with that usage. */
+    VideoProfile video_profile;
 };
 
 class Buffer
