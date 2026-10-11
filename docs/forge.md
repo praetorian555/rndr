@@ -382,7 +382,7 @@ reports:
   `used_for_long_term_reference` does. FFmpeg's Vulkan decoder fails the same conformance streams (MR1_BT_A, MR2_TANDBERG_E,
   MR4_TANDBERG_C) on the same pictures, while the same hardware through NVDEC decodes MR1_BT_A and MR2_TANDBERG_E bit for
   bit, so it is the Vulkan driver and not the decoder. Long-term references are rare outside conferencing streams; x264
-  does not write them unless asked.
+  does not write them unless asked. H.265's long-term references decode right on the same driver.
 
 What is not there yet: AV1 parameters and decode, and reference pictures as layers of one texture.
 
