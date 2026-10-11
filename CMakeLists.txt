@@ -150,6 +150,7 @@ if (${RNDR_BUILD_TESTS})
         list(APPEND RNDR_TEST_FILES
                 test/audio/audio-clip-test.cpp
                 test/audio/audio-mixer-test.cpp
+                test/audio/audio-stream-test.cpp
                 test/audio/audio-system-test.cpp)
     endif ()
     add_executable(rndr-test ${RNDR_TEST_FILES})

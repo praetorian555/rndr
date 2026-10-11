@@ -5,6 +5,7 @@
 #include "opal/container/function.h"
 #include "opal/container/scope-ptr.h"
 
+#include "rndr/audio/audio-types.hpp"
 #include "rndr/error-codes.hpp"
 #include "rndr/types.hpp"
 
@@ -21,9 +22,10 @@ struct AudioDeviceDesc
 
 /**
  * Fills a buffer of interleaved stereo f32 frames. Runs on the device's own thread, so it must not block, allocate
- * or touch anything the main thread is mutating. The buffer's size is twice the frame count and is never zero.
+ * or touch anything the main thread is mutating. The buffer's size is twice the frame count and is never zero. The
+ * timing says how much the device holds ahead of the buffer, so whoever fills it can tell when it will be heard.
  */
-using AudioRenderCallback = Opal::Function<void(Opal::ArrayView<f32> /*interleaved_stereo*/)>;
+using AudioRenderCallback = Opal::Function<void(Opal::ArrayView<f32> /*interleaved_stereo*/, const AudioRenderTiming& /*timing*/)>;
 
 /**
  * The platform half of audio output: owns a thread that pulls stereo f32 from a render callback and pushes it to the

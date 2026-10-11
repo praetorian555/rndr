@@ -15,6 +15,10 @@
 #include <mmreg.h>
 #include <objbase.h>
 
+#include <algorithm>
+
+#include "opal/time.h"
+
 #include "rndr/log.hpp"
 
 namespace
@@ -238,6 +242,13 @@ Rndr::i32 Rndr::WindowsAudioDevice::InitializeStream()
     {
         return result;
     }
+    // The clock only sharpens the timing the callback gets; without it the padding stands in.
+    if (FAILED(m_client->GetService(__uuidof(IAudioClock), reinterpret_cast<void**>(&m_clock))) ||
+        FAILED(m_clock->GetFrequency(&m_clock_frequency)) || m_clock_frequency == 0)
+    {
+        RNDR_LOG_WARNING("WindowsAudioDevice: the stream has no clock, its timing is the padding alone");
+        Release(m_clock);
+    }
 
     // Start from a full buffer of silence so the first callback has a whole period to run in.
     BYTE* data = nullptr;
@@ -251,6 +262,7 @@ Rndr::i32 Rndr::WindowsAudioDevice::InitializeStream()
     {
         return result;
     }
+    m_frames_written = m_buffer_frame_count;
     return m_client->Start();
 }
 
@@ -260,9 +272,11 @@ void Rndr::WindowsAudioDevice::ReleaseStream()
     {
         m_client->Stop();
     }
+    Release(m_clock);
     Release(m_render_client);
     Release(m_client);
     m_buffer_frame_count = 0;
+    m_frames_written = 0;
 }
 
 bool Rndr::WindowsAudioDevice::Pump()
@@ -302,14 +316,42 @@ bool Rndr::WindowsAudioDevice::Pump()
             return true;
         }
         // Rendered straight into the endpoint's buffer: the callback overwrites every sample it is given.
-        m_callback(Opal::ArrayView<f32>(reinterpret_cast<f32*>(data), static_cast<u64>(frame_count) * 2));
+        const AudioRenderTiming timing{.queued_frames = GetQueuedFrames(padding), .time_seconds = Opal::GetSeconds()};
+        m_callback(Opal::ArrayView<f32>(reinterpret_cast<f32*>(data), static_cast<u64>(frame_count) * 2), timing);
         result = m_render_client->ReleaseBuffer(frame_count, 0);
         if (FAILED(result))
         {
             RNDR_LOG_WARNING("WindowsAudioDevice: lost the audio output (0x{:08x}), reopening the stream", static_cast<u32>(result));
             return true;
         }
+        m_frames_written += frame_count;
     }
+}
+
+Rndr::u32 Rndr::WindowsAudioDevice::GetQueuedFrames(u32 padding) const
+{
+    if (m_clock == nullptr)
+    {
+        return padding;
+    }
+    UINT64 position = 0;
+    UINT64 position_time = 0;
+    if (FAILED(m_clock->GetPosition(&position, &position_time)))
+    {
+        return padding;
+    }
+    // The position is what the endpoint had played at position_time, in 100 ns units of the performance counter;
+    // it has played on since at the stream's rate.
+    LARGE_INTEGER counter;
+    LARGE_INTEGER counter_frequency;
+    QueryPerformanceCounter(&counter);
+    QueryPerformanceFrequency(&counter_frequency);
+    const f64 now = static_cast<f64>(counter.QuadPart) * 1e7 / static_cast<f64>(counter_frequency.QuadPart);
+    const auto rate = static_cast<f64>(m_desc.sample_rate);
+    const f64 played = static_cast<f64>(position) / static_cast<f64>(m_clock_frequency) * rate +
+                       std::max(now - static_cast<f64>(position_time), 0.0) * rate / 1e7;
+    const f64 queued = static_cast<f64>(m_frames_written) - played;
+    return queued > 0.0 ? static_cast<u32>(queued) : 0;
 }
 
 bool Rndr::WindowsAudioDevice::WaitBeforeRetry()

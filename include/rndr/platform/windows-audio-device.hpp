@@ -11,6 +11,7 @@
 struct IMMDeviceEnumerator;
 struct IAudioClient;
 struct IAudioRenderClient;
+struct IAudioClock;
 
 namespace Rndr
 {
@@ -54,6 +55,11 @@ private:
     void ReleaseStream();
     /** Runs the stream until it fails or the stop event is set; returns false on stop. */
     bool Pump();
+    /**
+     * Frames the stream holds ahead of what is about to be written, from the stream's clock: what was written less
+     * what the endpoint has played by now. @p padding is the answer when the clock has none.
+     */
+    u32 GetQueuedFrames(u32 padding) const;
     /** Waits out the retry interval; returns false when the stop event is set meanwhile. */
     bool WaitBeforeRetry();
 
@@ -73,7 +79,12 @@ private:
     IMMDeviceEnumerator* m_enumerator = nullptr;
     IAudioClient* m_client = nullptr;
     IAudioRenderClient* m_render_client = nullptr;
+    IAudioClock* m_clock = nullptr;
     u32 m_buffer_frame_count = 0;
+    /** Frames handed to the stream since it opened, the silence it starts with included. */
+    u64 m_frames_written = 0;
+    /** Units of IAudioClock::GetPosition in a second. */
+    u64 m_clock_frequency = 0;
 };
 OPAL_END_DISABLE_WARNINGS
 

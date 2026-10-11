@@ -1,6 +1,7 @@
 #include "rndr/audio/audio-system.hpp"
 
 #include "opal/allocator.h"
+#include "opal/time.h"
 
 #include "rndr/file.hpp"
 #include "rndr/log.hpp"
@@ -13,6 +14,7 @@ Rndr::AudioMixerDesc MixerDesc(const Rndr::AudioSystemDesc& desc)
     return {.sample_rate = desc.sample_rate,
             .max_voices = desc.max_voices,
             .max_clips = desc.max_clips,
+            .max_streams = desc.max_streams,
             .command_queue_capacity = desc.command_queue_capacity};
 }
 
@@ -36,8 +38,8 @@ Opal::Expected<Opal::ScopePtr<Rndr::AudioSystem>, Rndr::ErrorCode> Rndr::AudioSy
     // The callback holds the system, so the device is opened only once the system is at its final address.
     const AudioDeviceDesc device_desc{.sample_rate = desc.sample_rate, .buffer_frames = desc.buffer_frames};
     AudioSystem* system_ptr = system.Get();
-    Opal::Expected<Opal::ScopePtr<AudioDevice>, ErrorCode> device =
-        AudioDevice::Create(device_desc, [system_ptr](Opal::ArrayView<f32> out) { system_ptr->m_mixer.Mix(out); });
+    Opal::Expected<Opal::ScopePtr<AudioDevice>, ErrorCode> device = AudioDevice::Create(
+        device_desc, [system_ptr](Opal::ArrayView<f32> out, const AudioRenderTiming& timing) { system_ptr->m_mixer.Mix(out, timing); });
     if (!device.HasValue())
     {
         return Result(device.GetError());
@@ -71,6 +73,56 @@ void Rndr::AudioSystem::DestroyClip(AudioClipHandle clip)
 bool Rndr::AudioSystem::IsClipValid(AudioClipHandle clip) const
 {
     return m_mixer.IsClipValid(clip);
+}
+
+Opal::Expected<Rndr::AudioStreamHandle, Rndr::ErrorCode> Rndr::AudioSystem::CreateStream(const AudioStreamDesc& desc)
+{
+    return m_mixer.CreateStream(desc);
+}
+
+void Rndr::AudioSystem::DestroyStream(AudioStreamHandle stream)
+{
+    m_mixer.DestroyStream(stream);
+}
+
+bool Rndr::AudioSystem::IsStreamValid(AudioStreamHandle stream) const
+{
+    return m_mixer.IsStreamValid(stream);
+}
+
+Rndr::SoundHandle Rndr::AudioSystem::PlayStream(AudioStreamHandle stream, const PlaySoundDesc& desc)
+{
+    return m_mixer.PlayStream(stream, desc);
+}
+
+Rndr::u64 Rndr::AudioSystem::WriteStream(AudioStreamHandle stream, Opal::ArrayView<const f32> interleaved)
+{
+    return m_mixer.WriteStream(stream, interleaved);
+}
+
+Rndr::u64 Rndr::AudioSystem::GetStreamFreeFrames(AudioStreamHandle stream) const
+{
+    return m_mixer.GetStreamFreeFrames(stream);
+}
+
+void Rndr::AudioSystem::FlushStream(AudioStreamHandle stream)
+{
+    m_mixer.FlushStream(stream);
+}
+
+Rndr::u64 Rndr::AudioSystem::GetStreamQueuedFrames(AudioStreamHandle stream) const
+{
+    return m_mixer.GetStreamQueuedFrames(stream);
+}
+
+Rndr::u64 Rndr::AudioSystem::GetStreamPosition(AudioStreamHandle stream) const
+{
+    return m_mixer.GetStreamPosition(stream, Opal::GetSeconds());
+}
+
+Rndr::u32 Rndr::AudioSystem::GetStreamUnderrunCount(AudioStreamHandle stream) const
+{
+    return m_mixer.GetStreamUnderrunCount(stream);
 }
 
 Rndr::SoundHandle Rndr::AudioSystem::Play(AudioClipHandle clip, const PlaySoundDesc& desc)

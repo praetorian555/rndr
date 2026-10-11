@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "rndr/log.hpp"
 
@@ -74,6 +75,7 @@ Rndr::AudioMixer::AudioMixer(const AudioMixerDesc& desc)
     : m_desc(SanitizeDesc(desc)),
       m_commands(m_desc.command_queue_capacity),
       m_clips(m_desc.max_clips),
+      m_streams(m_desc.max_streams),
       m_voices(m_desc.max_voices),
       m_fading_voices(m_desc.max_voices)
 {
@@ -161,7 +163,7 @@ void Rndr::AudioMixer::DestroyClip(AudioClipHandle handle)
     }
     Command command;
     command.type = Command::Type::DestroyClip;
-    command.clip_index = handle.index;
+    command.source_index = handle.index;
     if (!Send(command))
     {
         RNDR_LOG_ERROR("AudioMixer: could not queue the clip destruction, the clip stays live");
@@ -284,6 +286,11 @@ Rndr::SoundHandle Rndr::AudioMixer::Play(AudioClipHandle clip, const PlaySoundDe
         RNDR_LOG_ERROR("AudioMixer: Play called with a clip handle that is not live");
         return {};
     }
+    return StartVoice(clip.index, false, desc);
+}
+
+Rndr::SoundHandle Rndr::AudioMixer::StartVoice(u32 source_index, bool is_stream, const PlaySoundDesc& desc)
+{
     // What the slot's generation was before it was claimed, so a send that does not go through can put it back. For
     // a stolen slot that is the generation of the sound still playing there, which is what makes the steal undoable.
     u32 previous_generation = 0;
@@ -303,7 +310,8 @@ Rndr::SoundHandle Rndr::AudioMixer::Play(AudioClipHandle clip, const PlaySoundDe
     Command command;
     command.type = Command::Type::Play;
     command.sound = sound;
-    command.clip_index = clip.index;
+    command.source_index = source_index;
+    command.is_stream = is_stream;
     command.desc = desc;
     command.desc.volume = ClampVolume(desc.volume);
     command.desc.pan = ClampPan(desc.pan);
@@ -468,6 +476,244 @@ bool Rndr::AudioMixer::IsPlaying(SoundHandle sound) const
     return IsLive(sound);
 }
 
+void Rndr::AudioMixer::ReclaimStreamSlots()
+{
+    const u64 epoch = m_mix_epoch.Load<Opal::MemoryOrder::Acquire>();
+    for (StreamSlot& slot : m_streams)
+    {
+        if (slot.is_pending_free && epoch >= slot.free_after_epoch)
+        {
+            slot.samples = Opal::DynamicArray<f32>();
+            slot.is_pending_free = false;
+        }
+    }
+}
+
+Opal::Expected<Rndr::AudioStreamHandle, Rndr::ErrorCode> Rndr::AudioMixer::CreateStream(const AudioStreamDesc& desc)
+{
+    using Result = Opal::Expected<AudioStreamHandle, ErrorCode>;
+
+    if (desc.channel_count != 1 && desc.channel_count != 2)
+    {
+        RNDR_LOG_ERROR("AudioMixer: a stream has 1 or 2 channels, not {}", desc.channel_count);
+        return Result(ErrorCode::InvalidArgument);
+    }
+    ReclaimStreamSlots();
+    for (u32 i = 0; i < m_streams.GetSize(); i++)
+    {
+        StreamSlot& slot = m_streams[i];
+        if (slot.is_live || slot.is_pending_free)
+        {
+            continue;
+        }
+
+        // The audio thread has not looked past is_known since the slot's last DestroyStream command, so everything
+        // else can be reset in place; the CreateStream command publishes it.
+        const u64 capacity_frames = desc.capacity_frames != 0 ? desc.capacity_frames : m_desc.sample_rate / 2;
+        slot.samples = Opal::DynamicArray<f32>(capacity_frames * desc.channel_count);
+        slot.channel_count = desc.channel_count;
+        slot.capacity_frames = capacity_frames;
+        slot.sound = {};
+        slot.write_frame.Store<Opal::MemoryOrder::Relaxed>(0);
+        slot.read_frame.Store<Opal::MemoryOrder::Relaxed>(0);
+        slot.flush_frame.Store<Opal::MemoryOrder::Relaxed>(0);
+        slot.underrun_count.Store<Opal::MemoryOrder::Relaxed>(0);
+        slot.is_dry = false;
+        slot.mix_start_frame = 0;
+        slot.mix_frame_count = 0;
+        slot.history_first = 0;
+        slot.history_count = 0;
+        slot.clock_frame.Store(0);
+        slot.clock_delay_frames.Store(0);
+        slot.clock_limit_frame.Store(0);
+        slot.clock_time.Store(0.0);
+
+        Command command;
+        command.type = Command::Type::CreateStream;
+        command.source_index = i;
+        if (!Send(command))
+        {
+            slot.samples = Opal::DynamicArray<f32>();
+            RNDR_LOG_ERROR("AudioMixer: could not queue the stream creation");
+            return Result(ErrorCode::OutOfResources);
+        }
+        slot.generation++;
+        if (slot.generation == 0)
+        {
+            slot.generation = 1;
+        }
+        slot.is_live = true;
+        return Result(AudioStreamHandle{i, slot.generation});
+    }
+    RNDR_LOG_ERROR("AudioMixer: every stream slot is in use");
+    return Result(ErrorCode::OutOfResources);
+}
+
+const Rndr::AudioMixer::StreamSlot* Rndr::AudioMixer::FindStream(AudioStreamHandle handle) const
+{
+    if (!handle.IsValid() || handle.index >= m_streams.GetSize())
+    {
+        return nullptr;
+    }
+    const StreamSlot& slot = m_streams[handle.index];
+    return slot.is_live && slot.generation == handle.generation ? &slot : nullptr;
+}
+
+Rndr::AudioMixer::StreamSlot* Rndr::AudioMixer::FindStream(AudioStreamHandle handle)
+{
+    return const_cast<StreamSlot*>(std::as_const(*this).FindStream(handle));
+}
+
+bool Rndr::AudioMixer::IsStreamValid(AudioStreamHandle handle) const
+{
+    return FindStream(handle) != nullptr;
+}
+
+void Rndr::AudioMixer::DestroyStream(AudioStreamHandle handle)
+{
+    ReclaimStreamSlots();
+    StreamSlot* slot = FindStream(handle);
+    if (slot == nullptr)
+    {
+        return;
+    }
+    Command command;
+    command.type = Command::Type::DestroyStream;
+    command.source_index = handle.index;
+    if (!Send(command))
+    {
+        RNDR_LOG_ERROR("AudioMixer: could not queue the stream destruction, the stream stays live");
+        return;
+    }
+    // Read after the send, for the reason DestroyClip gives.
+    slot->is_live = false;
+    slot->is_pending_free = true;
+    slot->free_after_epoch = m_mix_epoch.Load<Opal::MemoryOrder::Acquire>() + 2;
+}
+
+Rndr::SoundHandle Rndr::AudioMixer::PlayStream(AudioStreamHandle stream, const PlaySoundDesc& desc)
+{
+    StreamSlot* slot = FindStream(stream);
+    if (slot == nullptr)
+    {
+        RNDR_LOG_ERROR("AudioMixer: PlayStream called with a stream handle that is not live");
+        return {};
+    }
+    if (IsLive(slot->sound))
+    {
+        RNDR_LOG_ERROR("AudioMixer: the stream's last sound is still playing, a stream plays one sound at a time");
+        return {};
+    }
+    PlaySoundDesc stream_desc = desc;
+    stream_desc.pitch = 1.0f;
+    stream_desc.loop = false;
+    slot->sound = StartVoice(stream.index, true, stream_desc);
+    return slot->sound;
+}
+
+Rndr::u64 Rndr::AudioMixer::WriteStream(AudioStreamHandle stream, Opal::ArrayView<const f32> interleaved)
+{
+    StreamSlot* slot = FindStream(stream);
+    if (slot == nullptr)
+    {
+        return 0;
+    }
+    const u64 channel_count = slot->channel_count;
+    RNDR_ASSERT(interleaved.GetSize() % channel_count == 0, "AudioMixer: WriteStream takes whole frames");
+
+    const u64 write_frame = slot->write_frame.Load<Opal::MemoryOrder::Relaxed>();
+    const u64 read_frame = slot->read_frame.Load<Opal::MemoryOrder::Acquire>();
+    const u64 free_frames = slot->capacity_frames - (write_frame - read_frame);
+    const u64 frame_count = std::min(interleaved.GetSize() / channel_count, free_frames);
+
+    // The free part of the ring may wrap past its end, so it is filled in two copies at most.
+    const u64 start = write_frame % slot->capacity_frames;
+    const u64 first_count = std::min(frame_count, slot->capacity_frames - start);
+    std::copy_n(interleaved.GetData(), first_count * channel_count, slot->samples.GetData() + start * channel_count);
+    std::copy_n(interleaved.GetData() + first_count * channel_count, (frame_count - first_count) * channel_count, slot->samples.GetData());
+
+    slot->write_frame.Store<Opal::MemoryOrder::Release>(write_frame + frame_count);
+    return frame_count;
+}
+
+Rndr::u64 Rndr::AudioMixer::GetStreamFreeFrames(AudioStreamHandle stream) const
+{
+    const StreamSlot* slot = FindStream(stream);
+    if (slot == nullptr)
+    {
+        return 0;
+    }
+    const u64 read_frame = slot->read_frame.Load<Opal::MemoryOrder::Acquire>();
+    const u64 write_frame = slot->write_frame.Load<Opal::MemoryOrder::Acquire>();
+    return slot->capacity_frames - (write_frame - read_frame);
+}
+
+void Rndr::AudioMixer::FlushStream(AudioStreamHandle stream)
+{
+    StreamSlot* slot = FindStream(stream);
+    if (slot == nullptr)
+    {
+        return;
+    }
+    slot->flush_frame.Store<Opal::MemoryOrder::Release>(slot->write_frame.Load<Opal::MemoryOrder::Acquire>());
+}
+
+Rndr::u64 Rndr::AudioMixer::GetStreamQueuedFrames(AudioStreamHandle stream) const
+{
+    const StreamSlot* slot = FindStream(stream);
+    if (slot == nullptr)
+    {
+        return 0;
+    }
+    // The write end is read last: it is then at least as far as either of the others.
+    const u64 read_frame = slot->read_frame.Load<Opal::MemoryOrder::Acquire>();
+    const u64 flush_frame = slot->flush_frame.Load<Opal::MemoryOrder::Acquire>();
+    const u64 write_frame = slot->write_frame.Load<Opal::MemoryOrder::Acquire>();
+    return write_frame - std::max(read_frame, flush_frame);
+}
+
+Rndr::u64 Rndr::AudioMixer::GetStreamPosition(AudioStreamHandle stream, f64 time_seconds) const
+{
+    const StreamSlot* slot = FindStream(stream);
+    if (slot == nullptr)
+    {
+        return 0;
+    }
+    u64 frame = 0;
+    u64 delay_frames = 0;
+    u64 limit_frame = 0;
+    f64 clock_time = 0.0;
+    while (true)
+    {
+        const u32 sequence = slot->clock_sequence.Load();
+        if ((sequence & 1) != 0)
+        {
+            continue;
+        }
+        frame = slot->clock_frame.Load();
+        delay_frames = slot->clock_delay_frames.Load();
+        limit_frame = slot->clock_limit_frame.Load();
+        clock_time = slot->clock_time.Load();
+        if (slot->clock_sequence.Load() == sequence)
+        {
+            break;
+        }
+    }
+
+    const f64 advance = (time_seconds - clock_time) * static_cast<f64>(m_desc.sample_rate) - static_cast<f64>(delay_frames);
+    if (advance < 0.5)
+    {
+        return frame;
+    }
+    return frame + std::min(static_cast<u64>(advance + 0.5), limit_frame - frame);
+}
+
+Rndr::u32 Rndr::AudioMixer::GetStreamUnderrunCount(AudioStreamHandle stream) const
+{
+    const StreamSlot* slot = FindStream(stream);
+    return slot != nullptr ? slot->underrun_count.Load<Opal::MemoryOrder::Relaxed>() : 0;
+}
+
 void Rndr::AudioMixer::SetMasterVolume(f32 volume)
 {
     m_master_volume.Store<Opal::MemoryOrder::Relaxed>(ClampVolume(volume));
@@ -545,7 +791,8 @@ void Rndr::AudioMixer::MoveToFading(Voice& voice)
         }
     }
 
-    ghost->clip_index = voice.clip_index;
+    ghost->source_index = voice.source_index;
+    ghost->is_stream = voice.is_stream;
     ghost->is_active = true;
     ghost->is_paused = false;
     ghost->is_stopping = true;  // a ghost exists only to ramp out
@@ -590,8 +837,20 @@ void Rndr::AudioMixer::Execute(const Command& command)
                 // ramps out while this one ramps in, rather than cutting it here.
                 MoveToFading(fresh);
             }
+            if (command.is_stream)
+            {
+                // A ghost of the stream's last sound would read the ring alongside this one.
+                for (Voice& ghost : m_fading_voices)
+                {
+                    if (ghost.is_active && ghost.is_stream && ghost.source_index == command.source_index)
+                    {
+                        ghost.is_active = false;
+                    }
+                }
+            }
             fresh.playing_generation = command.sound.generation;
-            fresh.clip_index = command.clip_index;
+            fresh.source_index = command.source_index;
+            fresh.is_stream = command.is_stream;
             fresh.is_active = true;
             fresh.is_paused = command.desc.start_paused;
             fresh.is_stopping = false;
@@ -691,54 +950,76 @@ void Rndr::AudioMixer::Execute(const Command& command)
             }
             break;
         case Command::Type::DestroyClip:
+        case Command::Type::DestroyStream:
+        {
+            const bool is_stream = command.type == Command::Type::DestroyStream;
             for (Voice& v : m_voices)
             {
-                if (v.is_active && v.clip_index == command.clip_index)
+                if (v.is_active && v.is_stream == is_stream && v.source_index == command.source_index)
                 {
                     FinishVoice(v);
                 }
             }
-            // Ghosts too: the clip's memory is freed two mixes from now, and a ghost that is still ramping out
-            // would read it after that on a small enough buffer.
+            // Ghosts too: the memory is freed two mixes from now, and a ghost that is still ramping out would read
+            // it after that on a small enough buffer.
             for (Voice& ghost : m_fading_voices)
             {
-                if (ghost.is_active && ghost.clip_index == command.clip_index)
+                if (ghost.is_active && ghost.is_stream == is_stream && ghost.source_index == command.source_index)
                 {
                     ghost.is_active = false;
                 }
             }
+            if (is_stream)
+            {
+                m_streams[command.source_index].is_known = false;
+            }
+            break;
+        }
+        case Command::Type::CreateStream:
+            m_streams[command.source_index].is_known = true;
             break;
         case Command::Type::None:
             break;
     }
 }
 
-void Rndr::AudioMixer::MixVoice(Voice& voice, Opal::ArrayView<f32> out, f32 master_volume)
+Rndr::AudioMixer::GainRamp Rndr::AudioMixer::GetGainRamp(const Voice& voice, f32 master_volume) const
 {
-    const AudioClip& clip = m_clips[voice.clip_index].clip;
-    const Opal::ArrayView<const f32> samples = clip.GetData();
-    const u64 clip_frame_count = clip.GetFrameCount();
-    const u32 channel_count = clip.GetChannelCount();
-    const u64 out_frame_count = out.GetSize() / 2;
-
     f32 pan_left = 0.0f;
     f32 pan_right = 0.0f;
     PanGains(voice.pan, pan_left, pan_right);
     const f32 bus_volume = m_bus_volumes[voice.bus].Load<Opal::MemoryOrder::Relaxed>();
     const f32 gain = voice.is_stopping ? 0.0f : voice.volume * bus_volume * master_volume;
-    const f32 target_left = gain * pan_left;
-    const f32 target_right = gain * pan_right;
+    GainRamp ramp;
+    ramp.target_left = gain * pan_left;
+    ramp.target_right = gain * pan_right;
     // Whatever the distance, a gain lands in one ramp length.
-    const f32 step_left = std::abs(target_left - voice.gain_left) / static_cast<f32>(m_gain_ramp_frames);
-    const f32 step_right = std::abs(target_right - voice.gain_right) / static_cast<f32>(m_gain_ramp_frames);
+    ramp.step_left = std::abs(ramp.target_left - voice.gain_left) / static_cast<f32>(m_gain_ramp_frames);
+    ramp.step_right = std::abs(ramp.target_right - voice.gain_right) / static_cast<f32>(m_gain_ramp_frames);
+    return ramp;
+}
+
+void Rndr::AudioMixer::MixVoice(Voice& voice, Opal::ArrayView<f32> out, f32 master_volume)
+{
+    if (voice.is_stream)
+    {
+        MixStreamVoice(voice, out, master_volume);
+        return;
+    }
+    const AudioClip& clip = m_clips[voice.source_index].clip;
+    const Opal::ArrayView<const f32> samples = clip.GetData();
+    const u64 clip_frame_count = clip.GetFrameCount();
+    const u32 channel_count = clip.GetChannelCount();
+    const u64 out_frame_count = out.GetSize() / 2;
+    const GainRamp ramp = GetGainRamp(voice, master_volume);
 
     const f64 position_step = static_cast<f64>(voice.pitch) * static_cast<f64>(clip.GetSampleRate()) / static_cast<f64>(m_desc.sample_rate);
     const f64 clip_length = static_cast<f64>(clip_frame_count);
 
     for (u64 frame = 0; frame < out_frame_count; frame++)
     {
-        voice.gain_left = Approach(voice.gain_left, target_left, step_left);
-        voice.gain_right = Approach(voice.gain_right, target_right, step_right);
+        voice.gain_left = Approach(voice.gain_left, ramp.target_left, ramp.step_left);
+        voice.gain_right = Approach(voice.gain_right, ramp.target_right, ramp.step_right);
 
         // Linear interpolation between the frame under the read position and the next one. At the end of a
         // looping clip the next frame is the first one; at the end of a one-shot it is the last frame again.
@@ -787,7 +1068,172 @@ void Rndr::AudioMixer::MixVoice(Voice& voice, Opal::ArrayView<f32> out, f32 mast
     }
 }
 
-void Rndr::AudioMixer::Mix(Opal::ArrayView<f32> out)
+void Rndr::AudioMixer::MixStreamVoice(Voice& voice, Opal::ArrayView<f32> out, f32 master_volume)
+{
+    StreamSlot& stream = m_streams[voice.source_index];
+    const Opal::ArrayView<const f32> samples(stream.samples.GetData(), stream.samples.GetSize());
+    const u64 out_frame_count = out.GetSize() / 2;
+    const GainRamp ramp = GetGainRamp(voice, master_volume);
+
+    const u64 read_frame = stream.read_frame.Load<Opal::MemoryOrder::Relaxed>();
+    const u64 available = stream.write_frame.Load<Opal::MemoryOrder::Acquire>() - read_frame;
+    const u64 frame_count = std::min(available, out_frame_count);
+
+    // Past the frames there are, the gains keep ramping over silence, so a stop still finishes.
+    u64 played_count = frame_count;
+    bool is_finished = false;
+    for (u64 frame = 0; frame < out_frame_count; frame++)
+    {
+        voice.gain_left = Approach(voice.gain_left, ramp.target_left, ramp.step_left);
+        voice.gain_right = Approach(voice.gain_right, ramp.target_right, ramp.step_right);
+
+        if (frame < frame_count)
+        {
+            const u64 index = (read_frame + frame) % stream.capacity_frames;
+            f32 left = 0.0f;
+            f32 right = 0.0f;
+            if (stream.channel_count == 1)
+            {
+                left = samples[index];
+                right = left;
+            }
+            else
+            {
+                left = samples[index * 2];
+                right = samples[index * 2 + 1];
+            }
+            out[frame * 2] += left * voice.gain_left;
+            out[frame * 2 + 1] += right * voice.gain_right;
+        }
+
+        if (voice.is_stopping && voice.gain_left == 0.0f && voice.gain_right == 0.0f)
+        {
+            played_count = std::min(frame + 1, frame_count);
+            is_finished = true;
+            break;
+        }
+    }
+    stream.read_frame.Store<Opal::MemoryOrder::Release>(read_frame + played_count);
+    stream.mix_frame_count += played_count;
+
+    if (frame_count == out_frame_count || is_finished)
+    {
+        stream.is_dry = false;
+    }
+    else if (!stream.is_dry && !voice.is_stopping)
+    {
+        stream.is_dry = true;
+        stream.underrun_count.Store<Opal::MemoryOrder::Relaxed>(stream.underrun_count.Load<Opal::MemoryOrder::Relaxed>() + 1);
+    }
+    if (is_finished)
+    {
+        FinishVoice(voice);
+    }
+}
+
+void Rndr::AudioMixer::BeginStreamMix(StreamSlot& stream)
+{
+    const u64 flush_frame = stream.flush_frame.Load<Opal::MemoryOrder::Acquire>();
+    if (flush_frame > stream.read_frame.Load<Opal::MemoryOrder::Relaxed>())
+    {
+        stream.read_frame.Store<Opal::MemoryOrder::Release>(flush_frame);
+    }
+    stream.mix_start_frame = stream.read_frame.Load<Opal::MemoryOrder::Relaxed>();
+    stream.mix_frame_count = 0;
+}
+
+void Rndr::AudioMixer::EndStreamMix(StreamSlot& stream, const AudioRenderTiming& timing)
+{
+    // A stream is read by one voice at a time, from the start of the buffer, so what this mix played is one run.
+    if (stream.mix_frame_count > 0)
+    {
+        if (stream.history_count == k_stream_history_size)
+        {
+            stream.history_first = (stream.history_first + 1) % k_stream_history_size;
+            stream.history_count--;
+        }
+        const u32 last = (stream.history_first + stream.history_count) % k_stream_history_size;
+        stream.history[last] = {
+            .output_frame = m_output_frame, .stream_frame = stream.mix_start_frame, .frame_count = stream.mix_frame_count};
+        stream.history_count++;
+    }
+
+    const auto segment_at = [&stream](u32 i) -> const StreamSegment&
+    { return stream.history[(stream.history_first + i) % k_stream_history_size]; };
+    const auto segment_end = [](const StreamSegment& segment) { return segment.stream_frame + segment.frame_count; };
+    // The last stream frame reachable from segment i without a gap in the output or a jump in the stream.
+    const auto run_end = [&](u32 i)
+    {
+        u64 end = segment_end(segment_at(i));
+        u64 output_end = segment_at(i).output_frame + segment_at(i).frame_count;
+        for (u32 j = i + 1; j < stream.history_count; j++)
+        {
+            const StreamSegment& next = segment_at(j);
+            if (next.output_frame != output_end || next.stream_frame != end)
+            {
+                break;
+            }
+            end = segment_end(next);
+            output_end += next.frame_count;
+        }
+        return end;
+    };
+
+    // The output frame at the speaker when the device measured its queue: it holds that many ahead of this buffer.
+    const i64 speaker = static_cast<i64>(m_output_frame) - static_cast<i64>(timing.queued_frames);
+
+    // Segments the speaker is past are of no more use, but the last of them says where a gap after it starts.
+    while (stream.history_count >= 2 && static_cast<i64>(segment_at(1).output_frame + segment_at(1).frame_count) <= speaker)
+    {
+        stream.history_first = (stream.history_first + 1) % k_stream_history_size;
+        stream.history_count--;
+    }
+
+    // With nothing played, the speaker is wherever reading would start.
+    u64 frame = stream.mix_start_frame + stream.mix_frame_count;
+    u64 delay_frames = 0;
+    u64 limit_frame = frame;
+    if (stream.history_count > 0)
+    {
+        const StreamSegment& newest = segment_at(stream.history_count - 1);
+        frame = segment_end(newest);
+        limit_frame = frame;
+        for (u32 i = 0; i < stream.history_count; i++)
+        {
+            const StreamSegment& segment = segment_at(i);
+            const auto output_frame = static_cast<i64>(segment.output_frame);
+            if (speaker < output_frame)
+            {
+                // In the silence before this segment: held where the last one ended, and moving once the speaker
+                // reaches this one if it carries straight on from there.
+                frame = i > 0 ? segment_end(segment_at(i - 1)) : segment.stream_frame;
+                limit_frame = frame;
+                if (frame == segment.stream_frame)
+                {
+                    delay_frames = static_cast<u64>(output_frame - speaker);
+                    limit_frame = run_end(i);
+                }
+                break;
+            }
+            if (speaker < output_frame + static_cast<i64>(segment.frame_count))
+            {
+                frame = segment.stream_frame + static_cast<u64>(speaker - output_frame);
+                limit_frame = run_end(i);
+                break;
+            }
+        }
+    }
+
+    const u32 sequence = stream.clock_sequence.Load();
+    stream.clock_sequence.Store(sequence + 1);
+    stream.clock_frame.Store(frame);
+    stream.clock_delay_frames.Store(delay_frames);
+    stream.clock_limit_frame.Store(limit_frame);
+    stream.clock_time.Store(timing.time_seconds);
+    stream.clock_sequence.Store(sequence + 2);
+}
+
+void Rndr::AudioMixer::Mix(Opal::ArrayView<f32> out, const AudioRenderTiming& timing)
 {
     for (f32& sample : out)
     {
@@ -798,6 +1244,14 @@ void Rndr::AudioMixer::Mix(Opal::ArrayView<f32> out)
     while (m_commands.receiver.TryReceive(command) == Opal::ErrorCode::Success)
     {
         Execute(command);
+    }
+
+    for (StreamSlot& stream : m_streams)
+    {
+        if (stream.is_known)
+        {
+            BeginStreamMix(stream);
+        }
     }
 
     const f32 master_volume = m_master_volume.Load<Opal::MemoryOrder::Relaxed>();
@@ -827,6 +1281,16 @@ void Rndr::AudioMixer::Mix(Opal::ArrayView<f32> out)
             MixVoice(ghost, out, master_volume);
         }
     }
+
+    const u64 out_frame_count = out.GetSize() / 2;
+    for (StreamSlot& stream : m_streams)
+    {
+        if (stream.is_known)
+        {
+            EndStreamMix(stream, timing);
+        }
+    }
+    m_output_frame += out_frame_count;
 
     for (f32& sample : out)
     {

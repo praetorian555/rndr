@@ -31,6 +31,19 @@ struct AudioClipHandle
     bool operator==(const AudioClipHandle& other) const = default;
 };
 
+/**
+ * Names a stream owned by an AudioSystem: a sound whose samples the caller writes while it plays. Generational in the
+ * same way as AudioClipHandle.
+ */
+struct AudioStreamHandle
+{
+    u32 index = 0;
+    u32 generation = 0;
+
+    [[nodiscard]] bool IsValid() const { return generation != 0; }
+    bool operator==(const AudioStreamHandle& other) const = default;
+};
+
 enum class AudioFileFormat : u8
 {
     Wav,
@@ -55,6 +68,23 @@ struct PlaySoundDesc
     u8 priority = 128;
     /** Bus in [0, k_audio_bus_count) whose volume is applied on top of the sound's own. */
     u8 bus = 0;
+};
+
+struct AudioStreamDesc
+{
+    /** 1 or 2. Frames are interleaved the way an AudioClip's are, at the mix rate. */
+    u32 channel_count = 2;
+    /** Frames the stream holds between the writer and playback: how far ahead the writer can get. Zero picks half a second. */
+    u32 capacity_frames = 0;
+};
+
+/** What a device knows about the buffer it asks to be filled: when it will be heard. */
+struct AudioRenderTiming
+{
+    /** Frames the device already holds ahead of this buffer and has not played. The buffer's first frame follows them. */
+    u32 queued_frames = 0;
+    /** Opal::GetSeconds() at the moment queued_frames was true. */
+    f64 time_seconds = 0.0;
 };
 
 }  // namespace Rndr

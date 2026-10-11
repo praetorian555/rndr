@@ -96,10 +96,11 @@ Five minutes of stereo at 48 kHz is 110 MB as f32. Two tracks and the OGG decode
 thing in the load.
 
 - Short term: store clips as i16 and convert on read in the mixer. Halves memory, costs one multiply per sample.
-- Real fix: streaming. A voice bound to a streamed clip reads from a ring buffer that a loader thread (or the main
-  thread, on a `Update()` call) keeps ahead of it by decoding from disk. The decoder has to be seekable for loops.
+- Real fix: streaming. Half of it exists: a stream (`AudioSystem::CreateStream`) is a sound read from a ring buffer
+  a thread of the caller's keeps ahead of it, which is what a video's sound uses. What is left is the loader: a thread
+  that decodes from disk into it, with a decoder that can seek for loops.
 
-Layer: clip + mixer + a loader. Largest item on the list.
+Layer: a loader over the existing stream. Largest item left on the list.
 
 ---
 

@@ -1,8 +1,8 @@
 # Audio
 
 Basic sound for games: load a clip, play it with volume, pan and pitch, loop it, route it through a volume bus,
-pause everything. Two-dimensional only, everything decoded into memory. It is on by default (`RNDR_AUDIO`) and on
-Windows plays through WASAPI.
+pause everything. Two-dimensional only. Clips are decoded into memory; a stream is fed by the caller while it plays,
+which is how a video's sound gets in. It is on by default (`RNDR_AUDIO`) and on Windows plays through WASAPI.
 
 The public types live under `include/rndr/audio/`:
 
@@ -12,6 +12,9 @@ The public types live under `include/rndr/audio/`:
 | `AudioSystem` | What a game holds. Owns the clips, plays sounds, runs the output device. |
 | `AudioMixer` | The engine under `AudioSystem`: voices, commands, the mix. Has no thread; drive it yourself to test. |
 | `AudioDevice` | The platform half: a thread that pulls stereo f32 from a callback and pushes it to the endpoint. |
+
+A stream has no type of its own: `AudioSystem::CreateStream` hands back an `AudioStreamHandle`, and the stream lives in
+the mixer next to the clips.
 
 ---
 
@@ -109,6 +112,53 @@ new check. What it was playing keeps mixing for one 2 ms ramp while the new soun
 crossfade and not a click. `GetStolenVoiceCount` counts the sounds this has happened to - a number that climbs
 fast means `max_voices` is too low or something is playing more copies of one sound than anyone can hear.
 
+### Streams
+
+A stream is a sound whose samples arrive while it plays: a ring buffer of interleaved f32 frames, mono or stereo, at
+the mix rate. The caller decodes into it from a thread of its own and the audio thread drains it. It is for sound that
+is not all there up front - a video's, a long track decoded as it goes - and is the one part of the system a second
+thread calls into.
+
+```cpp
+const Rndr::AudioStreamHandle stream = audio->CreateStream({.channel_count = 2}).GetValueOr({});
+// Paused until there is something to play, or it starts dry. A high priority keeps it from being stolen.
+const Rndr::SoundHandle sound = audio->PlayStream(stream, {.start_paused = true, .priority = 255});
+
+// The decode thread, as often as it likes:
+const Rndr::u64 taken = audio->WriteStream(stream, interleaved_frames);  // as many as fit; the rest go next time
+
+// The main thread:
+audio->Resume(sound);
+const Rndr::u64 heard = audio->GetStreamPosition(stream);  // the frame at the speaker now
+```
+
+Frames are at `GetSampleRate()`. Nothing resamples a stream - a caller whose source runs at another rate converts it,
+or creates the system at the source's rate. `capacity_frames` is how far ahead of playback the writer can get, half a
+second when left at zero; `WriteStream` takes what fits and says how much, and `GetStreamFreeFrames` says ahead of time.
+
+`PlayStream` plays it as an ordinary sound: the handle takes `Pause`, `SetVolume`, `Stop` and the rest. Pitch and loop
+do not apply, and a stream plays one sound at a time - a second `PlayStream` is refused until the first sound has
+ended, its 2 ms stop ramp included. Pausing holds the read position. A stopped stream keeps what was written, and the
+next `PlayStream` carries on from there.
+
+**Running dry.** When the writer falls behind, the sound plays silence for what is missing and carries on once frames
+arrive. `GetStreamUnderrunCount` counts the dry spells, once each however long they last. The end of the material is a
+dry spell too, unless the caller stops the sound once `GetStreamQueuedFrames` reaches zero.
+
+**Seeking.** `FlushStream` drops everything written and not yet played; what is written after it plays next. It is the
+writer's call, or any thread's while nothing writes. The audio thread drops the frames at its next mix, so for one
+mix they still count against the free frames.
+
+**Position.** `GetStreamPosition` is the frame reaching the speaker, counted from the first frame ever written to the
+stream - flushed ones included - so a writer that notes the time of the first frame after a seek, and how many frames
+it had written by then, can turn a position back into a time. It is the clock a video's frames are shown against: it
+takes in what the device holds and has not played, holds still while the stream is paused, stopped or dry, and
+moves smoothly between audio callbacks rather than in steps of one.
+
+**Lifetime.** `DestroyStream` stops the sound and frees the ring once the audio thread is done with it, the way
+`DestroyClip` does. The writer must have stopped writing to the stream first - nothing guards a write racing the
+free.
+
 ### Buses and master volume
 
 There are `k_audio_bus_count` (8) buses. Bus 0 is the default; what the rest mean is up to the game - SFX, music,
@@ -133,6 +183,18 @@ The split is strict. Voice state belongs to the audio thread and is only changed
 storage belongs to the main thread. Master and bus volumes and the per-voice "finished" generations are atomics.
 The audio thread never allocates, locks or blocks.
 
+**Streams.** The ring is single-producer single-consumer: the writer owns the write end and the audio thread the read
+end, both atomic frame counts that only grow, so neither side waits on the other. A flush is a third count the writer
+sets to its write end; the audio thread moves its read end up to it at the start of the next mix. The ring's memory
+is freed on the main thread two mixes after `DestroyStream`, as a clip's is.
+
+**Stream position.** The device tells the mixer, with every buffer, how many frames it already holds ahead of it and
+when it measured that (`AudioRenderTiming`). Each mix records which output frames played which stream frames - one
+run per mix, since a stream is read by one voice from the start of the buffer - and keeps the last 64 runs. From the
+output frame at the speaker it finds the stream frame there, how long until the stream moves if the speaker is in a
+silence, and how far it may move before running out of what has been mixed. It publishes those with the time under a
+sequence lock, and `GetStreamPosition` moves on from them at the mix rate.
+
 **Voice slots.** The main thread allocates a voice slot when `Play` is called - so it can hand back a handle at
 once - and bumps the slot's generation. The audio thread writes that generation into an atomic when the voice ends.
 A slot is free when the two agree. That one atomic per voice is the whole of `IsPlaying`.
@@ -155,7 +217,9 @@ runs at and the mixer never has to adapt. All COM work happens on the audio thre
 device never needs `CoInitializeEx`. `AudioDevice::Create` waits for the thread's first attempt at the stream and
 reports `NoAudioDevice` or `PlatformError` if it failed, logging the `HRESULT`. When the endpoint disappears - headphones unplugged, default device changed -
 the thread reopens against the new default every half second; the mixer's state is untouched, so playback carries
-on. The thread asks MMCSS for "Pro Audio" scheduling, best effort.
+on. The thread asks MMCSS for "Pro Audio" scheduling, best effort. What the device holds ahead of a buffer comes from
+the stream's `IAudioClock` - frames written less what the endpoint has played by now - and from the padding where
+the stream has no clock.
 
 ---
 
@@ -163,7 +227,9 @@ on. The thread asks MMCSS for "Pro Audio" scheduling, best effort.
 
 `[audio]` is headless and deterministic: the decoders against WAV images built in the test and the OGG fixture
 under `assets/audio/`, and the mixer driven directly - `Play`, then `Mix` into a buffer, then look at the samples.
-`[audio-device]` opens the real endpoint, plays through it and checks timing. It skips on a machine with no output
+The stream cases write frames that carry their own index, so the output says which frame it came from, and hand
+`Mix` a made-up device timing to check the position against. `[audio-device]` opens the real endpoint, plays through
+it and checks timing, a stream fed from a second thread included. It skips on a machine with no output
 device, which from the outside looks like a pass; set `RNDR_TEST_REQUIRE_AUDIO=1` to make that a failure.
 
     ./build/msvc-debug/Debug/rndr-test.exe "[audio]"
@@ -176,8 +242,8 @@ on its own bus, Up/Down for master volume, P to pause everything.
 
 ## Not here yet
 
-- **Streaming.** Every clip is decoded whole. Five minutes of stereo at 48 kHz is 110 MB as f32; long music wants
-  a decoder fed from disk on the audio thread.
+- **Streaming from disk.** Every clip is decoded whole. Five minutes of stereo at 48 kHz is 110 MB as f32. A
+  stream can carry long music, but the decoding thread that feeds it is the caller's.
 - **3D.** No listener, no distance attenuation, no spatial pan. A game can compute pan and volume from positions
   and set them per sound.
 - **Effects and sends.** No filters, no reverb, no bus-to-bus routing beyond a single gain per bus.

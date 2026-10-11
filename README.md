@@ -9,7 +9,7 @@ Core features:
 * __Canvas API__ High-level rendering abstraction with command-list based drawing, automatic shader reflection, and GPU resource management (shaders, textures, buffers, meshes, render targets). Shaders are written in Slang and cross-compiled to GLSL at runtime, so the backend only requires OpenGL 4.5.
 * __Built-in Renderers__ PBR renderer with instanced batching, 2D shape renderer, bitmap text renderer, cubemap skybox renderer, and infinite grid renderer.
 * __Input System__ Stack-based input context model with support for keyboard, mouse, gamepad, text input, combos, and hold timers.
-* __Audio__ WAV and OGG clips, a software mixer with volume, pan, pitch, looping and volume buses, played through WASAPI from a thread of its own.
+* __Audio__ WAV and OGG clips and streams fed while they play, a software mixer with volume, pan, pitch, looping and volume buses, played through WASAPI from a thread of its own.
 * __Window Management__ Native window creation and event handling.
 
 ## Setup ##
@@ -114,6 +114,6 @@ error. Reconfigure with `-DRNDR_HARDENING=OFF` before installing.
 
 * [Canvas API](docs/canvas.md) — High-level rendering API, GPU resources, and built-in renderers.
 * [Input System](docs/input-system.md) — Stack-based input contexts, actions, bindings, and combos.
-* [Audio](docs/audio.md) — Clips, the mixer, buses, and the WASAPI device.
+* [Audio](docs/audio.md) — Clips, streams, the mixer, buses, and the WASAPI device.
 * [Hardware](docs/hardware.md) — Hardware and platform details.
 * [Vulkan](docs/vulkan.md) — Vulkan backend notes.
