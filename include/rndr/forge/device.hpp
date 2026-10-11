@@ -112,6 +112,11 @@ struct DeviceFeatures
     bool texture_compression_bc = false;
     /** Views of TextureViewType::CubeArray, which a texture naming one is refused without. */
     bool image_cube_array = false;
+    /**
+     * Sampling a video frame - a texture of a multi-planar format such as NV12 - as RGB, through a
+     * SamplerYcbcrConversion, which is refused without it. Core since Vulkan 1.1.
+     */
+    bool sampler_ycbcr_conversion = false;
 
     // Shaders.
     bool shader_int16 = false;

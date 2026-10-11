@@ -458,6 +458,13 @@ Opal::Expected<Rndr::Forge::DescriptorSetLayout, Rndr::ErrorCode> Rndr::Forge::D
             binding.pImmutableSamplers = immutable_samplers.GetData() + next_immutable_sampler;
             for (const Opal::Ref<const Sampler>& sampler : source.immutable_samplers)
             {
+                // Vulkan reads a conversion only beside an image in the same descriptor.
+                if (sampler->GetNativeConversion() != VK_NULL_HANDLE && source.descriptor_type != DescriptorType::CombinedImageSampler)
+                {
+                    RNDR_LOG_ERROR("Forge: binding {} holds a sampler with a YCbCr conversion, which only a CombinedImageSampler binding takes",
+                                   source.binding);
+                    return Result(ErrorCode::InvalidArgument);
+                }
                 immutable_samplers[next_immutable_sampler++] = sampler->GetNativeSampler();
             }
         }
@@ -633,10 +640,13 @@ Opal::Expected<Rndr::Forge::DescriptorSet, Rndr::ErrorCode> Rndr::Forge::Descrip
         // The variable binding holds what this set was allocated with, not what the layout declared, so an
         // element inside the declared array but outside the allocated one is caught here as well.
         const bool is_variable = variable_descriptor_count > 0 && &binding == variable_binding;
-        descriptor_set.m_binding_types.PushBack({.binding = binding.binding,
-                                                 .descriptor_type = binding.descriptor_type,
-                                                 .descriptor_count = is_variable ? variable_descriptor_count : binding.descriptor_count,
-                                                 .name = binding.name.Clone()});
+        descriptor_set.m_binding_types.PushBack(
+            {.binding = binding.binding,
+             .descriptor_type = binding.descriptor_type,
+             .descriptor_count = is_variable ? variable_descriptor_count : binding.descriptor_count,
+             .name = binding.name.Clone(),
+             .has_immutable_samplers = !binding.immutable_samplers.IsEmpty(),
+             .conversion = binding.immutable_samplers.IsEmpty() ? VK_NULL_HANDLE : binding.immutable_samplers[0]->GetNativeConversion()});
     }
     return Result(std::move(descriptor_set));
 }
@@ -760,9 +770,35 @@ Rndr::ErrorCode Rndr::Forge::DescriptorSet::Update(Opal::ArrayView<const Descrip
                     return ErrorCode::InvalidArgument;
                 }
             }
-            image_infos[i] = {.sampler = texture_info.sampler->GetNativeSampler(),
-                              .imageView = texture_info.view.IsValid() ? texture_info.view->GetNativeImageView()
-                                                                       : texture_info.texture->GetNativeImageView(),
+            const VkImageView image_view =
+                texture_info.view.IsValid() ? texture_info.view->GetNativeImageView() : texture_info.texture->GetNativeImageView();
+            if (image_view == VK_NULL_HANDLE)
+            {
+                RNDR_LOG_ERROR("Forge: the texture written into binding {} has no view of its own - one used only for transfers, or a "
+                               "YCbCr one, which is read through a TextureView made with its conversion",
+                               updates[i].binding);
+                return ErrorCode::InvalidArgument;
+            }
+            // A conversion is read from the immutable sampler and has to match the view's, so it cannot arrive in a write.
+            const BindingInfo& binding = binding_info.GetValue();
+            if (!binding.has_immutable_samplers && texture_info.sampler.IsValid() && texture_info.sampler->GetNativeConversion() != VK_NULL_HANDLE)
+            {
+                RNDR_LOG_ERROR("Forge: a sampler with a YCbCr conversion is only taken as an immutable sampler of the layout, and binding {} "
+                               "has none",
+                               updates[i].binding);
+                return ErrorCode::InvalidArgument;
+            }
+            const VkSamplerYcbcrConversion view_conversion = texture_info.view.IsValid() ? texture_info.view->GetNativeConversion() : VK_NULL_HANDLE;
+            if (view_conversion != binding.conversion)
+            {
+                RNDR_LOG_ERROR("Forge: binding {} reads through {} YCbCr conversion and the view written into it through {}; the two have "
+                               "to be the same one",
+                               updates[i].binding, binding.conversion != VK_NULL_HANDLE ? "a" : "no",
+                               view_conversion != VK_NULL_HANDLE ? "another" : "none");
+                return ErrorCode::InvalidArgument;
+            }
+            image_infos[i] = {.sampler = texture_info.sampler.IsValid() ? texture_info.sampler->GetNativeSampler() : VK_NULL_HANDLE,
+                              .imageView = image_view,
                               .imageLayout = static_cast<VkImageLayout>(texture_info.texture_layout)};
             descriptor_write.pImageInfo = &image_infos[i];
         }

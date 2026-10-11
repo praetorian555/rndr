@@ -5,6 +5,7 @@
 #include "rndr/forge/buffer.hpp"
 #include "rndr/forge/command-buffer.hpp"
 #include "rndr/forge/device.hpp"
+#include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/synchronization.hpp"
 #include "rndr/forge/transfer.hpp"
 #include "rndr/forge/vulkan-result.hpp"
@@ -280,6 +281,51 @@ static Rndr::u32 ResolveCount(Rndr::u32 first, Rndr::u32 count, Rndr::u32 total)
     return count == 0xFFFFFFFF ? total - first : count;
 }
 
+/**
+ * What Vulkan requires of an image in a format that needs a YCbCr conversion, checked so that a mistake is a log line
+ * naming it rather than an image the layer objects to: one 2D level, layer and sample of an even size, used only to
+ * be sampled or copied, in a format this device can sample.
+ */
+static Rndr::ErrorCode CheckYcbcrTexture(const Rndr::Forge::Device& device, const Rndr::Forge::TextureDesc& desc)
+{
+    using namespace Rndr;
+    using Forge::TextureUsageBits;
+
+    if (desc.dimension != Forge::TextureDimension::Texture2D || desc.view_type != Forge::TextureViewType::Texture2D)
+    {
+        RNDR_LOG_ERROR("Forge: a texture of a YCbCr format is two dimensional, with a Texture2D view type");
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.mip_level_count != 1 || desc.array_layer_count != 1 || desc.depth != 1 || desc.sample_count != Forge::SampleCount::Count1)
+    {
+        RNDR_LOG_ERROR("Forge: a texture of a YCbCr format has one mip level, one array layer and one sample");
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.width % 2 != 0 || desc.height % 2 != 0)
+    {
+        RNDR_LOG_ERROR("Forge: a texture of a 4:2:0 format has an even width and height, and is {}x{}", desc.width, desc.height);
+        return ErrorCode::InvalidArgument;
+    }
+    constexpr TextureUsageBits k_allowed = TextureUsageBits::Sampled | TextureUsageBits::TransferSource | TextureUsageBits::TransferDestination;
+    if (!!(desc.usage & ~k_allowed))
+    {
+        RNDR_LOG_ERROR("Forge: a texture of a YCbCr format can only be sampled or copied");
+        return ErrorCode::InvalidArgument;
+    }
+    const Forge::YcbcrFormatSupport support = device.GetPhysicalDevice().GetYcbcrFormatSupport(desc.format);
+    if (!!(desc.usage & TextureUsageBits::Sampled) && !support.sampled)
+    {
+        RNDR_LOG_ERROR("Forge: this device cannot sample the YCbCr format {}", static_cast<u32>(desc.format));
+        return ErrorCode::FeatureNotSupported;
+    }
+    if (!!(desc.usage & TextureUsageBits::TransferDestination) && !support.transfer_destination)
+    {
+        RNDR_LOG_ERROR("Forge: this device cannot copy into the YCbCr format {}", static_cast<u32>(desc.format));
+        return ErrorCode::FeatureNotSupported;
+    }
+    return ErrorCode::Success;
+}
+
 Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDesc& desc)
 {
     m_desc = desc;
@@ -338,6 +384,12 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
         return ErrorCode::InvalidArgument;
     }
 
+    const bool is_ycbcr = IsYcbcrFormat(m_desc.format);
+    if (is_ycbcr)
+    {
+        RNDR_FORGE_CHECK(CheckYcbcrTexture(device, m_desc));
+    }
+
     RNDR_FORGE_TRANSLATE(image_type, ToVkImageType(m_desc.dimension), "TextureDesc::dimension");
     RNDR_FORGE_TRANSLATE(sample_count, ToVkSampleCount(m_desc.sample_count), "TextureDesc::sample_count");
     const VkImageCreateInfo image_create_info = {
@@ -374,7 +426,8 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
                         "vmaCreateImage");
     // A view is only allowed on an image that some stage can read or write. A texture that is nothing but the
     // source or the destination of a transfer is a legitimate thing to create, and giving it one is invalid.
-    if (!SupportsImageView(m_desc.usage))
+    // A YCbCr texture can only be viewed with a conversion, which the caller brings to a TextureView.
+    if (!SupportsImageView(m_desc.usage) || is_ycbcr)
     {
         return ErrorCode::Success;
     }
@@ -575,6 +628,38 @@ Rndr::ErrorCode Rndr::Forge::Texture::SetCurrentLayout(const ImageSubresourceRan
 Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureView::Create(const Device& device, const Texture& texture,
                                                                                            const TextureViewDesc& desc)
 {
+    if (texture.IsValid() && IsYcbcrFormat(texture.GetDesc().format))
+    {
+        RNDR_LOG_ERROR("Forge: a view of a YCbCr texture needs a SamplerYcbcrConversion, which the other TextureView::Create takes");
+        return Opal::Expected<TextureView, ErrorCode>(ErrorCode::InvalidArgument);
+    }
+    return CreateView(device, texture, nullptr, desc);
+}
+
+Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureView::Create(const Device& device, const Texture& texture,
+                                                                                           const SamplerYcbcrConversion& conversion,
+                                                                                           const TextureViewDesc& desc)
+{
+    using Result = Opal::Expected<TextureView, ErrorCode>;
+
+    if (!conversion.IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: TextureView::Create was given an empty SamplerYcbcrConversion");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (texture.IsValid() && texture.GetDesc().format != conversion.GetDesc().format)
+    {
+        RNDR_LOG_ERROR("Forge: a view's conversion has to be for the texture's format, {}, and is for {}", static_cast<u32>(texture.GetDesc().format),
+                       static_cast<u32>(conversion.GetDesc().format));
+        return Result(ErrorCode::InvalidArgument);
+    }
+    return CreateView(device, texture, &conversion, desc);
+}
+
+Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureView::CreateView(const Device& device, const Texture& texture,
+                                                                                               const SamplerYcbcrConversion* conversion,
+                                                                                               const TextureViewDesc& desc)
+{
     using Result = Opal::Expected<TextureView, ErrorCode>;
 
     if (!texture.IsValid())
@@ -644,9 +729,13 @@ Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureVi
     view.m_device = device;
     view.m_texture = texture;
     view.m_desc = desc;
+    view.m_conversion = conversion != nullptr ? conversion->GetNativeConversion() : VK_NULL_HANDLE;
     RNDR_FORGE_TRANSLATE_EXPECTED(view_type, ToVkImageViewType(desc.view_type), "TextureViewDesc::view_type", Result);
+    const VkSamplerYcbcrConversionInfo conversion_info{.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO,
+                                                       .conversion = view.m_conversion};
     const VkImageViewCreateInfo image_view_create_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = conversion != nullptr ? &conversion_info : nullptr,
         .image = texture.GetNativeImage(),
         .viewType = view_type,
         .format = ToVkFormat(texture_desc.format),
@@ -667,9 +756,14 @@ Rndr::Forge::TextureView::~TextureView()
 }
 
 Rndr::Forge::TextureView::TextureView(TextureView&& other) noexcept
-    : m_device(std::move(other.m_device)), m_texture(std::move(other.m_texture)), m_view(other.m_view), m_desc(other.m_desc)
+    : m_device(std::move(other.m_device)),
+      m_texture(std::move(other.m_texture)),
+      m_view(other.m_view),
+      m_conversion(other.m_conversion),
+      m_desc(other.m_desc)
 {
     other.m_view = VK_NULL_HANDLE;
+    other.m_conversion = VK_NULL_HANDLE;
 }
 
 Rndr::Forge::TextureView& Rndr::Forge::TextureView::operator=(TextureView&& other) noexcept
@@ -680,8 +774,10 @@ Rndr::Forge::TextureView& Rndr::Forge::TextureView::operator=(TextureView&& othe
         m_device = std::move(other.m_device);
         m_texture = std::move(other.m_texture);
         m_view = other.m_view;
+        m_conversion = other.m_conversion;
         m_desc = other.m_desc;
         other.m_view = VK_NULL_HANDLE;
+        other.m_conversion = VK_NULL_HANDLE;
     }
     return *this;
 }
@@ -739,6 +835,49 @@ static Opal::Optional<VkSamplerReductionMode> ToVkSamplerReductionMode(Rndr::Sam
 
 Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Create(const Device& device, const SamplerDesc& desc)
 {
+    return CreateSampler(device, desc, nullptr);
+}
+
+Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Create(const Device& device, const SamplerDesc& desc,
+                                                                                   const SamplerYcbcrConversion& conversion)
+{
+    using Result = Opal::Expected<Sampler, ErrorCode>;
+
+    if (!conversion.IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: Sampler::Create was given an empty SamplerYcbcrConversion");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    const char* broken = nullptr;
+    if (desc.address_mode_u != ImageAddressMode::Clamp || desc.address_mode_v != ImageAddressMode::Clamp ||
+        desc.address_mode_w != ImageAddressMode::Clamp)
+    {
+        broken = "every address mode is Clamp";
+    }
+    else if (desc.max_anisotropy > 1.0f)
+    {
+        broken = "there is no anisotropy";
+    }
+    else if (desc.compare_enabled || desc.reduction != SamplerReduction::WeightedAverage)
+    {
+        broken = "it neither compares nor reduces";
+    }
+    else if ((desc.min_filter != conversion.GetDesc().chroma_filter || desc.mag_filter != conversion.GetDesc().chroma_filter) &&
+             !device.GetPhysicalDevice().GetYcbcrFormatSupport(conversion.GetDesc().format).separate_reconstruction_filter)
+    {
+        broken = "min_filter and mag_filter equal the conversion's chroma_filter, since the format allows no separate one";
+    }
+    if (broken != nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: a sampler with a YCbCr conversion has to keep to what Vulkan allows it: {}", broken);
+        return Result(ErrorCode::InvalidArgument);
+    }
+    return CreateSampler(device, desc, &conversion);
+}
+
+Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::CreateSampler(const Device& device, const SamplerDesc& desc,
+                                                                                          const SamplerYcbcrConversion* conversion)
+{
     using Result = Opal::Expected<Sampler, ErrorCode>;
 
     if (desc.max_anisotropy > 1.0f && !device.GetEnabledFeatures().sampler_anisotropy)
@@ -784,9 +923,22 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
                                                                  .reductionMode = reduction_mode};
     Sampler sampler;
     sampler.m_device = device;
+    sampler.m_conversion = conversion != nullptr ? conversion->GetNativeConversion() : VK_NULL_HANDLE;
+    // A sampler with a conversion neither reduces nor compares, so the two never share the chain.
+    const VkSamplerYcbcrConversionInfo conversion_info{.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO,
+                                                       .conversion = sampler.m_conversion};
+    const void* next = nullptr;
+    if (conversion != nullptr)
+    {
+        next = &conversion_info;
+    }
+    else if (desc.reduction != SamplerReduction::WeightedAverage)
+    {
+        next = &reduction_create_info;
+    }
     const VkSamplerCreateInfo sampler_create_info = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .pNext = desc.reduction != SamplerReduction::WeightedAverage ? &reduction_create_info : nullptr,
+        .pNext = next,
         .magFilter = ToVkFilter(desc.mag_filter),
         .minFilter = ToVkFilter(desc.min_filter),
         .mipmapMode = ToVkSamplerMipmapMode(desc.mip_map_filter),
@@ -812,9 +964,11 @@ Rndr::Forge::Sampler::~Sampler()
     Destroy();
 }
 
-Rndr::Forge::Sampler::Sampler(Sampler&& other) noexcept : m_device(std::move(other.m_device)), m_sampler(other.m_sampler)
+Rndr::Forge::Sampler::Sampler(Sampler&& other) noexcept
+    : m_device(std::move(other.m_device)), m_sampler(other.m_sampler), m_conversion(other.m_conversion)
 {
     other.m_sampler = VK_NULL_HANDLE;
+    other.m_conversion = VK_NULL_HANDLE;
     other.m_device = nullptr;
 }
 
@@ -825,7 +979,9 @@ Rndr::Forge::Sampler& Rndr::Forge::Sampler::operator=(Sampler&& other) noexcept
         Destroy();
         m_device = std::move(other.m_device);
         m_sampler = other.m_sampler;
+        m_conversion = other.m_conversion;
         other.m_sampler = VK_NULL_HANDLE;
+        other.m_conversion = VK_NULL_HANDLE;
         other.m_device = nullptr;
     }
     return *this;
@@ -837,5 +993,158 @@ void Rndr::Forge::Sampler::Destroy()
     {
         vkDestroySampler(m_device->GetNativeDevice(), m_sampler, nullptr);
         m_sampler = VK_NULL_HANDLE;
+    }
+    m_conversion = VK_NULL_HANDLE;
+}
+
+// SamplerYcbcrConversion
+
+static Opal::Optional<VkSamplerYcbcrModelConversion> ToVkYcbcrModel(Rndr::Forge::YcbcrModel model)
+{
+    switch (model)
+    {
+        case Rndr::Forge::YcbcrModel::RgbIdentity:
+            return Opal::Optional<VkSamplerYcbcrModelConversion>(VK_SAMPLER_YCBCR_MODEL_CONVERSION_RGB_IDENTITY);
+        case Rndr::Forge::YcbcrModel::YcbcrIdentity:
+            return Opal::Optional<VkSamplerYcbcrModelConversion>(VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_IDENTITY);
+        case Rndr::Forge::YcbcrModel::Bt709:
+            return Opal::Optional<VkSamplerYcbcrModelConversion>(VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709);
+        case Rndr::Forge::YcbcrModel::Bt601:
+            return Opal::Optional<VkSamplerYcbcrModelConversion>(VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_601);
+        case Rndr::Forge::YcbcrModel::Bt2020:
+            return Opal::Optional<VkSamplerYcbcrModelConversion>(VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_2020);
+    }
+    return {};
+}
+
+static Opal::Optional<VkSamplerYcbcrRange> ToVkYcbcrRange(Rndr::Forge::YcbcrRange range)
+{
+    switch (range)
+    {
+        case Rndr::Forge::YcbcrRange::Full:
+            return Opal::Optional<VkSamplerYcbcrRange>(VK_SAMPLER_YCBCR_RANGE_ITU_FULL);
+        case Rndr::Forge::YcbcrRange::Narrow:
+            return Opal::Optional<VkSamplerYcbcrRange>(VK_SAMPLER_YCBCR_RANGE_ITU_NARROW);
+    }
+    return {};
+}
+
+static Opal::Optional<VkChromaLocation> ToVkChromaLocation(Rndr::Forge::ChromaLocation location)
+{
+    switch (location)
+    {
+        case Rndr::Forge::ChromaLocation::CositedEven:
+            return Opal::Optional<VkChromaLocation>(VK_CHROMA_LOCATION_COSITED_EVEN);
+        case Rndr::Forge::ChromaLocation::Midpoint:
+            return Opal::Optional<VkChromaLocation>(VK_CHROMA_LOCATION_MIDPOINT);
+    }
+    return {};
+}
+
+Opal::Expected<Rndr::Forge::SamplerYcbcrConversion, Rndr::ErrorCode> Rndr::Forge::SamplerYcbcrConversion::Create(
+    const Device& device, const SamplerYcbcrConversionDesc& desc)
+{
+    using Result = Opal::Expected<SamplerYcbcrConversion, ErrorCode>;
+
+    if (!device.GetEnabledFeatures().sampler_ycbcr_conversion)
+    {
+        RNDR_LOG_ERROR("Forge: a SamplerYcbcrConversion needs the device created with DeviceFeatures::sampler_ycbcr_conversion");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (!IsYcbcrFormat(desc.format))
+    {
+        RNDR_LOG_ERROR("Forge: a SamplerYcbcrConversion is for a YCbCr format, and {} is not one", static_cast<u32>(desc.format));
+        return Result(ErrorCode::InvalidArgument);
+    }
+    RNDR_FORGE_TRANSLATE_EXPECTED(model, ToVkYcbcrModel(desc.model), "SamplerYcbcrConversionDesc::model", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(range, ToVkYcbcrRange(desc.range), "SamplerYcbcrConversionDesc::range", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(x_offset, ToVkChromaLocation(desc.x_chroma_offset), "SamplerYcbcrConversionDesc::x_chroma_offset", Result);
+    RNDR_FORGE_TRANSLATE_EXPECTED(y_offset, ToVkChromaLocation(desc.y_chroma_offset), "SamplerYcbcrConversionDesc::y_chroma_offset", Result);
+
+    // What the format allows decides what the conversion may ask for, and a device is free to allow little.
+    const YcbcrFormatSupport support = device.GetPhysicalDevice().GetYcbcrFormatSupport(desc.format);
+    const bool wants_cosited = desc.x_chroma_offset == ChromaLocation::CositedEven || desc.y_chroma_offset == ChromaLocation::CositedEven;
+    const bool wants_midpoint = desc.x_chroma_offset == ChromaLocation::Midpoint || desc.y_chroma_offset == ChromaLocation::Midpoint;
+    const char* missing = nullptr;
+    if (!support.sampled)
+    {
+        missing = "sampling the format at all";
+    }
+    else if (wants_cosited && !support.cosited_chroma)
+    {
+        missing = "cosited chroma (YcbcrFormatSupport::cosited_chroma)";
+    }
+    else if (wants_midpoint && !support.midpoint_chroma)
+    {
+        missing = "midpoint chroma (YcbcrFormatSupport::midpoint_chroma)";
+    }
+    else if (desc.chroma_filter == ImageFilter::Linear && !support.linear_chroma_filter)
+    {
+        missing = "a linear chroma filter (YcbcrFormatSupport::linear_chroma_filter)";
+    }
+    else if (desc.force_explicit_reconstruction && !support.explicit_reconstruction_forceable)
+    {
+        missing = "forcing explicit reconstruction (YcbcrFormatSupport::explicit_reconstruction_forceable)";
+    }
+    if (missing != nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: this device does not allow {} for the YCbCr format {}", missing, static_cast<u32>(desc.format));
+        return Result(ErrorCode::InvalidArgument);
+    }
+
+    SamplerYcbcrConversion conversion;
+    conversion.m_device = device;
+    conversion.m_desc = desc;
+    const VkSamplerYcbcrConversionCreateInfo create_info{
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO,
+        .format = ToVkFormat(desc.format),
+        .ycbcrModel = model,
+        .ycbcrRange = range,
+        .components = {.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                       .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                       .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                       .a = VK_COMPONENT_SWIZZLE_IDENTITY},
+        .xChromaOffset = x_offset,
+        .yChromaOffset = y_offset,
+        .chromaFilter = ToVkFilter(desc.chroma_filter),
+        .forceExplicitReconstruction = desc.force_explicit_reconstruction ? VK_TRUE : VK_FALSE,
+    };
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateSamplerYcbcrConversion(device.GetNativeDevice(), &create_info, nullptr, &conversion.m_conversion),
+                                 "vkCreateSamplerYcbcrConversion", Result);
+    return Result(std::move(conversion));
+}
+
+Rndr::Forge::SamplerYcbcrConversion::~SamplerYcbcrConversion()
+{
+    Destroy();
+}
+
+Rndr::Forge::SamplerYcbcrConversion::SamplerYcbcrConversion(SamplerYcbcrConversion&& other) noexcept
+    : m_device(std::move(other.m_device)), m_conversion(other.m_conversion), m_desc(other.m_desc)
+{
+    other.m_conversion = VK_NULL_HANDLE;
+    other.m_device = nullptr;
+}
+
+Rndr::Forge::SamplerYcbcrConversion& Rndr::Forge::SamplerYcbcrConversion::operator=(SamplerYcbcrConversion&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_device = std::move(other.m_device);
+        m_conversion = other.m_conversion;
+        m_desc = other.m_desc;
+        other.m_conversion = VK_NULL_HANDLE;
+        other.m_device = nullptr;
+    }
+    return *this;
+}
+
+void Rndr::Forge::SamplerYcbcrConversion::Destroy()
+{
+    if (m_conversion != VK_NULL_HANDLE)
+    {
+        vkDestroySamplerYcbcrConversion(m_device->GetNativeDevice(), m_conversion, nullptr);
+        m_conversion = VK_NULL_HANDLE;
     }
 }

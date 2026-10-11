@@ -127,6 +127,7 @@ struct FeatureChain
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR};
 #if defined(RNDR_FORGE_VULKAN_1_1)
     VkPhysicalDeviceMultiviewFeatures multiview{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};
+    VkPhysicalDeviceSamplerYcbcrConversionFeatures ycbcr{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES};
     VkPhysicalDeviceTimelineSemaphoreFeatures timeline_semaphore{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES};
     VkPhysicalDeviceSynchronization2Features synchronization2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES};
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES};
@@ -169,6 +170,7 @@ struct FeatureChain
         if (!uses_version_structures)
         {
             Append(&multiview);
+            Append(&ycbcr);
             AppendIf(has_extension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME), &timeline_semaphore);
             AppendIf(has_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME), &synchronization2);
             has_dynamic_rendering = true;
@@ -213,6 +215,7 @@ struct FeatureChain
         if (!uses_version_structures)
         {
             vk11.multiview = multiview.multiview;
+            vk11.samplerYcbcrConversion = ycbcr.samplerYcbcrConversion;
 
             vk12.descriptorIndexing = has_descriptor_indexing ? VK_TRUE : VK_FALSE;
             vk12.runtimeDescriptorArray = descriptor_indexing.runtimeDescriptorArray;
@@ -278,6 +281,7 @@ struct FeatureChain
         features2.features.shaderFloat64 = features.shader_float64;
 
         vk11.multiview = features.multiview;
+        vk11.samplerYcbcrConversion = features.sampler_ycbcr_conversion;
 
         vk12.runtimeDescriptorArray = features.runtime_descriptor_array;
         vk12.descriptorBindingVariableDescriptorCount = features.variable_descriptor_count;
@@ -319,6 +323,7 @@ struct FeatureChain
         // The features whose extension has no structure are turned on by enabling it, which
         // CollectDeviceExtensions has done; vk12.descriptorIndexing likewise stands for the extension.
         multiview.multiview = vk11.multiview;
+        ycbcr.samplerYcbcrConversion = vk11.samplerYcbcrConversion;
         descriptor_indexing.runtimeDescriptorArray = vk12.runtimeDescriptorArray;
         descriptor_indexing.descriptorBindingVariableDescriptorCount = vk12.descriptorBindingVariableDescriptorCount;
         descriptor_indexing.descriptorBindingPartiallyBound = vk12.descriptorBindingPartiallyBound;
@@ -372,6 +377,7 @@ struct FeatureChain
         features.shader_float64 = core.shaderFloat64 == VK_TRUE;
 
         features.multiview = vk11.multiview == VK_TRUE;
+        features.sampler_ycbcr_conversion = vk11.samplerYcbcrConversion == VK_TRUE;
 
         features.runtime_descriptor_array = vk12.runtimeDescriptorArray == VK_TRUE;
         features.variable_descriptor_count = vk12.descriptorBindingVariableDescriptorCount == VK_TRUE;
@@ -622,6 +628,7 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.shader_float64, core.shaderFloat64, "shader_float64");
 
     require(requested.multiview, supported.vk11.multiview, "multiview");
+    require(requested.sampler_ycbcr_conversion, supported.vk11.samplerYcbcrConversion, "sampler_ycbcr_conversion");
 
     require(requested.runtime_descriptor_array, supported.vk12.runtimeDescriptorArray, "runtime_descriptor_array");
     require(requested.variable_descriptor_count, supported.vk12.descriptorBindingVariableDescriptorCount, "variable_descriptor_count");

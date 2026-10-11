@@ -27,6 +27,33 @@ namespace Rndr::Forge
     return (reported & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)) != 0 ? reported | VK_QUEUE_TRANSFER_BIT : reported;
 }
 
+/**
+ * What a device allows of a YCbCr format when it is sampled through a SamplerYcbcrConversion, which is what decides the
+ * conversion it accepts. Every field false, and the count zero, for a format the device cannot sample at all.
+ */
+struct YcbcrFormatSupport
+{
+    /** An optimally tiled image of the format can be sampled. */
+    bool sampled = false;
+    /** It can be filled by a copy, which an upload needs. */
+    bool transfer_destination = false;
+    /** A conversion may place the chroma samples level with the even luma ones: ChromaLocation::CositedEven. */
+    bool cosited_chroma = false;
+    /** A conversion may place them between two luma samples: ChromaLocation::Midpoint. */
+    bool midpoint_chroma = false;
+    /** A conversion may rebuild the chroma between its samples with a linear filter. */
+    bool linear_chroma_filter = false;
+    /** A sampler of the format may filter with something other than the conversion's chroma filter. */
+    bool separate_reconstruction_filter = false;
+    /** A conversion may set force_explicit_reconstruction. */
+    bool explicit_reconstruction_forceable = false;
+    /**
+     * How many descriptors one combined image sampler of the format takes from a descriptor pool. Size a pool for this
+     * many per descriptor; most devices answer one, some more for a format of several planes.
+     */
+    u32 combined_image_sampler_descriptor_count = 0;
+};
+
 class PhysicalDevice
 {
 public:
@@ -103,6 +130,13 @@ public:
      * @param as_source True to ask about the source of the blit, false about the destination.
      */
     [[nodiscard]] bool SupportsBlit(PixelFormat format, bool as_source) const;
+
+    /**
+     * What this device allows of a YCbCr format sampled through a conversion, for an optimally tiled two dimensional
+     * image. The answer for a format that is not a YCbCr one, or that the device cannot sample, has every field off.
+     * @param format Format of the image, one that IsYcbcrFormat reports.
+     */
+    [[nodiscard]] YcbcrFormatSupport GetYcbcrFormatSupport(PixelFormat format) const;
 
     /**
      * Whether an optimally tiled image of this format can be filtered linearly, which a blit with a linear

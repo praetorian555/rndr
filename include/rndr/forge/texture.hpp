@@ -45,7 +45,10 @@ public:
     ~Texture();
 
     /**
-     * Create the image and, unless its usage is transfer only, a view of it.
+     * Create the image and, unless its usage is transfer only, a view of it. A texture of a YCbCr format gets no view
+     * of its own, since Vulkan allows one only with a conversion: it is read through a TextureView created with one.
+     * Such a texture is two dimensional, one mip level, one layer, one sample, of an even width and height, and
+     * sampled or copied only.
      *
      * @param device Device to allocate from. Has to outlive the texture.
      * @param desc Extent, format, usage and what the view covers.
@@ -146,6 +149,99 @@ private:
     VmaAllocation m_image_allocation = VK_NULL_HANDLE;
 };
 
+/** The matrix a SamplerYcbcrConversion turns YCbCr into RGB with. Mirrors VkSamplerYcbcrModelConversion. */
+enum class YcbcrModel : u8
+{
+    /** No conversion: the samples are RGB already, and only the chroma planes are rebuilt to full size. */
+    RgbIdentity = 0,
+    /** The range is expanded but no matrix is applied: Y, Cb and Cr come out in G, B and R. */
+    YcbcrIdentity = 1,
+    /** BT.709, high definition video and most H.264 and 8-bit HEVC. */
+    Bt709 = 2,
+    /** BT.601, standard definition video. */
+    Bt601 = 3,
+    /** BT.2020, ultra high definition and HDR video, most 10-bit HEVC. */
+    Bt2020 = 4,
+};
+
+/** Which values the samples span. Mirrors VkSamplerYcbcrRange. */
+enum class YcbcrRange : u8
+{
+    /** Every code: 0 to 255 in 8 bits. */
+    Full = 0,
+    /** The broadcast range most video uses: Y from 16 to 235 and chroma from 16 to 240 in 8 bits, 64 to 940 and 960 in 10. */
+    Narrow = 1,
+};
+
+/** Where a chroma sample sits against the luma samples it covers, on one axis. Mirrors VkChromaLocation. */
+enum class ChromaLocation : u8
+{
+    /** Level with the even luma sample: H.264 and HEVC put the chroma here horizontally. */
+    CositedEven = 0,
+    /** Halfway between two luma samples: H.264 and HEVC put the chroma here vertically. */
+    Midpoint = 1,
+};
+
+/**
+ * How a SamplerYcbcrConversion reads a video frame. The defaults are those of high definition H.264 and HEVC: BT.709,
+ * narrow range, chroma level with the left luma column and between the two rows, rebuilt linearly.
+ */
+struct SamplerYcbcrConversionDesc
+{
+    /** The format of the frames it reads, one that IsYcbcrFormat reports. Views and textures of it have to match. */
+    PixelFormat format = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    YcbcrModel model = YcbcrModel::Bt709;
+    YcbcrRange range = YcbcrRange::Narrow;
+    ChromaLocation x_chroma_offset = ChromaLocation::CositedEven;
+    ChromaLocation y_chroma_offset = ChromaLocation::Midpoint;
+    /** How the chroma is rebuilt between its samples. Linear needs YcbcrFormatSupport::linear_chroma_filter. */
+    ImageFilter chroma_filter = ImageFilter::Linear;
+    /** Rebuild the chroma as a step of its own where the device would otherwise fold it into the filtering. */
+    bool force_explicit_reconstruction = false;
+};
+
+/**
+ * What turns the planes of a video frame into RGB as it is sampled: the matrix, the range and where the chroma
+ * sits. It goes into the two places Vulkan reads it from, a Sampler and a TextureView, which have to carry the
+ * same one; a shader then samples the frame as an ordinary texture and gets RGB.
+ *
+ * A sampler with a conversion can only be used as an immutable sampler of a CombinedImageSampler binding, so the
+ * layout, and the pipeline built on it, is made for one kind of stream. A stream with a different matrix or range
+ * needs a conversion, a layout and a pipeline of its own.
+ */
+class SamplerYcbcrConversion
+{
+public:
+    SamplerYcbcrConversion() = default;
+    ~SamplerYcbcrConversion();
+
+    /**
+     * @param desc The format and how to read it.
+     * @return The conversion, or ErrorCode::InvalidArgument when the device was created without
+     *         DeviceFeatures::sampler_ycbcr_conversion, the format is not a YCbCr one, or the desc asks for what the
+     *         device does not allow of the format (see PhysicalDevice::GetYcbcrFormatSupport) - the log names which -
+     *         or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<SamplerYcbcrConversion, ErrorCode> Create(const Device& device,
+                                                                                  const SamplerYcbcrConversionDesc& desc = {});
+
+    SamplerYcbcrConversion(const SamplerYcbcrConversion&) = delete;
+    SamplerYcbcrConversion& operator=(const SamplerYcbcrConversion&) = delete;
+    SamplerYcbcrConversion(SamplerYcbcrConversion&& other) noexcept;
+    SamplerYcbcrConversion& operator=(SamplerYcbcrConversion&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] bool IsValid() const { return m_conversion != VK_NULL_HANDLE; }
+    [[nodiscard]] VkSamplerYcbcrConversion GetNativeConversion() const { return m_conversion; }
+    [[nodiscard]] const SamplerYcbcrConversionDesc& GetDesc() const { return m_desc; }
+
+private:
+    Opal::Ref<const Device> m_device;
+    VkSamplerYcbcrConversion m_conversion = VK_NULL_HANDLE;
+    SamplerYcbcrConversionDesc m_desc;
+};
+
 /** What a TextureView sees of its texture: how the image is interpreted, and which part of it. */
 struct TextureViewDesc
 {
@@ -186,6 +282,18 @@ public:
     [[nodiscard]] static Opal::Expected<TextureView, ErrorCode> Create(const Device& device, const Texture& texture,
                                                                        const TextureViewDesc& desc = {});
 
+    /**
+     * A view of a video frame, read as RGB through a conversion. The only way to sample a texture of a YCbCr format,
+     * which has no view of its own; it is bound through a CombinedImageSampler binding whose immutable sampler carries
+     * the same conversion.
+     * @param conversion How the frame is read. It has to outlive the view, and its format has to be the texture's.
+     * @return The view, ErrorCode::InvalidArgument when the conversion is empty or of another format, or what the
+     *         overload above refuses.
+     */
+    [[nodiscard]] static Opal::Expected<TextureView, ErrorCode> Create(const Device& device, const Texture& texture,
+                                                                       const SamplerYcbcrConversion& conversion,
+                                                                       const TextureViewDesc& desc = {});
+
     TextureView(const TextureView&) = delete;
     TextureView& operator=(const TextureView&) = delete;
     TextureView(TextureView&& other) noexcept;
@@ -198,11 +306,18 @@ public:
     [[nodiscard]] const TextureViewDesc& GetDesc() const { return m_desc; }
     /** The texture this is a view of, which is where its layout is tracked. */
     [[nodiscard]] const Texture& GetTexture() const { return *m_texture; }
+    /** The conversion the view reads through, or VK_NULL_HANDLE for a view without one. */
+    [[nodiscard]] VkSamplerYcbcrConversion GetNativeConversion() const { return m_conversion; }
 
 private:
+    [[nodiscard]] static Opal::Expected<TextureView, ErrorCode> CreateView(const Device& device, const Texture& texture,
+                                                                           const SamplerYcbcrConversion* conversion,
+                                                                           const TextureViewDesc& desc);
+
     Opal::Ref<const Device> m_device;
     Opal::Ref<const Texture> m_texture;
     VkImageView m_view = VK_NULL_HANDLE;
+    VkSamplerYcbcrConversion m_conversion = VK_NULL_HANDLE;
     TextureViewDesc m_desc;
 };
 
@@ -220,6 +335,18 @@ public:
      */
     [[nodiscard]] static Opal::Expected<Sampler, ErrorCode> Create(const Device& device, const SamplerDesc& desc = {});
 
+    /**
+     * A sampler that reads video frames as RGB through a conversion. Vulkan takes it only as an immutable sampler of a
+     * CombinedImageSampler binding, beside a TextureView made with the same conversion.
+     * @param conversion How the frames are read. It has to outlive the sampler.
+     * @return The sampler, ErrorCode::InvalidArgument when the conversion is empty or the desc breaks what a sampler
+     *         with one has to keep to: every address mode Clamp, no anisotropy, no comparison or reduction, and
+     *         min_filter and mag_filter equal to the conversion's chroma_filter unless the format allows a separate
+     *         reconstruction filter. The log names which.
+     */
+    [[nodiscard]] static Opal::Expected<Sampler, ErrorCode> Create(const Device& device, const SamplerDesc& desc,
+                                                                   const SamplerYcbcrConversion& conversion);
+
     Sampler(const Sampler&) = delete;
     Sampler& operator=(const Sampler&) = delete;
     Sampler(Sampler&& other) noexcept;
@@ -229,10 +356,16 @@ public:
 
     [[nodiscard]] bool IsValid() const { return m_sampler != VK_NULL_HANDLE; }
     [[nodiscard]] VkSampler GetNativeSampler() const { return m_sampler; }
+    /** The conversion the sampler reads through, or VK_NULL_HANDLE for a sampler without one. */
+    [[nodiscard]] VkSamplerYcbcrConversion GetNativeConversion() const { return m_conversion; }
 
 private:
+    [[nodiscard]] static Opal::Expected<Sampler, ErrorCode> CreateSampler(const Device& device, const SamplerDesc& desc,
+                                                                          const SamplerYcbcrConversion* conversion);
+
     Opal::Ref<const Device> m_device;
     VkSampler m_sampler = VK_NULL_HANDLE;
+    VkSamplerYcbcrConversion m_conversion = VK_NULL_HANDLE;
 };
 
 }  // namespace Rndr::Forge

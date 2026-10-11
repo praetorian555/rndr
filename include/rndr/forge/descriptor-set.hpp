@@ -334,6 +334,10 @@ private:
         u32 descriptor_count = 1;
         /** What the shader calls it, when the layout was built with the shaders that declare it. */
         Opal::StringUtf8 name;
+        /** Whether the layout bakes its samplers in, which a write then cannot replace. */
+        bool has_immutable_samplers = false;
+        /** The YCbCr conversion its immutable sampler reads through, which a view written into it has to carry too. */
+        VkSamplerYcbcrConversion conversion = VK_NULL_HANDLE;
     };
 
     /** The binding of that index, reporting the way every other lookup here does when there is none. */

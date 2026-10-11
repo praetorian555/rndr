@@ -1,16 +1,77 @@
 #include "rndr/pixel-format.hpp"
 
 #if RNDR_FORGE
+namespace
+{
+// The multi-planar block of VkFormat, which PixelFormat keeps at its Vulkan value less this.
+constexpr Rndr::i64 k_ycbcr_vk_offset = 1000155000;
+constexpr Rndr::i64 k_ycbcr_vk_first = VK_FORMAT_G8B8G8R8_422_UNORM;
+constexpr Rndr::i64 k_ycbcr_vk_last = VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM;
+}  // namespace
+
 VkFormat Rndr::ToVkFormat(PixelFormat format)
 {
+    const i64 value = static_cast<i64>(format);
+    if (value >= k_ycbcr_vk_first - k_ycbcr_vk_offset && value <= k_ycbcr_vk_last - k_ycbcr_vk_offset)
+    {
+        return static_cast<VkFormat>(value + k_ycbcr_vk_offset);
+    }
     return static_cast<VkFormat>(format);
 }
 
 Rndr::PixelFormat Rndr::FromVkFormat(VkFormat format)
 {
+    const i64 value = static_cast<i64>(format);
+    if (value >= k_ycbcr_vk_first && value <= k_ycbcr_vk_last)
+    {
+        return static_cast<PixelFormat>(value - k_ycbcr_vk_offset);
+    }
     return static_cast<PixelFormat>(format);
 }
 #endif
+
+Rndr::u32 Rndr::GetPlaneCount(PixelFormat format)
+{
+    switch (format)
+    {
+        case PixelFormat::G8_B8R8_2PLANE_420_UNORM:
+        case PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+            return 2;
+        case PixelFormat::G8_B8_R8_3PLANE_420_UNORM:
+            return 3;
+        default:
+            return 1;
+    }
+}
+
+bool Rndr::IsYcbcrFormat(PixelFormat format)
+{
+    return GetPlaneCount(format) > 1;
+}
+
+Rndr::PixelFormat Rndr::GetPlaneFormat(PixelFormat format, u32 plane)
+{
+    if (plane >= GetPlaneCount(format))
+    {
+        return PixelFormat::Undefined;
+    }
+    switch (format)
+    {
+        case PixelFormat::G8_B8R8_2PLANE_420_UNORM:
+            return plane == 0 ? PixelFormat::R8_UNORM : PixelFormat::R8G8_UNORM;
+        case PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+            return plane == 0 ? PixelFormat::R10X6_UNORM_PACK16 : PixelFormat::R10X6G10X6_UNORM_2PACK16;
+        case PixelFormat::G8_B8_R8_3PLANE_420_UNORM:
+            return PixelFormat::R8_UNORM;
+        default:
+            return format;
+    }
+}
+
+Rndr::u32 Rndr::GetPlaneDivisor(PixelFormat format, u32 plane)
+{
+    return IsYcbcrFormat(format) && plane > 0 ? 2 : 1;
+}
 
 Rndr::u32 Rndr::GetPixelSize(PixelFormat format)
 {
@@ -176,7 +237,13 @@ Rndr::u32 Rndr::GetPixelSize(PixelFormat format)
         case PixelFormat::R64G64B64A64_SFLOAT:
             return 32;
 
-        // Undefined and compressed formats
+        // Plane formats of 10-bit video, each component in a 16-bit word
+        case PixelFormat::R10X6_UNORM_PACK16:
+            return 2;
+        case PixelFormat::R10X6G10X6_UNORM_2PACK16:
+            return 4;
+
+        // Undefined, compressed and multi-planar formats
         case PixelFormat::Undefined:
         default:
             return 0;
@@ -418,6 +485,14 @@ Rndr::FormatNumericClass Rndr::GetFormatNumericClass(PixelFormat format)
         case PixelFormat::D24_UNORM_S8_UINT:
         case PixelFormat::D32_SFLOAT_S8_UINT:
             return FormatNumericClass::UnsignedInt;
+
+        // A video frame is read as RGB through its conversion, its planes as normalised values.
+        case PixelFormat::G8_B8_R8_3PLANE_420_UNORM:
+        case PixelFormat::G8_B8R8_2PLANE_420_UNORM:
+        case PixelFormat::R10X6_UNORM_PACK16:
+        case PixelFormat::R10X6G10X6_UNORM_2PACK16:
+        case PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+            return FormatNumericClass::Float;
 
         case PixelFormat::Undefined:
         case PixelFormat::EnumCount:

@@ -393,8 +393,55 @@ static Opal::Expected<Rndr::Forge::ImageLayout, Rndr::ErrorCode> ResolveTransfer
 }
 
 /**
+ * Which plane of a multi-planar texture a subresource names, or -1 for a texture of one plane. A multi-planar texture
+ * is copied one plane at a time, so its subresource has to name exactly one plane it has.
+ */
+static Opal::Expected<Rndr::i32, Rndr::ErrorCode> ResolvePlane(const Rndr::Forge::Texture& texture,
+                                                               const Rndr::Forge::ImageSubresourceLayers& subresource, const char* role,
+                                                               const char* what)
+{
+    using namespace Rndr;
+    using Result = Opal::Expected<i32, ErrorCode>;
+
+    const PixelFormat format = texture.GetDesc().format;
+    const Forge::ImageAspectBits planes = Forge::ImageAspectBits::Plane0 | Forge::ImageAspectBits::Plane1 | Forge::ImageAspectBits::Plane2;
+    if (!IsYcbcrFormat(format))
+    {
+        if (!!(subresource.aspect_mask & planes))
+        {
+            RNDR_LOG_ERROR("Forge: {} names a plane of the {} texture, which has only one", what, role);
+            return Result(ErrorCode::InvalidArgument);
+        }
+        return Result(-1);
+    }
+    i32 plane = -1;
+    switch (subresource.aspect_mask)
+    {
+        case Forge::ImageAspectBits::Plane0:
+            plane = 0;
+            break;
+        case Forge::ImageAspectBits::Plane1:
+            plane = 1;
+            break;
+        case Forge::ImageAspectBits::Plane2:
+            plane = 2;
+            break;
+        default:
+            break;
+    }
+    if (plane < 0 || static_cast<u32>(plane) >= GetPlaneCount(format))
+    {
+        RNDR_LOG_ERROR("Forge: {} has to name one plane of the {} texture, which has {}, as ImageAspectBits::Plane0 to Plane{}", what,
+                       role, GetPlaneCount(format), GetPlaneCount(format) - 1);
+        return Result(ErrorCode::InvalidArgument);
+    }
+    return Result(plane);
+}
+
+/**
  * Check that the subresource exists on the texture and report the extent of the mip level it names, which is
- * what every region on that texture is measured against.
+ * what every region on that texture is measured against. For one plane of a multi-planar texture that is the
+ * plane's own extent, which is smaller than the texture's for a chroma plane.
  */
 static Opal::Expected<VkExtent3D, Rndr::ErrorCode> ValidateSubresource(const Rndr::Forge::Texture& texture,
                                                                        const Rndr::Forge::ImageSubresourceLayers& subresource,
@@ -403,6 +450,12 @@ static Opal::Expected<VkExtent3D, Rndr::ErrorCode> ValidateSubresource(const Rnd
     using namespace Rndr;
     using Result = Opal::Expected<VkExtent3D, ErrorCode>;
 
+    const Opal::Expected<i32, ErrorCode> plane = ResolvePlane(texture, subresource, role, what);
+    if (!plane.HasValue())
+    {
+        return Result(plane.GetError());
+    }
+    const u32 divisor = plane.GetValue() > 0 ? GetPlaneDivisor(texture.GetDesc().format, static_cast<u32>(plane.GetValue())) : 1;
     const Forge::TextureDesc& desc = texture.GetDesc();
     if (subresource.mip_level >= desc.mip_level_count)
     {
@@ -415,8 +468,8 @@ static Opal::Expected<VkExtent3D, Rndr::ErrorCode> ValidateSubresource(const Rnd
         RNDR_LOG_ERROR("Forge: {} names array layers the {} texture does not have", what, role);
         return Result(ErrorCode::OutOfBounds);
     }
-    return Result(VkExtent3D{.width = MipExtent(desc.width, subresource.mip_level),
-                             .height = MipExtent(desc.height, subresource.mip_level),
+    return Result(VkExtent3D{.width = MipExtent(desc.width, subresource.mip_level) / divisor,
+                             .height = MipExtent(desc.height, subresource.mip_level) / divisor,
                              .depth = MipExtent(desc.depth, subresource.mip_level)});
 }
 
@@ -537,8 +590,12 @@ static Opal::Expected<VkBufferImageCopy, Rndr::ErrorCode> ToVkBufferImageCopy(co
         return Result(ErrorCode::InvalidArgument);
     }
     // A compressed format is measured in blocks rather than pixels, so the size below would be wrong for one.
-    // GetPixelSize reports zero for those, and the validation layer covers what this cannot.
-    const u32 pixel_size = GetPixelSize(texture.GetDesc().format);
+    // GetPixelSize reports zero for those, and the validation layer covers what this cannot. A plane of a
+    // multi-planar texture is measured in the format the plane is copied as.
+    const PixelFormat format = texture.GetDesc().format;
+    const Forge::ImageAspectBits aspect = region.texture_subresource.aspect_mask;
+    const u32 plane = aspect == Forge::ImageAspectBits::Plane1 ? 1 : (aspect == Forge::ImageAspectBits::Plane2 ? 2 : 0);
+    const u32 pixel_size = GetPixelSize(IsYcbcrFormat(format) ? GetPlaneFormat(format, plane) : format);
     if (pixel_size != 0)
     {
         const u64 row_length = region.buffer_row_length != 0 ? region.buffer_row_length : extent.width;

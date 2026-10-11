@@ -198,6 +198,41 @@ bool Rndr::Forge::PhysicalDevice::SupportsBlit(PixelFormat format, bool as_sourc
     return (features & required) != 0;
 }
 
+Rndr::Forge::YcbcrFormatSupport Rndr::Forge::PhysicalDevice::GetYcbcrFormatSupport(PixelFormat format) const
+{
+    YcbcrFormatSupport support;
+    if (!IsYcbcrFormat(format))
+    {
+        return support;
+    }
+    const VkFormatFeatureFlags features = GetOptimalTilingFeatures(m_physical_device, format);
+    support.sampled = (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0;
+    if (!support.sampled)
+    {
+        return support;
+    }
+    support.transfer_destination = (features & VK_FORMAT_FEATURE_TRANSFER_DST_BIT) != 0;
+    support.cosited_chroma = (features & VK_FORMAT_FEATURE_COSITED_CHROMA_SAMPLES_BIT) != 0;
+    support.midpoint_chroma = (features & VK_FORMAT_FEATURE_MIDPOINT_CHROMA_SAMPLES_BIT) != 0;
+    support.linear_chroma_filter = (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER_BIT) != 0;
+    support.separate_reconstruction_filter = (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_SEPARATE_RECONSTRUCTION_FILTER_BIT) != 0;
+    support.explicit_reconstruction_forceable =
+        (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_CHROMA_RECONSTRUCTION_EXPLICIT_FORCEABLE_BIT) != 0;
+
+    const VkPhysicalDeviceImageFormatInfo2 format_info{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+                                                       .format = ToVkFormat(format),
+                                                       .type = VK_IMAGE_TYPE_2D,
+                                                       .tiling = VK_IMAGE_TILING_OPTIMAL,
+                                                       .usage = VK_IMAGE_USAGE_SAMPLED_BIT};
+    VkSamplerYcbcrConversionImageFormatProperties ycbcr_properties{.sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_IMAGE_FORMAT_PROPERTIES};
+    VkImageFormatProperties2 properties{.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, .pNext = &ycbcr_properties};
+    if (vkGetPhysicalDeviceImageFormatProperties2(m_physical_device, &format_info, &properties) == VK_SUCCESS)
+    {
+        support.combined_image_sampler_descriptor_count = ycbcr_properties.combinedImageSamplerDescriptorCount;
+    }
+    return support;
+}
+
 bool Rndr::Forge::PhysicalDevice::SupportsLinearFilter(PixelFormat format) const
 {
     const VkFormatFeatureFlags features = GetOptimalTilingFeatures(m_physical_device, format);

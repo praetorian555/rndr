@@ -18,6 +18,7 @@ class SwapChain;
 class Texture;
 class TextureView;
 class Sampler;
+class SamplerYcbcrConversion;
 class Buffer;
 class Shader;
 class Pipeline;

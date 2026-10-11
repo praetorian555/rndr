@@ -250,6 +250,56 @@ texture that was filled some other way.
 
 ---
 
+## Video frames
+
+A decoded video frame is YCbCr in planes, not RGB: NV12 is a full size plane of luma and a half size plane of chroma
+pairs, P010 the same with 10 bits in each 16-bit sample, and I420 keeps the two chroma components in planes of their
+own. Forge holds such a frame as one texture of a multi-planar `PixelFormat` - `G8_B8R8_2PLANE_420_UNORM`,
+`G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16` or `G8_B8_R8_3PLANE_420_UNORM` - and a shader reads it as RGB through a
+`SamplerYcbcrConversion`. Vulkan numbers these formats past what `PixelFormat`'s 16 bits hold, so they sit at their
+Vulkan value less 1000155000 and `ToVkFormat` puts them back; `GetPlaneCount`, `GetPlaneFormat` and
+`GetPlaneDivisor` describe their planes.
+
+The device has to be created with `DeviceFeatures::sampler_ycbcr_conversion`. What a format allows beyond that - which
+chroma siting, whether chroma can be rebuilt linearly, how many descriptors one binding of it takes from a pool -
+varies by device, and `PhysicalDevice::GetYcbcrFormatSupport` says.
+
+Filling a frame is a copy per plane. A `BufferTextureCopyRegion` names its plane with `ImageAspectBits::Plane0`,
+`Plane1` or `Plane2`, and its extent and buffer size are measured in that plane: the chroma plane of a 1920x1080 NV12
+frame is 960x540 texels of `R8G8_UNORM`. A copy that names no plane, or one the format does not have, is refused.
+Barriers name the whole texture as usual and move every plane together.
+
+Reading it takes three objects that carry the same conversion:
+
+```cpp
+const auto conversion = SamplerYcbcrConversion::Create(device, {.format = PixelFormat::G8_B8R8_2PLANE_420_UNORM,
+                                                               .model = YcbcrModel::Bt709,
+                                                               .range = YcbcrRange::Narrow});
+const auto sampler = Sampler::Create(device, {.address_mode_u = ImageAddressMode::Clamp, /* v and w too */}, conversion.GetValue());
+const auto view = TextureView::Create(device, frame, conversion.GetValue());
+layout_desc.AddBinding(0, DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Fragment, {&immutable_sampler, 1});
+```
+
+The rules Vulkan attaches to them are checked up front, each refused with `ErrorCode::InvalidArgument` and a log line
+that names it:
+
+- **The texture.** Two dimensional, one mip level, one layer, one sample, an even width and height, and used only to be
+  sampled or copied. It gets no view of its own, since Vulkan allows one only with a conversion; `GetNativeImageView`
+  is null, and the plain `TextureView::Create` refuses it.
+- **The conversion.** Only for a YCbCr format, and only with siting, filter and reconstruction the format allows.
+- **The sampler.** Every address mode `Clamp`, no anisotropy, no comparison or reduction, and `min_filter` and
+  `mag_filter` equal to the conversion's `chroma_filter` unless the format allows a separate reconstruction filter.
+- **The binding.** A sampler with a conversion is only taken as an immutable sampler of a `CombinedImageSampler`
+  binding, so the layout and the pipelines built on it are made for one conversion; a stream with another matrix or
+  range needs its own. `DescriptorSet::Update` refuses a conversion sampler written into a binding without one, and a
+  view whose conversion is not the one the binding's immutable sampler carries.
+
+The conversion yields R'G'B' still gamma encoded, the way the video carries it. Written to a UNORM target that is what
+the display wants; an sRGB target would encode it a second time. HDR content - BT.2020 with the PQ or HLG curve - still
+needs tone mapping after the conversion. `samples/video-frame` draws one NV12 frame this way.
+
+---
+
 ## Parameters and references
 
 References at the API surface are plain C++ references. `Opal::Ref` appears only where a reference has to be

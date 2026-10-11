@@ -406,7 +406,14 @@ enum class ImageAspectBits : u8
     None = 0,
     Color = 1,
     Depth = 2,
-    Stencil = 4
+    Stencil = 4,
+    /**
+     * One plane of a multi-planar format, which is how a copy names it. Plane0 is the Y plane of a video frame, Plane1
+     * its chroma (Cb in a three plane format) and Plane2 the Cr plane of a three plane format.
+     */
+    Plane0 = 16,
+    Plane1 = 32,
+    Plane2 = 64
 };
 OPAL_ENUM_CLASS_FLAGS(ImageAspectBits);
 

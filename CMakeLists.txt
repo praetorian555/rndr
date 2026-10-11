@@ -218,6 +218,13 @@ if (${RNDR_BUILD_SAMPLES})
         target_link_libraries(modern-vulkan shared imgui)
         rndr_deploy_runtime(modern-vulkan)
 
+        # One still NV12 frame drawn through a sampler YCbCr conversion; desktop only, like the practice samples.
+        if (NOT ANDROID)
+            add_executable(video-frame samples/video-frame/video-frame.cpp)
+            target_link_libraries(video-frame shared)
+            rndr_deploy_runtime(video-frame)
+        endif ()
+
         # Exercises, work in progress by design, so off unless asked for and never on Android.
         if (${RNDR_FORGE_PRACTICE} AND NOT ANDROID)
             file(GLOB RNDR_FORGE_PRACTICE_SOURCES CONFIGURE_DEPENDS samples/forge-practice/*.cpp)

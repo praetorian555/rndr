@@ -231,6 +231,20 @@ enum class PixelFormat : u16
     ASTC_12x12_UNORM_BLOCK = 183,
     ASTC_12x12_SRGB_BLOCK = 184,
 
+    // Video frames: formats with more than one plane, and the single plane formats their planes are copied as. Vulkan
+    // numbers these from 1000156000, past what a u16 holds, so each sits at its Vulkan value less 1000155000 and
+    // ToVkFormat maps it back. A frame in one of the multi-planar formats is sampled through a SamplerYcbcrConversion.
+    /** I420: Y, then Cb, then Cr, each in a plane of its own, the two chroma planes at half width and half height. */
+    G8_B8_R8_3PLANE_420_UNORM = 1002,
+    /** NV12: Y, then one plane of Cb and Cr pairs at half width and half height. */
+    G8_B8R8_2PLANE_420_UNORM = 1003,
+    /** One 10-bit component in the top bits of a 16-bit word: the Y plane of a P010 frame. */
+    R10X6_UNORM_PACK16 = 1007,
+    /** Two 10-bit components, each in the top bits of a 16-bit word: the chroma plane of a P010 frame. */
+    R10X6G10X6_UNORM_2PACK16 = 1008,
+    /** P010: NV12 with 10 bits in the top of each 16-bit sample, which 10-bit video decodes into. */
+    G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16 = 1013,
+
     EnumCount
 };
 
@@ -275,9 +289,44 @@ enum class FormatNumericClass : u8
 /**
  * Get the size of a pixel in bytes for the given format.
  * @param format The pixel format.
- * @return Size in bytes, or 0 for compressed/undefined formats.
+ * @return Size in bytes, or 0 for compressed, multi-planar and undefined formats. A plane of a multi-planar format has
+ *         the size of GetPlaneFormat.
  */
 [[nodiscard]] u32 GetPixelSize(PixelFormat format);
+
+/**
+ * How many planes an image of the format keeps its samples in.
+ * @param format The pixel format.
+ * @return 2 or 3 for a multi-planar format, 1 for every other one.
+ */
+[[nodiscard]] u32 GetPlaneCount(PixelFormat format);
+
+/**
+ * Check if the format holds YCbCr video samples that Vulkan only samples through a sampler YCbCr conversion: every
+ * multi-planar format here.
+ * @param format The pixel format.
+ * @return True for such a format.
+ */
+[[nodiscard]] bool IsYcbcrFormat(PixelFormat format);
+
+/**
+ * The single plane format one plane of a multi-planar format is copied as: R8_UNORM for the Y plane of an NV12 frame,
+ * R8G8_UNORM for its chroma plane.
+ * @param format The pixel format.
+ * @param plane Which plane, from 0.
+ * @return The plane's format, the format itself for plane 0 of a single plane format, or Undefined for a plane the
+ *         format does not have.
+ */
+[[nodiscard]] PixelFormat GetPlaneFormat(PixelFormat format, u32 plane);
+
+/**
+ * How much smaller than the image a plane is on each axis: 2 for the chroma planes of a 4:2:0 format, 1 otherwise. A
+ * plane of an image `width` wide is `width / divisor` wide.
+ * @param format The pixel format.
+ * @param plane Which plane, from 0.
+ * @return The divisor, the same on both axes for every format here.
+ */
+[[nodiscard]] u32 GetPlaneDivisor(PixelFormat format, u32 plane);
 
 /**
  * Check if the format is a depth format.

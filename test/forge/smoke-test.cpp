@@ -17843,3 +17843,258 @@ TEST_CASE("Forge a transient attachment", "[forge]")
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }
+
+namespace
+{
+
+/**
+ * Reads sixteen points of a 16x16 video frame through a conversion, one per 4x4 block of the frame, at the pixel one
+ * in from the block's top left corner. Every block holds one colour, so the point reads the same whatever the siting
+ * and the filter: the chroma samples either side of it belong to the block too.
+ */
+constexpr const char* k_ycbcr_sample_source = R"(
+[[vk::binding(0, 0)]] Sampler2D frame;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float4> colours;
+
+[shader("compute")]
+[numthreads(16, 1, 1)]
+void main_sample_frame(uint3 id : SV_DispatchThreadID)
+{
+    const uint block_x = id.x % 4;
+    const uint block_y = id.x / 4;
+    const float2 uv = float2(block_x * 4 + 1.5, block_y * 4 + 1.5) / 16.0;
+    colours[id.x] = frame.SampleLevel(uv, 0.0);
+}
+)";
+
+constexpr u32 k_frame_size = 16;
+constexpr u32 k_block_count = 16;
+
+/** The 8-bit Y, Cb and Cr of one block, spread so that no two blocks share a value. */
+struct YcbcrBlock
+{
+    u8 y;
+    u8 cb;
+    u8 cr;
+};
+
+YcbcrBlock GetBlock(u32 block)
+{
+    return {.y = static_cast<u8>(30 + 12 * block), .cb = static_cast<u8>(16 + (block * 37) % 225), .cr = static_cast<u8>(16 + (block * 53) % 225)};
+}
+
+/** The frame as NV12: 16x16 bytes of Y, then 8x8 pairs of Cb and Cr. */
+Opal::DynamicArray<u8> MakeNv12Frame()
+{
+    constexpr u32 k_chroma_size = k_frame_size / 2;
+    Opal::DynamicArray<u8> bytes(k_frame_size * k_frame_size + k_chroma_size * k_chroma_size * 2);
+    for (u32 y = 0; y < k_frame_size; ++y)
+    {
+        for (u32 x = 0; x < k_frame_size; ++x)
+        {
+            bytes[y * k_frame_size + x] = GetBlock((y / 4) * 4 + x / 4).y;
+        }
+    }
+    u8* chroma = bytes.GetData() + k_frame_size * k_frame_size;
+    for (u32 y = 0; y < k_chroma_size; ++y)
+    {
+        for (u32 x = 0; x < k_chroma_size; ++x)
+        {
+            const YcbcrBlock block = GetBlock((y / 2) * 4 + x / 2);
+            chroma[(y * k_chroma_size + x) * 2] = block.cb;
+            chroma[(y * k_chroma_size + x) * 2 + 1] = block.cr;
+        }
+    }
+    return bytes;
+}
+
+/** What Vulkan's conversion makes of one block, worked out from the spec's formulas for 8-bit samples. */
+Vector4f ConvertOnCpu(const YcbcrBlock& block, f32 kr, f32 kb, bool narrow)
+{
+    const f32 y = narrow ? (static_cast<f32>(block.y) - 16.0f) / 219.0f : static_cast<f32>(block.y) / 255.0f;
+    const f32 cb = (static_cast<f32>(block.cb) - 128.0f) / (narrow ? 224.0f : 255.0f);
+    const f32 cr = (static_cast<f32>(block.cr) - 128.0f) / (narrow ? 224.0f : 255.0f);
+    const f32 kg = 1.0f - kr - kb;
+    const f32 r = y + 2.0f * (1.0f - kr) * cr;
+    const f32 b = y + 2.0f * (1.0f - kb) * cb;
+    const f32 g = y - 2.0f * kb * (1.0f - kb) / kg * cb - 2.0f * kr * (1.0f - kr) / kg * cr;
+    return {r, g, b, 1.0f};
+}
+
+f32 Saturate(f32 value)
+{
+    return value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
+}
+
+}  // namespace
+
+TEST_CASE("Forge a video frame sampled through a YCbCr conversion", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr Forge::DeviceFeatures k_ycbcr{.sampler_ycbcr_conversion = true};
+    if (!CanCreateDevice(k_ycbcr))
+    {
+        SKIP("This device has no sampler YCbCr conversion.");
+    }
+    ForgeFixture fixture(k_ycbcr);
+    constexpr PixelFormat k_format = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    const Forge::YcbcrFormatSupport support = fixture.device.GetPhysicalDevice().GetYcbcrFormatSupport(k_format);
+    if (!support.sampled || !support.transfer_destination || !support.cosited_chroma || !support.midpoint_chroma)
+    {
+        SKIP("This device cannot sample and fill NV12 with both chroma sitings.");
+    }
+    REQUIRE(support.combined_image_sampler_descriptor_count >= 1);
+
+    Forge::Texture frame = ForgeTest::Unwrap(Forge::Texture::Create(
+        fixture.device,
+        {.format = k_format, .width = k_frame_size, .height = k_frame_size, .usage = Forge::TextureUsageBits::Sampled | Forge::TextureUsageBits::TransferDestination}));
+    REQUIRE(frame.GetNativeImageView() == VK_NULL_HANDLE);
+
+    // The frame goes in as two copies, one per plane, from one staging buffer holding both.
+    const Opal::DynamicArray<u8> bytes = MakeNv12Frame();
+    const Forge::Buffer staging = ForgeTest::Unwrap(
+        Forge::Buffer::Create(fixture.device, {.size = bytes.GetSize(), .usage = Forge::BufferUsageBits::TransferSource},
+                              {bytes.GetData(), bytes.GetSize()}));
+    const Forge::BufferTextureCopyRegion planes[] = {
+        {.buffer_offset = 0, .texture_subresource = {.aspect_mask = Forge::ImageAspectBits::Plane0}},
+        {.buffer_offset = k_frame_size * k_frame_size, .texture_subresource = {.aspect_mask = Forge::ImageAspectBits::Plane1}}};
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(frame)) ==
+                                               ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, frame, {planes, 2}) == ErrorCode::Success);
+                                       REQUIRE(command_buffer.CmdTextureBarrier(
+                                                   Forge::TextureBarrier::ToShaderRead(frame, Forge::PipelineStageBits::ComputeShader)) ==
+                                               ErrorCode::Success);
+                                   }) == ErrorCode::Success);
+
+    const Forge::Shader shader = ForgeTest::Unwrap(Forge::Shader::FromSourceInMemory(
+        fixture.device, k_ycbcr_sample_source, {.entry_point = "main_sample_frame", .cache = GetShaderCache()}));
+
+    /** Sample the frame through a conversion of the given desc and compare every block with the CPU's answer. */
+    auto check_conversion = [&](const Forge::SamplerYcbcrConversionDesc& desc, f32 kr, f32 kb)
+    {
+        const Forge::SamplerYcbcrConversion conversion = ForgeTest::Unwrap(Forge::SamplerYcbcrConversion::Create(fixture.device, desc));
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device,
+                                                                                {.min_filter = desc.chroma_filter,
+                                                                                 .mag_filter = desc.chroma_filter,
+                                                                                 .mip_map_filter = ImageFilter::Nearest,
+                                                                                 .address_mode_u = ImageAddressMode::Clamp,
+                                                                                 .address_mode_v = ImageAddressMode::Clamp,
+                                                                                 .address_mode_w = ImageAddressMode::Clamp},
+                                                                                conversion));
+        const Forge::TextureView view = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, frame, conversion));
+        REQUIRE(view.GetNativeConversion() == conversion.GetNativeConversion());
+
+        Forge::DescriptorPoolDesc pool_desc;
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::CombinedImageSampler, support.combined_image_sampler_descriptor_count) ==
+                ErrorCode::Success);
+        REQUIRE(pool_desc.Add(Forge::DescriptorType::StorageBuffer, 1) == ErrorCode::Success);
+        pool_desc.max_sets = 1;
+        const Forge::DescriptorPool pool = ForgeTest::Unwrap(Forge::DescriptorPool::Create(fixture.device, pool_desc));
+        Forge::DescriptorSetLayoutDesc layout_desc;
+        const Opal::Ref<const Forge::Sampler> immutable(sampler);
+        REQUIRE(layout_desc.AddBinding(0, Forge::DescriptorType::CombinedImageSampler, 1, ShaderTypeBits::Compute, {&immutable, 1}) ==
+                ErrorCode::Success);
+        REQUIRE(layout_desc.AddBinding(1, Forge::DescriptorType::StorageBuffer, 1, ShaderTypeBits::Compute) == ErrorCode::Success);
+        const Forge::DescriptorSetLayout layout = ForgeTest::Unwrap(Forge::DescriptorSetLayout::Create(fixture.device, layout_desc));
+
+        Forge::ComputePipelineDesc pipeline_desc;
+        pipeline_desc.shader = shader;
+        pipeline_desc.descriptor_set_layouts.PushBack(Opal::Ref<const Forge::DescriptorSetLayout>(layout));
+        const Forge::Pipeline pipeline = ForgeTest::Unwrap(Forge::Pipeline::Create(fixture.device, pipeline_desc));
+
+        const Forge::Buffer output = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device,
+            {.size = sizeof(Vector4f) * k_block_count, .usage = Forge::BufferUsageBits::StorageBuffer, .host_access = Forge::HostAccess::Random}));
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(pool, layout));
+        REQUIRE(set.Update(0, view, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::Success);
+        REQUIRE(set.Update(1, output) == ErrorCode::Success);
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBindPipeline(pipeline) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdBindDescriptorSet(pipeline, set) == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdDispatch(1) == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        Vector4f colours[k_block_count];
+        REQUIRE(output.Read({reinterpret_cast<u8*>(colours), sizeof(colours)}) == ErrorCode::Success);
+
+        const bool narrow = desc.range == Forge::YcbcrRange::Narrow;
+        for (u32 block = 0; block < k_block_count; ++block)
+        {
+            const Vector4f expected = ConvertOnCpu(GetBlock(block), kr, kb, narrow);
+            const Vector4f& actual = colours[block];
+            INFO("block " << block << " expected " << expected.x << " " << expected.y << " " << expected.z << ", got " << actual.x << " "
+                          << actual.y << " " << actual.z);
+            // A colour outside the RGB cube is one the device may clamp or not, so both sides are clamped.
+            REQUIRE(Saturate(actual.x) == Catch::Approx(Saturate(expected.x)).margin(0.01));
+            REQUIRE(Saturate(actual.y) == Catch::Approx(Saturate(expected.y)).margin(0.01));
+            REQUIRE(Saturate(actual.z) == Catch::Approx(Saturate(expected.z)).margin(0.01));
+        }
+    };
+
+    SECTION("BT.709 narrow range, the way HD H.264 is, with a linear chroma filter")
+    {
+        if (!support.linear_chroma_filter)
+        {
+            SKIP("This device cannot rebuild NV12 chroma linearly.");
+        }
+        check_conversion({.format = k_format}, 0.2126f, 0.0722f);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("BT.601 full range, cosited on both axes, with a nearest chroma filter")
+    {
+        check_conversion({.format = k_format,
+                          .model = Forge::YcbcrModel::Bt601,
+                          .range = Forge::YcbcrRange::Full,
+                          .x_chroma_offset = Forge::ChromaLocation::CositedEven,
+                          .y_chroma_offset = Forge::ChromaLocation::CositedEven,
+                          .chroma_filter = ImageFilter::Nearest},
+                         0.299f, 0.114f);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("What Vulkan forbids around a conversion is refused before it reaches the driver")
+    {
+        const Forge::SamplerYcbcrConversion conversion =
+            ForgeTest::Unwrap(Forge::SamplerYcbcrConversion::Create(fixture.device, {.format = k_format, .chroma_filter = ImageFilter::Nearest}));
+        // A sampler with a conversion clamps to the edge.
+        REQUIRE(Forge::Sampler::Create(fixture.device, {.min_filter = ImageFilter::Nearest, .mag_filter = ImageFilter::Nearest}, conversion)
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        // A YCbCr texture has no view without its conversion.
+        REQUIRE(Forge::TextureView::Create(fixture.device, frame).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        // A conversion is for a YCbCr format.
+        REQUIRE(Forge::SamplerYcbcrConversion::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM}).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        // A 4:2:0 frame has an even size.
+        REQUIRE(Forge::Texture::Create(fixture.device, {.format = k_format, .width = 15, .height = 16, .usage = Forge::TextureUsageBits::Sampled})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        // A copy into a frame names the plane it fills.
+        const Forge::BufferTextureCopyRegion whole{.texture_subresource = {}};
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToTransferDestination(frame)) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdCopyBufferToTexture(staging, frame, {&whole, 1}) == ErrorCode::InvalidArgument);
+                                       }) == ErrorCode::Success);
+
+        // A sampler with a conversion is only taken as an immutable sampler.
+        const Forge::Sampler sampler = ForgeTest::Unwrap(Forge::Sampler::Create(fixture.device,
+                                                                                {.min_filter = ImageFilter::Nearest,
+                                                                                 .mag_filter = ImageFilter::Nearest,
+                                                                                 .address_mode_u = ImageAddressMode::Clamp,
+                                                                                 .address_mode_v = ImageAddressMode::Clamp,
+                                                                                 .address_mode_w = ImageAddressMode::Clamp},
+                                                                                conversion));
+        const Forge::TextureView view = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, frame, conversion));
+        const SampleHarness harness = MakeSampleHarness(fixture.device, 1);
+        Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(harness.pool, harness.layout));
+        REQUIRE(set.Update(0, view, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
