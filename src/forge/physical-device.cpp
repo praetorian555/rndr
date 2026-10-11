@@ -47,6 +47,29 @@ Opal::Expected<Rndr::Forge::PhysicalDevice, Rndr::ErrorCode> Rndr::Forge::Physic
         }
     }
 
+    // Which codecs each family decodes is only asked of a device that has video at all: the structure belongs to the
+    // extension, and chaining it without the extension is not allowed.
+    if (device.IsExtensionSupported(VK_KHR_VIDEO_QUEUE_EXTENSION_NAME))
+    {
+        Opal::DynamicArray<VkQueueFamilyVideoPropertiesKHR> video_properties(queue_family_count);
+        Opal::DynamicArray<VkQueueFamilyQueryResultStatusPropertiesKHR> status_properties(queue_family_count);
+        Opal::DynamicArray<VkQueueFamilyProperties2> properties2(queue_family_count);
+        for (u32 i = 0; i < queue_family_count; ++i)
+        {
+            status_properties[i] = {.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_QUERY_RESULT_STATUS_PROPERTIES_KHR};
+            video_properties[i] = {.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_VIDEO_PROPERTIES_KHR, .pNext = &status_properties[i]};
+            properties2[i] = {.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2, .pNext = &video_properties[i]};
+        }
+        vkGetPhysicalDeviceQueueFamilyProperties2(physical_device, &queue_family_count, properties2.GetData());
+        device.m_video_codec_operations.Resize(queue_family_count, 0u);
+        device.m_query_result_status_support.Resize(queue_family_count, false);
+        for (u32 i = 0; i < queue_family_count; ++i)
+        {
+            device.m_video_codec_operations[i] = video_properties[i].videoCodecOperations;
+            device.m_query_result_status_support[i] = status_properties[i].queryResultStatusSupport == VK_TRUE;
+        }
+    }
+
     // Core since Vulkan 1.2 and an extension before, and chaining the structure is only allowed on a device that has
     // one or the other. One with neither cannot run Forge, which needs dynamic rendering and so this extension too,
     // and is turned down when a device is chosen; its resolve modes stay zero.
@@ -75,6 +98,8 @@ Rndr::Forge::PhysicalDevice::PhysicalDevice(PhysicalDevice&& other) noexcept
       m_memory_properties(other.m_memory_properties),
       m_depth_stencil_resolve_properties(other.m_depth_stencil_resolve_properties),
       m_queue_family_properties(Opal::Move(other.m_queue_family_properties)),
+      m_video_codec_operations(Opal::Move(other.m_video_codec_operations)),
+      m_query_result_status_support(Opal::Move(other.m_query_result_status_support)),
       m_supported_extensions(Opal::Move(other.m_supported_extensions))
 {
     other.m_physical_device = VK_NULL_HANDLE;
@@ -104,6 +129,8 @@ Rndr::Forge::PhysicalDevice& Rndr::Forge::PhysicalDevice::operator=(PhysicalDevi
     m_memory_properties = other.m_memory_properties;
     m_depth_stencil_resolve_properties = other.m_depth_stencil_resolve_properties;
     m_queue_family_properties = Opal::Move(other.m_queue_family_properties);
+    m_video_codec_operations = Opal::Move(other.m_video_codec_operations);
+    m_query_result_status_support = Opal::Move(other.m_query_result_status_support);
     m_supported_extensions = Opal::Move(other.m_supported_extensions);
 
     other.m_physical_device = VK_NULL_HANDLE;
@@ -169,6 +196,28 @@ Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetPresentQueueFamilyInde
     }
     return {};
 #endif
+}
+
+VkVideoCodecOperationFlagsKHR Rndr::Forge::PhysicalDevice::GetVideoCodecOperations(u32 queue_family) const
+{
+    return queue_family < m_video_codec_operations.GetSize() ? m_video_codec_operations[queue_family] : 0;
+}
+
+bool Rndr::Forge::PhysicalDevice::SupportsQueryResultStatus(u32 queue_family) const
+{
+    return queue_family < m_query_result_status_support.GetSize() && m_query_result_status_support[queue_family];
+}
+
+Opal::Optional<Rndr::u32> Rndr::Forge::PhysicalDevice::GetDecodeQueueFamilyIndex(VkVideoCodecOperationFlagsKHR codecs) const
+{
+    for (u32 i = 0; i < m_queue_family_properties.GetSize(); i++)
+    {
+        if ((m_queue_family_properties[i].queueFlags & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0 && (GetVideoCodecOperations(i) & codecs) == codecs)
+        {
+            return Opal::Optional<u32>(i);
+        }
+    }
+    return {};
 }
 
 bool Rndr::Forge::PhysicalDevice::IsExtensionSupported(const char* extension_name) const
@@ -269,6 +318,8 @@ void Rndr::Forge::PhysicalDevice::Destroy()
     m_physical_device = VK_NULL_HANDLE;
     m_api_version = 0;
     m_queue_family_properties.Clear();
+    m_video_codec_operations.Clear();
+    m_query_result_status_support.Clear();
     m_supported_extensions.Clear();
     m_queue_family_properties = {};
 }

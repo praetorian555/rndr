@@ -490,6 +490,23 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
     {
         extensions.PushBack(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
     }
+    if (desc.use_decode_queue)
+    {
+        extensions.PushBack(VK_KHR_VIDEO_QUEUE_EXTENSION_NAME);
+        extensions.PushBack(VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME);
+        if (!!(desc.decode_codecs & Forge::VideoCodecBits::H264))
+        {
+            extensions.PushBack(VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME);
+        }
+        if (!!(desc.decode_codecs & Forge::VideoCodecBits::H265))
+        {
+            extensions.PushBack(VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME);
+        }
+        if (!!(desc.decode_codecs & Forge::VideoCodecBits::Av1))
+        {
+            extensions.PushBack(VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME);
+        }
+    }
 #if defined(RNDR_FORGE_VULKAN_1_1)
     if (!IsUsedAtVulkan13(physical_device))
     {
@@ -758,6 +775,17 @@ Opal::StringUtf8 FindUnmetRequirement(const Forge::PhysicalDevice& physical_devi
     {
         return Opal::StringUtf8("has no video decode queue");
     }
+    if (desc.use_decode_queue &&
+        !physical_device.GetDecodeQueueFamilyIndex(static_cast<VkVideoCodecOperationFlagsKHR>(desc.decode_codecs)).HasValue())
+    {
+        return Opal::StringUtf8("has no video decode queue that decodes every codec in DeviceDesc::decode_codecs");
+    }
+#if defined(RNDR_FORGE_VULKAN_1_1)
+    if (desc.use_decode_queue && !IsUsedAtVulkan13(physical_device) && !physical_device.IsExtensionSupported(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME))
+    {
+        return Opal::StringUtf8("has no synchronization2, which video decode is built on");
+    }
+#endif
     if (desc.use_encode_queue && !physical_device.GetQueueFamilyIndex(VK_QUEUE_VIDEO_ENCODE_BIT_KHR).HasValue())
     {
         return Opal::StringUtf8("has no video encode queue");
@@ -1129,14 +1157,15 @@ Rndr::ErrorCode Rndr::Forge::Device::CollectQueueFamilies(Opal::DynamicArray<VkD
 
     if (m_desc.use_decode_queue)
     {
-        queue_family_index = m_physical_device.GetQueueFamilyIndex(VK_QUEUE_VIDEO_DECODE_BIT_KHR);
+        queue_family_index = m_physical_device.GetDecodeQueueFamilyIndex(static_cast<VkVideoCodecOperationFlagsKHR>(m_desc.decode_codecs));
         if (queue_family_index.HasValue())
         {
             m_queue_family_indices.decode_family_index = queue_family_index.GetValue();
         }
         else
         {
-            RNDR_LOG_ERROR("Forge: a video decode queue was requested but this device has none");
+            RNDR_LOG_ERROR("Forge: a video decode queue was requested but this device has none that decodes every codec in "
+                           "DeviceDesc::decode_codecs");
             return ErrorCode::FeatureNotSupported;
         }
     }

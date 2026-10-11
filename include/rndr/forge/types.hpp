@@ -132,6 +132,16 @@ enum class TextureUsageBits : u32
 };
 OPAL_ENUM_CLASS_FLAGS(TextureUsageBits);
 
+/** The codecs a video decode queue can decode. Mirrors the decode bits of VkVideoCodecOperationFlagBitsKHR. */
+enum class VideoCodecBits : u32
+{
+    None = 0,
+    H264 = 0x00000001,
+    H265 = 0x00000002,
+    Av1 = 0x00000004
+};
+OPAL_ENUM_CLASS_FLAGS(VideoCodecBits);
+
 /** Number of dimensions the image data has. */
 enum class TextureDimension : u8
 {

@@ -264,11 +264,20 @@ struct DeviceDesc : Opal::ClonableBase<DeviceDesc>
     bool enable_presentation = false;
     bool use_async_compute_queue = false;
     bool use_dedicated_transfer_queue = false;
+    /**
+     * Take a video decode queue, and the extensions video decode needs: VK_KHR_video_queue, VK_KHR_video_decode_queue
+     * and one per codec in decode_codecs. Needs synchronization2, which a device used at Vulkan 1.3 always has.
+     */
     bool use_decode_queue = false;
     bool use_encode_queue = false;
+    /**
+     * The codecs the decode queue has to decode, all of them on the one queue family. Only read with use_decode_queue;
+     * a device whose decode queues cannot is passed over by SelectPhysicalDevice and refused by Device::Create.
+     */
+    VideoCodecBits decode_codecs = VideoCodecBits::None;
 
     OPAL_CLONE_FIELDS(features, enable_supported_features, extensions, surface, enable_presentation, use_async_compute_queue,
-                      use_dedicated_transfer_queue, use_decode_queue, use_encode_queue);
+                      use_dedicated_transfer_queue, use_decode_queue, use_encode_queue, decode_codecs);
 };
 
 struct QueueFamilyIndices

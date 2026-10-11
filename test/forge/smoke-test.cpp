@@ -27,6 +27,7 @@
 #include "rndr/forge/shader.hpp"
 #include "rndr/forge/texture.hpp"
 #include "rndr/forge/transfer.hpp"
+#include "rndr/forge/video.hpp"
 #include "rndr/trace.hpp"
 #include "rndr/types.hpp"
 
@@ -67,6 +68,8 @@ struct ForgeQueues
 {
     bool async_compute = false;
     bool dedicated_transfer = false;
+    /** The codecs a video decode queue has to decode; none takes no decode queue. */
+    Forge::VideoCodecBits decode = Forge::VideoCodecBits::None;
 };
 
 /**
@@ -126,7 +129,9 @@ struct ForgeFixture
         Forge::DeviceDesc device_desc{.features = features,
                                       .enable_supported_features = false,
                                       .use_async_compute_queue = queues.async_compute,
-                                      .use_dedicated_transfer_queue = queues.dedicated_transfer};
+                                      .use_dedicated_transfer_queue = queues.dedicated_transfer,
+                                      .use_decode_queue = queues.decode != Forge::VideoCodecBits::None,
+                                      .decode_codecs = queues.decode};
         for (const char* extension : extensions)
         {
             device_desc.extensions.PushBack(extension);
@@ -18201,6 +18206,94 @@ TEST_CASE("Forge a video frame sampled through a YCbCr conversion", "[forge]")
         const SampleHarness harness = MakeSampleHarness(fixture.device, 1);
         Forge::DescriptorSet set = ForgeTest::Unwrap(Forge::DescriptorSet::Create(harness.pool, harness.layout));
         REQUIRE(set.Update(0, view, sampler, Forge::ImageLayout::ShaderReadOnly) == ErrorCode::InvalidArgument);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
+
+namespace
+{
+
+bool ContainsFormat(const Opal::DynamicArray<PixelFormat>& formats, PixelFormat format)
+{
+    for (const PixelFormat candidate : formats)
+    {
+        if (candidate == format)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool IsPowerOfTwo(u64 value)
+{
+    return value != 0 && (value & (value - 1)) == 0;
+}
+
+}  // namespace
+
+TEST_CASE("Forge video decode queues and what a profile decodes", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_h264{.decode = Forge::VideoCodecBits::H264};
+    if (!CanCreateDevice({}, k_h264))
+    {
+        SKIP("This device has no queue that decodes H.264.");
+    }
+    ForgeFixture fixture({}, k_h264);
+    const Forge::PhysicalDevice& physical_device = fixture.device.GetPhysicalDevice();
+
+    SECTION("The decode queue decodes the codecs the desc names, and the video extensions come with it")
+    {
+        const u32 family = fixture.GetQueue(Forge::QueueFamily::Decode).GetQueueFamilyIndex();
+        REQUIRE((physical_device.GetVideoCodecOperations(family) & VK_VIDEO_CODEC_OPERATION_DECODE_H264_BIT_KHR) != 0);
+        REQUIRE(fixture.device.IsExtensionEnabled(VK_KHR_VIDEO_QUEUE_EXTENSION_NAME));
+        REQUIRE(fixture.device.IsExtensionEnabled(VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME));
+        REQUIRE(fixture.device.IsExtensionEnabled(VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME));
+        REQUIRE_FALSE(fixture.device.IsExtensionEnabled(VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME));
+        // A family that decodes nothing reports no codec, and a family past the last reports none either.
+        REQUIRE(physical_device.GetVideoCodecOperations(static_cast<u32>(physical_device.GetQueueFamilyProperties().GetSize())) == 0);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("H.264 High at 8 bits decodes HD into NV12")
+    {
+        const Forge::VideoCapabilities capabilities =
+            ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(physical_device, {.codec = Forge::VideoCodec::H264, .codec_profile = 100}));
+        INFO("max extent " << capabilities.max_coded_extent.x << "x" << capabilities.max_coded_extent.y << ", dpb slots "
+                           << capabilities.max_dpb_slots << ", offset alignment " << capabilities.bitstream_offset_alignment);
+        REQUIRE(capabilities.max_coded_extent.x >= 1920);
+        REQUIRE(capabilities.max_coded_extent.y >= 1080);
+        REQUIRE(capabilities.min_coded_extent.x <= capabilities.max_coded_extent.x);
+        REQUIRE(capabilities.min_coded_extent.y <= capabilities.max_coded_extent.y);
+        REQUIRE(capabilities.max_dpb_slots >= 1);
+        REQUIRE(capabilities.max_active_reference_pictures <= capabilities.max_dpb_slots);
+        REQUIRE(IsPowerOfTwo(capabilities.bitstream_offset_alignment));
+        REQUIRE(IsPowerOfTwo(capabilities.bitstream_size_alignment));
+        REQUIRE((capabilities.dpb_and_output_coincide || capabilities.dpb_and_output_distinct));
+        REQUIRE(capabilities.max_level > 0);
+        REQUIRE(ContainsFormat(capabilities.dpb_formats, PixelFormat::G8_B8R8_2PLANE_420_UNORM));
+        REQUIRE(ContainsFormat(capabilities.output_formats, PixelFormat::G8_B8R8_2PLANE_420_UNORM));
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("H.265 Main 10 decodes into P010")
+    {
+        if (!physical_device.IsExtensionSupported(VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME))
+        {
+            SKIP("This device does not decode H.265.");
+        }
+        const Forge::VideoCapabilities capabilities = ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(
+            physical_device, {.codec = Forge::VideoCodec::H265, .codec_profile = 2, .bit_depth = 10}));
+        REQUIRE(ContainsFormat(capabilities.dpb_formats, PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16));
+        REQUIRE(ContainsFormat(capabilities.output_formats, PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16));
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A profile Forge cannot describe is refused before the device is asked")
+    {
+        REQUIRE(Forge::GetVideoDecodeCapabilities(physical_device, {.codec = Forge::VideoCodec::H264, .bit_depth = 12})
+                    .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }

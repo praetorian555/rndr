@@ -124,6 +124,21 @@ public:
     [[nodiscard]] bool IsExtensionSupported(const char* extension_name) const;
 
     /**
+     * The codecs a queue family can decode, as VkVideoCodecOperationFlagsKHR. Zero for a family that decodes nothing,
+     * for one past the last, and for every family of a device without VK_KHR_video_queue.
+     */
+    [[nodiscard]] VkVideoCodecOperationFlagsKHR GetVideoCodecOperations(u32 queue_family) const;
+
+    /** Whether a queue family can report the status of a video operation through a result status query. */
+    [[nodiscard]] bool SupportsQueryResultStatus(u32 queue_family) const;
+
+    /**
+     * Find a video decode queue family that decodes every one of `codecs`. Empty when this device has none, which is an
+     * answer rather than a failure.
+     */
+    [[nodiscard]] Opal::Optional<u32> GetDecodeQueueFamilyIndex(VkVideoCodecOperationFlagsKHR codecs) const;
+
+    /**
      * Whether an optimally tiled image of this format can take part in a blit. Support is per format and per
      * side, so a format that can be blitted from cannot always be blitted into.
      * @param format Format of the image.
@@ -168,6 +183,9 @@ private:
     VkPhysicalDeviceDepthStencilResolveProperties m_depth_stencil_resolve_properties = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES};
     Opal::DynamicArray<VkQueueFamilyProperties> m_queue_family_properties;
+    /** Per queue family: the codecs it decodes or encodes, and whether it reports result status. Empty without video. */
+    Opal::DynamicArray<VkVideoCodecOperationFlagsKHR> m_video_codec_operations;
+    Opal::DynamicArray<bool> m_query_result_status_support;
     Opal::DynamicArray<Opal::StringUtf8> m_supported_extensions;
 };
 
