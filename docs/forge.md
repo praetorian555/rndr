@@ -355,7 +355,7 @@ reference picture's slot (`dpb_and_output_coincide`, the only mode NVIDIA offers
 picture needs a slot, its output view is the slot's view with both decode usages, and a picture nothing refers to frees
 its slot once it has been read.
 
-**What the NVIDIA driver does differently.** Two things on the 616.56 driver, neither of which the validation layer
+**What the NVIDIA driver does differently.** Three things on the 616.56 driver, none of which the validation layer
 reports:
 
 - It reads the structures of `vkCmdDecodeVideoKHR` - the picture information, the slice offsets, the reference slots and
@@ -371,6 +371,13 @@ reports:
   out wrong. It does wrap the value when it applies `ref_pic_list_modification`. A short-term reference handed over as
   FrameNumWrap plus MaxFrameNum - the `frame_num` after the wrap, MaxFrameNum more before it - decodes right on this driver
   and on one that wraps the value itself.
+- It does not decode an H.264 picture with a long-term reference among its references: the output is a copy of the first
+  picture of its reference list, and the status query still says `Complete`. What the reference carries makes no
+  difference - its `FrameNum`, its place in the references, how its slot was set up - only
+  `used_for_long_term_reference` does. FFmpeg's Vulkan decoder fails the same conformance streams (MR1_BT_A, MR2_TANDBERG_E,
+  MR4_TANDBERG_C) on the same pictures, while the same hardware through NVDEC decodes MR1_BT_A and MR2_TANDBERG_E bit for
+  bit, so it is the Vulkan driver and not the decoder. Long-term references are rare outside conferencing streams; x264
+  does not write them unless asked.
 
 What is not there yet: H.265 and AV1 parameters and decode, and reference pictures as layers of one texture.
 
