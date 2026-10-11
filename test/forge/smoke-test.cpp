@@ -18609,3 +18609,142 @@ TEST_CASE("Forge video coding scopes on the decode queue", "[forge]")
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }
+
+TEST_CASE("Forge video status queries", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_h264{.decode = Forge::VideoCodecBits::H264};
+    if (!CanCreateDevice({}, k_h264))
+    {
+        SKIP("This device has no queue that decodes H.264.");
+    }
+    ForgeFixture fixture({}, k_h264);
+    Forge::DeviceQueue& decode_queue = fixture.GetQueue(Forge::QueueFamily::Decode);
+    if (!fixture.device.GetPhysicalDevice().SupportsQueryResultStatus(decode_queue.GetQueueFamilyIndex()))
+    {
+        SKIP("The decode queue of this device writes no result status.");
+    }
+    const Forge::VideoProfile profile{.codec = Forge::VideoCodec::H264, .codec_profile = 100};
+    const Forge::VideoCapabilities capabilities =
+        ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(fixture.device.GetPhysicalDevice(), profile));
+    constexpr PixelFormat k_nv12 = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    if (!ContainsFormat(capabilities.dpb_formats, k_nv12) || !ContainsFormat(capabilities.output_formats, k_nv12))
+    {
+        SKIP("This device does not decode H.264 into NV12.");
+    }
+    const Forge::VideoSession session = ForgeTest::Unwrap(Forge::VideoSession::Create(
+        fixture.device, {.profile = profile,
+                         .max_dpb_slots = Opal::Min(17u, capabilities.max_dpb_slots),
+                         .max_active_reference_pictures = Opal::Min(16u, capabilities.max_active_reference_pictures)}));
+    const StdVideoH264SequenceParameterSet sps = MakeHdSequenceParameterSet(0);
+    const StdVideoH264PictureParameterSet pps = MakePictureParameterSet(0, 0);
+    const Forge::VideoSessionParameters parameters = ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateH264(
+        fixture.device, session, {.sequence_parameter_sets = {&sps, 1}, .picture_parameter_sets = {&pps, 1}}));
+    const Forge::VideoStatusQueryPool pool =
+        ForgeTest::Unwrap(Forge::VideoStatusQueryPool::Create(fixture.device, {.profile = profile, .query_count = 2}));
+    REQUIRE(pool.IsValid());
+    const u64 size_alignment = session.GetBitstreamSizeAlignment();
+
+    SECTION("A decode of a bitstream that is no H.264 writes its status, which reads back once the device is done")
+    {
+        // The picture goes into a reference picture texture, which is the output too where the two coincide.
+        const bool coincide = !capabilities.dpb_and_output_distinct;
+        const Forge::TextureUsageBits dpb_usage =
+            coincide ? Forge::TextureUsageBits::VideoDecodeDpb | Forge::TextureUsageBits::VideoDecodeDestination
+                     : Forge::TextureUsageBits::VideoDecodeDpb;
+        Forge::Texture dpb = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_nv12, .width = 1920, .height = 1088, .usage = dpb_usage, .video_profile = profile}));
+        const Forge::TextureView dpb_view = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, dpb, {.usage = dpb_usage}));
+        Forge::Texture output;
+        Forge::TextureView output_view;
+        if (!coincide)
+        {
+            output = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_nv12,
+                                                                               .width = 1920,
+                                                                               .height = 1088,
+                                                                               .usage = Forge::TextureUsageBits::VideoDecodeDestination,
+                                                                               .video_profile = profile}));
+            output_view = ForgeTest::Unwrap(
+                Forge::TextureView::Create(fixture.device, output, {.usage = Forge::TextureUsageBits::VideoDecodeDestination}));
+        }
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size_alignment * 64, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = profile}));
+        const Opal::DynamicArray<u8> zeros(size_alignment * 64, static_cast<u8>(0));
+        REQUIRE(bitstream.Update({zeros.GetData(), zeros.GetSize()}) == ErrorCode::Success);
+
+        const Vector2i extent{1920, 1088};
+        const u32 slice = 0;
+        Forge::VideoDecodeDesc decode{.bitstream = bitstream,
+                                      .bitstream_size = size_alignment * 64,
+                                      .output = {.view = coincide ? dpb_view : output_view, .coded_extent = extent},
+                                      .setup = {.slot_index = 0, .picture = {.view = dpb_view, .coded_extent = extent}},
+                                      .h264_slice_offsets = {&slice, 1},
+                                      .status_query_pool = pool,
+                                      .status_query = 1};
+        decode.h264_picture.flags.IdrPicFlag = 1;
+        decode.h264_picture.flags.is_intra = 1;
+        decode.h264_picture.flags.is_reference = 1;
+        const Forge::VideoReferenceSlot scope_slot{.slot_index = -1, .picture = {.view = dpb_view, .coded_extent = extent}};
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, decode_queue,
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToVideoDecodeDpb(dpb)) == ErrorCode::Success);
+                        if (!coincide)
+                        {
+                            REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToVideoDecodeDestination(
+                                        output, Forge::ImageLayout::Undefined)) == ErrorCode::Success);
+                        }
+                        REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBeginVideoCoding(
+                                    {.session = session, .parameters = parameters, .reference_slots = {&scope_slot, 1}}) ==
+                                ErrorCode::Success);
+                        // A pool is reset outside a scope.
+                        REQUIRE(command_buffer.CmdResetQueryPool(pool) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        const Forge::VideoDecodeStatus status = ForgeTest::Unwrap(pool.GetStatus(1));
+        INFO("status " << static_cast<int>(status));
+        REQUIRE(status != Forge::VideoDecodeStatus::NotReady);
+        REQUIRE(ForgeTest::Unwrap(pool.TryGetStatus(1)) == status);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A pool of no queries, a query past the pool or a pool for another profile is refused")
+    {
+        REQUIRE(
+            Forge::VideoStatusQueryPool::Create(fixture.device, {.profile = profile, .query_count = 0}).GetErrorOr(ErrorCode::Success) ==
+            ErrorCode::InvalidArgument);
+        REQUIRE(pool.TryGetStatus(2).GetErrorOr(ErrorCode::Success) == ErrorCode::OutOfBounds);
+        const Forge::VideoStatusQueryPool main_pool = ForgeTest::Unwrap(
+            Forge::VideoStatusQueryPool::Create(fixture.device, {.profile = {.codec = Forge::VideoCodec::H264, .codec_profile = 77}}));
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size_alignment, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = profile}));
+        const u32 slice = 0;
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, decode_queue,
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdResetQueryPool(pool, 1, 2) == ErrorCode::OutOfBounds);
+                        REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
+                                                               .bitstream_size = size_alignment,
+                                                               .h264_slice_offsets = {&slice, 1},
+                                                               .status_query_pool = main_pool}) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdDecodeVideo({.bitstream = bitstream,
+                                                               .bitstream_size = size_alignment,
+                                                               .h264_slice_offsets = {&slice, 1},
+                                                               .status_query_pool = pool,
+                                                               .status_query = 2}) == ErrorCode::OutOfBounds);
+                        REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}

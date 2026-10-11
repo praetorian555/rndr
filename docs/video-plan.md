@@ -46,7 +46,8 @@ the feature read through `VkPhysicalDeviceSamplerYcbcrConversionFeatures` - has 
 | Phase | State |
 |---|---|
 | 0 - planes and YCbCr sampling | **Done**: textures filled a plane at a time, `SamplerYcbcrConversion`, the `[forge]` case and `samples/video-frame`; described in [forge.md](forge.md#video-frames). NV12, P010 and I420 are each checked against the CPU |
-| 1 - Vulkan Video decode | **H.264 decodes end to end**: decode queue by codec, capabilities, video buffers and textures, `VideoSession`, H.264 `VideoSessionParameters`, the coding scope and `CmdDecodeVideo`, described in [forge.md](forge.md#video-decode); the player decodes thirteen ITU-T conformance streams bit for bit - CAVLC and CABAC, I, P and B pictures, several slices a picture, temporal and spatial direct, explicit and implicit weighted prediction, hierarchical B pictures that are references, `frame_num` wrapping. Left: the result status query, long-term references and gaps in `frame_num` (MR1_BT_A, MR2_TANDBERG_E and MR4_TANDBERG_C do not decode yet), H.265 and AV1 |
+| 1 - Vulkan Video decode | **H.264 decodes end to end**: decode queue by codec, capabilities, video buffers and textures, `VideoSession`, H.264 `VideoSessionParameters`, the coding scope and `CmdDecodeVideo`, described in [forge.md](forge.md#video-decode); the player decodes thirteen ITU-T conformance streams bit for bit - CAVLC and CABAC, I, P and B pictures, several slices a picture, temporal and spatial direct, explicit and implicit weighted prediction, hierarchical B pictures that are references, `frame_num` wrapping - each with a status query that says the device decoded it (one that, on NVIDIA, also says so of
+a buffer of zeros). Left: long-term references and gaps in `frame_num` (MR1_BT_A, MR2_TANDBERG_E and MR4_TANDBERG_C do not decode yet), H.265 and AV1 |
 | 2 - Android hardware buffer import | Not started |
 | 3 - streamed audio | Not started |
 

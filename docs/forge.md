@@ -341,6 +341,15 @@ refused. The decoded picture moves to the graphics queue by a queue family owner
 616.56 driver, copying a decoded picture to a buffer on the decode queue crashes the driver at submit, though the family
 reports transfer support and the validation layer has nothing to say.
 
+**Whether a decode succeeded.** A device decodes whatever bitstream it is given without a Vulkan error, so the answer
+comes from a status query. A `VideoStatusQueryPool` is made for the session's profile, on a device whose decode queue
+reports result status (`PhysicalDevice::SupportsQueryResultStatus`); `CmdResetQueryPool` resets it outside a coding scope,
+`VideoDecodeDesc::status_query_pool` and `status_query` name the query a decode writes into, and `GetStatus` or
+`TryGetStatus` read back `Complete`, `Error` or, before the device is done, `NotReady`. A pool for another profile, or a
+query past the pool, is refused. On NVIDIA's 616.56 driver the query says less than it could: a buffer of zeros decoded as
+an IDR picture comes back `Complete`, the driver printing `GP or MB timer timeout occurred` to the console, and so do
+pictures decoded from the wrong references.
+
 A device writes the decoded picture either into an output texture of its own (`dpb_and_output_distinct`) or into the
 reference picture's slot (`dpb_and_output_coincide`, the only mode NVIDIA offers for H.264). In the second, every
 picture needs a slot, its output view is the slot's view with both decode usages, and a picture nothing refers to frees
@@ -363,8 +372,7 @@ reports:
   FrameNumWrap plus MaxFrameNum - the `frame_num` after the wrap, MaxFrameNum more before it - decodes right on this driver
   and on one that wraps the value itself.
 
-What is not there yet: H.265 and AV1 parameters and decode, the result status query that says whether a decode
-succeeded, and reference pictures as layers of one texture.
+What is not there yet: H.265 and AV1 parameters and decode, and reference pictures as layers of one texture.
 
 ---
 

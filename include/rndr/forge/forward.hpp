@@ -21,6 +21,7 @@ class Sampler;
 class SamplerYcbcrConversion;
 class VideoSession;
 class VideoSessionParameters;
+class VideoStatusQueryPool;
 class Buffer;
 class Shader;
 class Pipeline;

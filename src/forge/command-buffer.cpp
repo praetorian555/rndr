@@ -2122,6 +2122,29 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdResetQueryPool(const TimestampQue
     return ErrorCode::Success;
 }
 
+Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdResetQueryPool(const VideoStatusQueryPool& query_pool, u32 first_query, u32 query_count)
+{
+    if (m_video_session != nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: a video status query pool is reset outside a video coding scope, before CmdBeginVideoCoding");
+        return ErrorCode::InvalidArgument;
+    }
+    if (!query_pool.IsValid())
+    {
+        RNDR_LOG_ERROR("Forge: CmdResetQueryPool on an empty video status query pool");
+        return ErrorCode::InvalidArgument;
+    }
+    const u32 pool_size = query_pool.GetQueryCount();
+    const u32 count = query_count == k_all_queries && first_query <= pool_size ? pool_size - first_query : query_count;
+    if (first_query > pool_size || count > pool_size - first_query)
+    {
+        RNDR_LOG_ERROR("Forge: Resetting {} queries from index {} of a video status query pool holding {}", count, first_query, pool_size);
+        return ErrorCode::OutOfBounds;
+    }
+    vkCmdResetQueryPool(m_native_command_buffer, query_pool.GetNativeQueryPool(), first_query, count);
+    return ErrorCode::Success;
+}
+
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdWriteTimestamp(const TimestampQueryPool& query_pool, u32 query_index,
                                                               PipelineStageBits stage)
 {
@@ -2334,6 +2357,22 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         return ErrorCode::InvalidArgument;
     }
 
+    const bool has_status_query = desc.status_query_pool.IsValid();
+    if (has_status_query)
+    {
+        const VideoStatusQueryPool& pool = desc.status_query_pool.Get();
+        if (!pool.IsValid() || pool.GetDesc().profile != session.GetDesc().profile)
+        {
+            RNDR_LOG_ERROR("Forge: a decode's status query is in a pool made for the session's profile");
+            return ErrorCode::InvalidArgument;
+        }
+        if (desc.status_query >= pool.GetQueryCount())
+        {
+            RNDR_LOG_ERROR("Forge: status query {} of a video status query pool holding {}", desc.status_query, pool.GetQueryCount());
+            return ErrorCode::OutOfBounds;
+        }
+    }
+
     Opal::ScopePtr<VideoDecodeRecord> record = Opal::MakeScoped<VideoDecodeRecord>(Opal::GetDefaultAllocator());
     if (!record.IsValid())
     {
@@ -2391,7 +2430,15 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         .referenceSlotCount = static_cast<u32>(reference_count),
         .pReferenceSlots = r.reference_slots.GetData(),
     };
+    if (has_status_query)
+    {
+        vkCmdBeginQuery(m_native_command_buffer, desc.status_query_pool->GetNativeQueryPool(), desc.status_query, 0);
+    }
     vkCmdDecodeVideoKHR(m_native_command_buffer, &r.decode_info);
+    if (has_status_query)
+    {
+        vkCmdEndQuery(m_native_command_buffer, desc.status_query_pool->GetNativeQueryPool(), desc.status_query);
+    }
     m_video_decodes.PushBack(std::move(record));
     return ErrorCode::Success;
 }

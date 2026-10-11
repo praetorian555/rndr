@@ -42,6 +42,8 @@ struct VideoProfile
     u32 codec_profile = 100;
     /** Bits per sample, luma and chroma alike: 8, or 10 for HEVC Main 10 and 10-bit AV1. */
     u32 bit_depth = 8;
+
+    bool operator==(const VideoProfile& other) const = default;
 };
 
 /** What a device can decode under one profile, from GetVideoDecodeCapabilities. */
@@ -87,6 +89,86 @@ struct VideoCapabilities
  */
 [[nodiscard]] Opal::Expected<VideoCapabilities, ErrorCode> GetVideoDecodeCapabilities(const PhysicalDevice& physical_device,
                                                                                       const VideoProfile& profile);
+
+/** What the device made of one decode, as a status query reports it. */
+enum class VideoDecodeStatus : u8
+{
+    /** The device has not finished the decode yet. */
+    NotReady,
+    /** The picture was decoded. */
+    Complete,
+    /** The decode failed, and what it wrote is not a picture of the stream - a bitstream the device could not decode. */
+    Error,
+};
+
+/** A pool of status queries for one profile. */
+struct VideoStatusQueryPoolDesc
+{
+    /** The profile of the session whose decodes the queries report on, which has to be the same. */
+    VideoProfile profile;
+    /** How many queries fit: one per decode whose status is wanted before the pool is read and reset. */
+    u32 query_count = 1;
+};
+
+/**
+ * Status queries of video decodes: VideoDecodeDesc::status_query names one, the decode writes into it whether it
+ * succeeded, and GetStatus reads that back. A device decodes whatever bitstream it is given without a Vulkan error, so
+ * this is the one place a picture the device could not make sense of shows up as such.
+ *
+ * Like any query, one holds an undefined value until CommandBuffer::CmdResetQueryPool resets it, which happens outside a
+ * video coding scope - in the same command buffer before CmdBeginVideoCoding, or an earlier one. Only a decode queue
+ * whose family reports result status support (PhysicalDevice::SupportsQueryResultStatus) writes them.
+ */
+class VideoStatusQueryPool
+{
+public:
+    VideoStatusQueryPool() = default;
+    ~VideoStatusQueryPool();
+
+    /**
+     * @param desc The profile and how many queries.
+     * @return The pool, ErrorCode::InvalidArgument for no queries or a profile the device was not created to decode,
+     *         ErrorCode::FeatureNotSupported when the decode queue's family writes no result status, or whatever the
+     *         failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<VideoStatusQueryPool, ErrorCode> Create(const Device& device,
+                                                                                const VideoStatusQueryPoolDesc& desc = {});
+
+    VideoStatusQueryPool(const VideoStatusQueryPool&) = delete;
+    VideoStatusQueryPool& operator=(const VideoStatusQueryPool&) = delete;
+    VideoStatusQueryPool(VideoStatusQueryPool&& other) noexcept;
+    VideoStatusQueryPool& operator=(VideoStatusQueryPool&& other) noexcept;
+
+    void Destroy();
+
+    [[nodiscard]] bool IsValid() const { return m_query_pool != VK_NULL_HANDLE; }
+    [[nodiscard]] VkQueryPool GetNativeQueryPool() const { return m_query_pool; }
+    [[nodiscard]] const VideoStatusQueryPoolDesc& GetDesc() const { return m_desc; }
+    [[nodiscard]] u32 GetQueryCount() const { return m_desc.query_count; }
+
+    /**
+     * Read one query's status, waiting until the device has written it. A query no decode wrote waits forever, so this
+     * is for one a submitted decode named.
+     * @param query Which query of the pool.
+     * @return Complete or Error, ErrorCode::OutOfBounds for a query past the pool, or whatever the failing read maps to.
+     */
+    [[nodiscard]] Opal::Expected<VideoDecodeStatus, ErrorCode> GetStatus(u32 query) const;
+
+    /**
+     * Read one query's status without waiting.
+     * @param query Which query of the pool.
+     * @return NotReady while the device has not written it, Complete or Error once it has, ErrorCode::OutOfBounds for a
+     *         query past the pool, or whatever the failing read maps to.
+     */
+    [[nodiscard]] Opal::Expected<VideoDecodeStatus, ErrorCode> TryGetStatus(u32 query) const;
+
+private:
+    [[nodiscard]] Opal::Expected<VideoDecodeStatus, ErrorCode> ReadStatus(u32 query, bool wait) const;
+
+    Opal::Ref<const Device> m_device;
+    VkQueryPool m_query_pool = VK_NULL_HANDLE;
+    VideoStatusQueryPoolDesc m_desc;
+};
 
 /** What a video session decodes: the stream's profile, the largest picture and how many reference pictures it keeps. */
 struct VideoSessionDesc
@@ -205,6 +287,12 @@ struct VideoDecodeDesc
     /** H.264: the picture's parameters from its slice header, and where each of its slices starts in the bitstream range. */
     StdVideoDecodeH264PictureInfo h264_picture{};
     Opal::ArrayView<const u32> h264_slice_offsets;
+    /**
+     * Where the decode writes whether it succeeded, or empty for nowhere: a pool for the session's profile, and a query
+     * of it that has been reset since it was last written.
+     */
+    Opal::Ref<const VideoStatusQueryPool> status_query_pool;
+    u32 status_query = 0;
 };
 
 /**

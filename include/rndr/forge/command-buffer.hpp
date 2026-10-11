@@ -770,6 +770,12 @@ public:
     ErrorCode CmdResetQueryPool(const TimestampQueryPool& query_pool, u32 first_query = 0, u32 query_count = k_all_queries);
 
     /**
+     * The same for video status queries, recorded outside a video coding scope - before CmdBeginVideoCoding.
+     * @return ErrorCode::InvalidArgument inside a scope or for an empty pool, ErrorCode::OutOfBounds when the range does not fit.
+     */
+    ErrorCode CmdResetQueryPool(const VideoStatusQueryPool& query_pool, u32 first_query = 0, u32 query_count = k_all_queries);
+
+    /**
      * Write the GPU tick counter into one query of a pool.
      *
      * This is a marker in the command stream rather than a timer around a scope: the tick is written once
@@ -802,10 +808,12 @@ public:
     ErrorCode CmdResetVideoCoding();
 
     /**
-     * Decode one picture. H.264 only, so far.
+     * Decode one picture. H.264 only, so far. With VideoDecodeDesc::status_query_pool set, the decode writes whether it
+     * succeeded into that query.
      * @return ErrorCode::InvalidArgument outside a scope, for a bitstream buffer without BufferUsageBits::VideoDecodeSource,
      *         a bitstream range that breaks the session's alignments or reaches past the buffer, no slice, a picture
-     *         without a decode view, or more references than the session takes; OutOfBounds for a slot past the session's.
+     *         without a decode view, more references than the session takes, or a status query pool for another profile;
+     *         OutOfBounds for a slot past the session's or a status query past its pool.
      */
     ErrorCode CmdDecodeVideo(const VideoDecodeDesc& desc);
 

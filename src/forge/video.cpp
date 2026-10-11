@@ -563,3 +563,117 @@ void Rndr::Forge::VideoSessionParameters::Destroy()
         word = 0;
     }
 }
+
+// VideoStatusQueryPool
+
+Opal::Expected<Rndr::Forge::VideoStatusQueryPool, Rndr::ErrorCode> Rndr::Forge::VideoStatusQueryPool::Create(
+    const Device& device, const VideoStatusQueryPoolDesc& desc)
+{
+    using Result = Opal::Expected<VideoStatusQueryPool, ErrorCode>;
+
+    if (desc.query_count == 0)
+    {
+        RNDR_LOG_ERROR("Forge: a video status query pool needs at least one query");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    RNDR_FORGE_CHECK_EXPECTED(CheckVideoUsage(device, desc.profile, "a VideoStatusQueryPool"), Result);
+    const Opal::Expected<const DeviceQueue&, ErrorCode> decode_queue = device.GetQueue(QueueFamily::Decode);
+    if (!decode_queue.HasValue())
+    {
+        return Result(decode_queue.GetError());
+    }
+    const u32 family = decode_queue.GetValue().GetQueueFamilyIndex();
+    if (!device.GetPhysicalDevice().SupportsQueryResultStatus(family))
+    {
+        RNDR_LOG_ERROR("Forge: the decode queue's family {} writes no result status, so it has no video status queries", family);
+        return Result(ErrorCode::FeatureNotSupported);
+    }
+
+    VideoStatusQueryPool pool;
+    pool.m_device = device;
+    pool.m_desc = desc;
+    const VideoProfileChain chain(desc.profile);
+    const VkQueryPoolCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                            .pNext = &chain.profile,
+                                            .queryType = VK_QUERY_TYPE_RESULT_STATUS_ONLY_KHR,
+                                            .queryCount = desc.query_count};
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateQueryPool(device.GetNativeDevice(), &create_info, nullptr, &pool.m_query_pool),
+                                 "vkCreateQueryPool", Result);
+    return Result(std::move(pool));
+}
+
+Rndr::Forge::VideoStatusQueryPool::~VideoStatusQueryPool()
+{
+    Destroy();
+}
+
+Rndr::Forge::VideoStatusQueryPool::VideoStatusQueryPool(VideoStatusQueryPool&& other) noexcept
+    : m_device(std::move(other.m_device)), m_query_pool(other.m_query_pool), m_desc(other.m_desc)
+{
+    other.m_query_pool = VK_NULL_HANDLE;
+    other.m_device = nullptr;
+}
+
+Rndr::Forge::VideoStatusQueryPool& Rndr::Forge::VideoStatusQueryPool::operator=(VideoStatusQueryPool&& other) noexcept
+{
+    if (this != &other)
+    {
+        Destroy();
+        m_device = std::move(other.m_device);
+        m_query_pool = other.m_query_pool;
+        m_desc = other.m_desc;
+        other.m_query_pool = VK_NULL_HANDLE;
+        other.m_device = nullptr;
+    }
+    return *this;
+}
+
+void Rndr::Forge::VideoStatusQueryPool::Destroy()
+{
+    if (m_query_pool != VK_NULL_HANDLE)
+    {
+        vkDestroyQueryPool(m_device->GetNativeDevice(), m_query_pool, nullptr);
+        m_query_pool = VK_NULL_HANDLE;
+    }
+}
+
+Opal::Expected<Rndr::Forge::VideoDecodeStatus, Rndr::ErrorCode> Rndr::Forge::VideoStatusQueryPool::GetStatus(u32 query) const
+{
+    return ReadStatus(query, true);
+}
+
+Opal::Expected<Rndr::Forge::VideoDecodeStatus, Rndr::ErrorCode> Rndr::Forge::VideoStatusQueryPool::TryGetStatus(u32 query) const
+{
+    return ReadStatus(query, false);
+}
+
+Opal::Expected<Rndr::Forge::VideoDecodeStatus, Rndr::ErrorCode> Rndr::Forge::VideoStatusQueryPool::ReadStatus(u32 query, bool wait) const
+{
+    using Result = Opal::Expected<VideoDecodeStatus, ErrorCode>;
+
+    if (!IsValid() || query >= m_desc.query_count)
+    {
+        RNDR_LOG_ERROR("Forge: reading status query {} of a video status query pool holding {}", query, IsValid() ? m_desc.query_count : 0);
+        return Result(ErrorCode::OutOfBounds);
+    }
+    // VkQueryResultStatusKHR: negative for a failed decode, zero for one not done yet, positive for one that succeeded.
+    i64 status = 0;
+    const VkQueryResultFlags flags = VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_STATUS_BIT_KHR |
+                                     (wait ? static_cast<VkQueryResultFlags>(VK_QUERY_RESULT_WAIT_BIT) : 0u);
+    const VkResult result =
+        vkGetQueryPoolResults(m_device->GetNativeDevice(), m_query_pool, query, 1, sizeof(status), &status, sizeof(status), flags);
+    if (result == VK_NOT_READY && !wait)
+    {
+        return Result(VideoDecodeStatus::NotReady);
+    }
+    if (result != VK_SUCCESS)
+    {
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkGetQueryPoolResults", VkResultToString(result));
+        return Result(VkResultToErrorCode(result));
+    }
+    if (status < 0)
+    {
+        return Result(VideoDecodeStatus::Error);
+    }
+    return Result(status > 0 ? VideoDecodeStatus::Complete : VideoDecodeStatus::NotReady);
+}
