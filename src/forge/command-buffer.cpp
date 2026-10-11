@@ -1,5 +1,6 @@
 #include "rndr/forge/command-buffer.hpp"
 
+#include "opal/allocator.h"
 #include "opal/container/in-place-array.h"
 
 #include "rndr/forge/buffer.hpp"
@@ -37,20 +38,21 @@ Rndr::Forge::CommandBuffer::~CommandBuffer()
     Destroy();
 }
 
-void Rndr::Forge::CommandBuffer::ReleaseFramebuffers() const
+void Rndr::Forge::CommandBuffer::ReleaseRecording() const
 {
     for (const VkFramebuffer framebuffer : m_framebuffers)
     {
         vkDestroyFramebuffer(m_device->GetNativeDevice(), framebuffer, nullptr);
     }
     m_framebuffers.Clear();
+    m_video_decodes.Clear();
 }
 
 void Rndr::Forge::CommandBuffer::Destroy()
 {
-    if (!m_framebuffers.IsEmpty())
+    if (!m_framebuffers.IsEmpty() || !m_video_decodes.IsEmpty())
     {
-        ReleaseFramebuffers();
+        ReleaseRecording();
     }
     if (m_native_command_buffer != VK_NULL_HANDLE)
     {
@@ -63,7 +65,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::Begin(bool submit_one_time) const
 {
     // Beginning resets a recorded buffer, and one being recorded again is not pending, so what it last rendered
     // into is done with, and no video coding scope is open in it.
-    ReleaseFramebuffers();
+    ReleaseRecording();
     m_video_session = nullptr;
     VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = 0};
     begin_info.flags |= submit_one_time ? VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT : 0;
@@ -80,7 +82,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::End() const
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::Reset() const
 {
-    ReleaseFramebuffers();
+    ReleaseRecording();
     RNDR_FORGE_VK_CHECK(vkResetCommandBuffer(m_native_command_buffer, 0), "vkResetCommandBuffer");
     return ErrorCode::Success;
 }
@@ -2146,9 +2148,11 @@ Rndr::Forge::CommandBuffer::CommandBuffer(CommandBuffer&& other) noexcept
       m_queue(std::move(other.m_queue)),
       m_native_command_buffer(other.m_native_command_buffer),
       m_video_session(other.m_video_session),
-      m_framebuffers(std::move(other.m_framebuffers))
+      m_framebuffers(std::move(other.m_framebuffers)),
+      m_video_decodes(std::move(other.m_video_decodes))
 {
     other.m_framebuffers.Clear();
+    other.m_video_decodes.Clear();
     other.m_native_command_buffer = VK_NULL_HANDLE;
     other.m_video_session = nullptr;
 }
@@ -2163,9 +2167,11 @@ Rndr::Forge::CommandBuffer& Rndr::Forge::CommandBuffer::operator=(CommandBuffer&
         m_native_command_buffer = other.m_native_command_buffer;
         m_video_session = other.m_video_session;
         m_framebuffers = std::move(other.m_framebuffers);
+        m_video_decodes = std::move(other.m_video_decodes);
         other.m_native_command_buffer = VK_NULL_HANDLE;
         other.m_video_session = nullptr;
         other.m_framebuffers.Clear();
+        other.m_video_decodes.Clear();
     }
     return *this;
 }
@@ -2328,54 +2334,65 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         return ErrorCode::InvalidArgument;
     }
 
+    Opal::ScopePtr<VideoDecodeRecord> record = Opal::MakeScoped<VideoDecodeRecord>(Opal::GetDefaultAllocator());
+    if (!record.IsValid())
+    {
+        return ErrorCode::OutOfMemory;
+    }
+    VideoDecodeRecord& r = *record;
     VkVideoPictureResourceInfoKHR output{};
     RNDR_FORGE_CHECK(ToVkPictureResource(desc.output, output));
 
     // The setup slot and each reference carry the codec's reference information beside the picture.
     const bool has_setup = desc.setup.slot_index >= 0;
-    VkVideoPictureResourceInfoKHR setup_picture{};
-    VkVideoDecodeH264DpbSlotInfoKHR setup_h264{.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR,
-                                               .pStdReferenceInfo = &desc.setup.h264_reference};
-    VkVideoReferenceSlotInfoKHR setup_slot{.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR, .pNext = &setup_h264};
     if (has_setup)
     {
         RNDR_FORGE_CHECK(CheckSlotIndex(session, desc.setup.slot_index, false));
-        RNDR_FORGE_CHECK(ToVkPictureResource(desc.setup.picture, setup_picture));
-        setup_slot.slotIndex = desc.setup.slot_index;
-        setup_slot.pPictureResource = &setup_picture;
+        RNDR_FORGE_CHECK(ToVkPictureResource(desc.setup.picture, r.setup_picture));
+        r.setup_reference = desc.setup.h264_reference;
+        r.setup_h264 = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.setup_reference};
+        r.setup_slot = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
+                        .pNext = &r.setup_h264,
+                        .slotIndex = desc.setup.slot_index,
+                        .pPictureResource = &r.setup_picture};
     }
     const i64 reference_count = desc.references.GetSize();
-    Opal::DynamicArray<VkVideoPictureResourceInfoKHR> reference_pictures(reference_count);
-    Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR> reference_h264(reference_count);
-    Opal::DynamicArray<VkVideoReferenceSlotInfoKHR> reference_slots(reference_count);
+    r.reference_pictures = Opal::DynamicArray<VkVideoPictureResourceInfoKHR>(reference_count);
+    r.reference_h264 = Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR>(reference_count);
+    r.reference_infos = Opal::DynamicArray<StdVideoDecodeH264ReferenceInfo>(reference_count);
+    r.reference_slots = Opal::DynamicArray<VkVideoReferenceSlotInfoKHR>(reference_count);
     for (i64 i = 0; i < reference_count; ++i)
     {
         const VideoReferenceSlot& reference = desc.references[i];
         RNDR_FORGE_CHECK(CheckSlotIndex(session, reference.slot_index, false));
-        RNDR_FORGE_CHECK(ToVkPictureResource(reference.picture, reference_pictures[i]));
-        reference_h264[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &reference.h264_reference};
-        reference_slots[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
-                              .pNext = &reference_h264[i],
-                              .slotIndex = reference.slot_index,
-                              .pPictureResource = &reference_pictures[i]};
+        RNDR_FORGE_CHECK(ToVkPictureResource(reference.picture, r.reference_pictures[i]));
+        r.reference_infos[i] = reference.h264_reference;
+        r.reference_h264[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.reference_infos[i]};
+        r.reference_slots[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
+                                .pNext = &r.reference_h264[i],
+                                .slotIndex = reference.slot_index,
+                                .pPictureResource = &r.reference_pictures[i]};
     }
 
-    const VkVideoDecodeH264PictureInfoKHR h264_info{.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_PICTURE_INFO_KHR,
-                                                    .pStdPictureInfo = &desc.h264_picture,
-                                                    .sliceCount = static_cast<u32>(desc.h264_slice_offsets.GetSize()),
-                                                    .pSliceOffsets = desc.h264_slice_offsets.GetData()};
-    const VkVideoDecodeInfoKHR decode_info{
+    r.h264_picture = desc.h264_picture;
+    r.slice_offsets = Opal::DynamicArray<u32>(desc.h264_slice_offsets.GetData(), desc.h264_slice_offsets.GetSize());
+    r.h264_info = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_PICTURE_INFO_KHR,
+                   .pStdPictureInfo = &r.h264_picture,
+                   .sliceCount = static_cast<u32>(r.slice_offsets.GetSize()),
+                   .pSliceOffsets = r.slice_offsets.GetData()};
+    r.decode_info = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_INFO_KHR,
-        .pNext = &h264_info,
+        .pNext = &r.h264_info,
         .srcBuffer = desc.bitstream->GetNativeBuffer(),
         .srcBufferOffset = desc.bitstream_offset,
         .srcBufferRange = desc.bitstream_size,
         .dstPictureResource = output,
-        .pSetupReferenceSlot = has_setup ? &setup_slot : nullptr,
+        .pSetupReferenceSlot = has_setup ? &r.setup_slot : nullptr,
         .referenceSlotCount = static_cast<u32>(reference_count),
-        .pReferenceSlots = reference_slots.GetData(),
+        .pReferenceSlots = r.reference_slots.GetData(),
     };
-    vkCmdDecodeVideoKHR(m_native_command_buffer, &decode_info);
+    vkCmdDecodeVideoKHR(m_native_command_buffer, &r.decode_info);
+    m_video_decodes.PushBack(std::move(record));
     return ErrorCode::Success;
 }
 

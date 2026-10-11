@@ -346,6 +346,17 @@ reference picture's slot (`dpb_and_output_coincide`, the only mode NVIDIA offers
 picture needs a slot, its output view is the slot's view with both decode usages, and a picture nothing refers to frees
 its slot once it has been read.
 
+**What the NVIDIA driver does differently.** On the 616.56 driver, and without a word from the validation layer:
+
+- It reads the structures of `vkCmdDecodeVideoKHR` - the picture information, the slice offsets, the reference slots and
+  their `StdVideoDecodeH264ReferenceInfo` - again when the command buffer is submitted, where Vulkan lets them go when the
+  call returns. Released memory that has been reused crashes it inside the submit (`nvoglv64.dll`, a read of address 0)
+  or gives a wrong picture, after a few dozen to a few hundred pictures and at a different one each run. So
+  `CmdDecodeVideo` copies what it hands Vulkan into the command buffer, which keeps it until the buffer is recorded again,
+  reset or freed - the same lifetime as the framebuffers of its passes. The validation layer, when it wraps handles,
+  hands the driver copies of its own, released as the call returns; `GraphicsContext::Create` turns that off through
+  `VK_EXT_layer_settings` (`unique_handles`), and warns when the layer does not offer the extension.
+
 What is not there yet: H.265 and AV1 parameters and decode, the result status query that says whether a decode
 succeeded, and reference pictures as layers of one texture.
 
@@ -898,8 +909,8 @@ underneath it. There is a comment saying so where the paths would go.
 
 ## Debugging
 
-Build with `-DRNDR_FORGE_VALIDATION=ON` and the validation layer is enabled whenever it is installed. Its
-messages are logged, and the context also keeps them:
+Build with `-DRNDR_FORGE_VALIDATION=ON` and the validation layer is enabled whenever it is installed, with its handle
+wrapping off (see [Video decode](#video-decode) for why). Its messages are logged, and the context also keeps them:
 
 ```cpp
 if (context.GetDebugMessageCount(DebugMessageSeverity::Error, DebugMessageTypeBits::Validation) != 0)

@@ -319,6 +319,7 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
     // Check if all the requested instance extensions are supported
     Opal::DynamicArray<const char*> required_extensions = GetRequiredInstanceExtensions(desc, use_validation_layer);
     Opal::DynamicArray<VkExtensionProperties> supported_extensions = GetSupportedInstanceExtensions();
+    bool use_layer_settings = false;
 #if defined(RNDR_FORGE_VALIDATION)
     // The layer is enabled below, so what it provides is as good as what the implementation does.
     if (use_validation_layer)
@@ -326,6 +327,16 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
         for (const VkExtensionProperties& extension : GetLayerInstanceExtensions(k_validation_layer_name))
         {
             supported_extensions.PushBack(extension);
+            if (strcmp(extension.extensionName, VK_EXT_LAYER_SETTINGS_EXTENSION_NAME) == 0)
+            {
+                use_layer_settings = true;
+                required_extensions.PushBack(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+            }
+        }
+        if (!use_layer_settings)
+        {
+            RNDR_LOG_WARNING("Forge: the validation layer has no {}, so it wraps handles, and a video decode can crash the NVIDIA driver",
+                             VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
         }
     }
 #endif
@@ -399,6 +410,20 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
     {
         create_info.enabledLayerCount = 1;
         create_info.ppEnabledLayerNames = &k_validation_layer_name;
+    }
+    // The validation layer hands the driver each command's own structures rather than copies with its handles in.
+    const VkBool32 unique_handles = VK_FALSE;
+    const VkLayerSettingEXT unique_handles_setting{.pLayerName = k_validation_layer_name,
+                                                   .pSettingName = "unique_handles",
+                                                   .type = VK_LAYER_SETTING_TYPE_BOOL32_EXT,
+                                                   .valueCount = 1,
+                                                   .pValues = &unique_handles};
+    VkLayerSettingsCreateInfoEXT layer_settings{
+        .sType = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT, .settingCount = 1, .pSettings = &unique_handles_setting};
+    if (use_layer_settings)
+    {
+        layer_settings.pNext = create_info.pNext;
+        create_info.pNext = &layer_settings;
     }
 
     VkResult result = vkCreateInstance(&create_info, nullptr, &context.m_instance);

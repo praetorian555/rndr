@@ -6,6 +6,7 @@
 #include "opal/container/expected.h"
 #include "opal/container/optional.h"
 #include "opal/container/ref.h"
+#include "opal/container/scope-ptr.h"
 #include "opal/container/string.h"
 #include "opal/variant.h"
 
@@ -812,8 +813,8 @@ public:
     ErrorCode CmdEndVideoCoding();
 
 private:
-    /** Destroy the framebuffers made for the last recording. Only while the buffer is not pending. */
-    void ReleaseFramebuffers() const;
+    /** Destroy the framebuffers and drop the decode records of the last recording. Only while the buffer is not pending. */
+    void ReleaseRecording() const;
 
     Opal::Ref<const Device> m_device;
     Opal::Ref<DeviceQueue> m_queue;
@@ -827,6 +828,28 @@ private:
      * const, and what they release is bookkeeping rather than state a caller sees.
      */
     mutable Opal::DynamicArray<VkFramebuffer> m_framebuffers;
+
+    /** The Vulkan structures one CmdDecodeVideo was recorded with, at addresses that stay put. */
+    struct VideoDecodeRecord
+    {
+        VkVideoDecodeInfoKHR decode_info{};
+        VkVideoDecodeH264PictureInfoKHR h264_info{};
+        StdVideoDecodeH264PictureInfo h264_picture{};
+        Opal::DynamicArray<u32> slice_offsets;
+        VkVideoReferenceSlotInfoKHR setup_slot{};
+        VkVideoPictureResourceInfoKHR setup_picture{};
+        VkVideoDecodeH264DpbSlotInfoKHR setup_h264{};
+        StdVideoDecodeH264ReferenceInfo setup_reference{};
+        Opal::DynamicArray<VkVideoReferenceSlotInfoKHR> reference_slots;
+        Opal::DynamicArray<VkVideoPictureResourceInfoKHR> reference_pictures;
+        Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR> reference_h264;
+        Opal::DynamicArray<StdVideoDecodeH264ReferenceInfo> reference_infos;
+    };
+    /**
+     * What each CmdDecodeVideo of this recording handed to Vulkan, kept like the framebuffers until the buffer is recorded
+     * again, reset or freed: the NVIDIA driver reads it again when the buffer is submitted. Mutable for the same reason.
+     */
+    mutable Opal::DynamicArray<Opal::ScopePtr<VideoDecodeRecord>> m_video_decodes;
 };
 
 }  // namespace Rndr::Forge
