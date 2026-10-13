@@ -171,6 +171,23 @@ interface.
   `Opal::GetSeconds` through the swap chain's time domain; Facet keeps, for each frame, the time its tick began and
   gives the window the smoothed time from a tick to its first pixel. Where the extension is missing - Android, unless
   `VK_GOOGLE_display_timing` or the choreographer's expected presentation time stands in - the estimate stays.
+- **Colour from the bitstream.** The player takes a picture's matrix, range, transfer and primaries from the Matroska
+  `Colour` element alone, and guesses BT.709 above 720 lines when it is missing. Many remuxes carry the colour only in
+  the sequence parameter set's VUI: a 4K HEVC clip whose VUI says BT.2020 is drawn through the BT.709 matrix, and an
+  HDR10 file tagged the same way would lose its PQ transfer. The H.264 and H.265 parsers read `video_signal_type` from
+  the VUI, and what the container leaves unspecified is taken from there.
+- **A clock that stops at the end.** Once the last picture is shown and the sound has played out, the clock carries
+  on with the wall clock, so the position runs past the duration for as long as the file stays open. It stops where
+  the file ends.
+- **An end to a stream.** `GetStreamUnderrunCount` counts the end of the material as a dry spell: the mix that empties
+  the ring comes up short and counts before the writer can see the ring is empty, so the player reports one dry spell
+  for every file played to its end, and the advice in [audio.md](audio.md#streams) to stop the sound once
+  `GetStreamQueuedFrames` reaches zero cannot avoid it. The writer says when it has written the last frame, and the
+  mixer does not count running out after that; a write after a flush takes the mark back.
+- **Test files with their real times.** The Matroska files the player's tests mux from the conformance streams give
+  each packet its place in decoding order as its time, so the streams with B pictures show a third to a half of their
+  pictures out of order and the player drops them as late. They are muxed again with the times the pictures are shown
+  at.
 
 ## Open questions
 
