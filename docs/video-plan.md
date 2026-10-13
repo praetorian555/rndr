@@ -171,6 +171,14 @@ interface.
   that ties a stream frame to the file's time moves with it and is published to the main thread atomically, the
   flush for a seek is made on the reader thread where the seek already runs, and the main thread still decides when
   the sound starts, since that waits for the first pictures. No change in the mixer is needed.
+- **Measuring how long a frame takes to reach the screen.** The sound's position takes in what the audio device holds,
+  but a picture made current in an update reaches the screen only when the swap chain shows that frame, some frames
+  later. The player makes each picture current that much early, and estimates the delay as two ticks of its loop.
+  The measured delay replaces the estimate: Forge presents with `VK_EXT_present_timing`, which reports when the first
+  pixel of a present went out (the desktop NVIDIA driver offers it, with that stage), and maps that time onto
+  `Opal::GetSeconds` through the swap chain's time domain; Facet keeps, for each frame, the time its tick began and
+  gives the window the smoothed time from a tick to its first pixel. Where the extension is missing - Android, unless
+  `VK_GOOGLE_display_timing` or the choreographer's expected presentation time stands in - the estimate stays.
 
 ## Open questions
 
