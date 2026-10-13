@@ -110,6 +110,11 @@ void Rndr::AudioSystem::FlushStream(AudioStreamHandle stream)
     m_mixer.FlushStream(stream);
 }
 
+void Rndr::AudioSystem::EndStream(AudioStreamHandle stream)
+{
+    m_mixer.EndStream(stream);
+}
+
 Rndr::u64 Rndr::AudioSystem::GetStreamQueuedFrames(AudioStreamHandle stream) const
 {
     return m_mixer.GetStreamQueuedFrames(stream);

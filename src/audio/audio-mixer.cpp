@@ -517,6 +517,7 @@ Opal::Expected<Rndr::AudioStreamHandle, Rndr::ErrorCode> Rndr::AudioMixer::Creat
         slot.write_frame.Store<Opal::MemoryOrder::Relaxed>(0);
         slot.read_frame.Store<Opal::MemoryOrder::Relaxed>(0);
         slot.flush_frame.Store<Opal::MemoryOrder::Relaxed>(0);
+        slot.end_frame.Store<Opal::MemoryOrder::Relaxed>(k_no_stream_end);
         slot.underrun_count.Store<Opal::MemoryOrder::Relaxed>(0);
         slot.is_dry = false;
         slot.mix_start_frame = 0;
@@ -632,6 +633,10 @@ Rndr::u64 Rndr::AudioMixer::WriteStream(AudioStreamHandle stream, Opal::ArrayVie
     std::copy_n(interleaved.GetData(), first_count * channel_count, slot->samples.GetData() + start * channel_count);
     std::copy_n(interleaved.GetData() + first_count * channel_count, (frame_count - first_count) * channel_count, slot->samples.GetData());
 
+    if (frame_count > 0)
+    {
+        slot->end_frame.Store<Opal::MemoryOrder::Relaxed>(k_no_stream_end);
+    }
     slot->write_frame.Store<Opal::MemoryOrder::Release>(write_frame + frame_count);
     return frame_count;
 }
@@ -655,7 +660,18 @@ void Rndr::AudioMixer::FlushStream(AudioStreamHandle stream)
     {
         return;
     }
+    slot->end_frame.Store<Opal::MemoryOrder::Relaxed>(k_no_stream_end);
     slot->flush_frame.Store<Opal::MemoryOrder::Release>(slot->write_frame.Load<Opal::MemoryOrder::Acquire>());
+}
+
+void Rndr::AudioMixer::EndStream(AudioStreamHandle stream)
+{
+    StreamSlot* slot = FindStream(stream);
+    if (slot == nullptr)
+    {
+        return;
+    }
+    slot->end_frame.Store<Opal::MemoryOrder::Release>(slot->write_frame.Load<Opal::MemoryOrder::Relaxed>());
 }
 
 Rndr::u64 Rndr::AudioMixer::GetStreamQueuedFrames(AudioStreamHandle stream) const
@@ -1078,6 +1094,7 @@ void Rndr::AudioMixer::MixStreamVoice(Voice& voice, Opal::ArrayView<f32> out, f3
     const u64 read_frame = stream.read_frame.Load<Opal::MemoryOrder::Relaxed>();
     const u64 available = stream.write_frame.Load<Opal::MemoryOrder::Acquire>() - read_frame;
     const u64 frame_count = std::min(available, out_frame_count);
+    const bool reaches_end = read_frame + frame_count >= stream.end_frame.Load<Opal::MemoryOrder::Acquire>();
 
     // Past the frames there are, the gains keep ramping over silence, so a stop still finishes.
     u64 played_count = frame_count;
@@ -1123,7 +1140,10 @@ void Rndr::AudioMixer::MixStreamVoice(Voice& voice, Opal::ArrayView<f32> out, f3
     else if (!stream.is_dry && !voice.is_stopping)
     {
         stream.is_dry = true;
-        stream.underrun_count.Store<Opal::MemoryOrder::Relaxed>(stream.underrun_count.Load<Opal::MemoryOrder::Relaxed>() + 1);
+        if (!reaches_end)
+        {
+            stream.underrun_count.Store<Opal::MemoryOrder::Relaxed>(stream.underrun_count.Load<Opal::MemoryOrder::Relaxed>() + 1);
+        }
     }
     if (is_finished)
     {

@@ -230,6 +230,35 @@ TEST_CASE("Mixer stream playback", "[audio]")
         REQUIRE(mixer.GetStreamUnderrunCount(stream) == 2);
     }
 
+    SECTION("An ended stream runs out without a dry spell, until a write or a flush takes the end back")
+    {
+        const AudioStreamHandle stream = CreateStreamOrFail(mixer, {.channel_count = 1, .capacity_frames = 1000});
+        mixer.PlayStream(stream);
+        Write(mixer, stream, CountingFrames(0, 300));
+        mixer.EndStream(stream);
+
+        Opal::DynamicArray<f32> out = Mix(mixer, 400);
+        RequireCounting(out, k_ramp_frames, 300, k_ramp_frames);
+        RequireSilence(out, 300, 400);
+        Mix(mixer, 400);
+        REQUIRE(mixer.GetStreamUnderrunCount(stream) == 0);
+
+        // Written past the end: running out again is a dry spell.
+        Write(mixer, stream, CountingFrames(300, 500));
+        Mix(mixer, 400);
+        Mix(mixer, 400);
+        REQUIRE(mixer.GetStreamUnderrunCount(stream) == 1);
+
+        // Ended, then flushed for a seek: what is written after the flush is not the end.
+        Write(mixer, stream, CountingFrames(800, 100));
+        mixer.EndStream(stream);
+        mixer.FlushStream(stream);
+        Write(mixer, stream, CountingFrames(900, 500));
+        Mix(mixer, 400);
+        Mix(mixer, 400);
+        REQUIRE(mixer.GetStreamUnderrunCount(stream) == 2);
+    }
+
     SECTION("Pausing holds the read position")
     {
         const AudioStreamHandle stream = CreateStreamOrFail(mixer, {.channel_count = 1, .capacity_frames = 1000});

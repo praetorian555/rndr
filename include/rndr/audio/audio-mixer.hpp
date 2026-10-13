@@ -89,7 +89,7 @@ struct AudioMixerCommand
  * be called every frame. Streams are freed the same way.
  *
  * A stream adds a third thread, the writer, which fills the stream's ring buffer while the audio thread drains it.
- * WriteStream, GetStreamFreeFrames and FlushStream are the writer's; the ring's two ends are atomics, so the writer
+ * WriteStream, GetStreamFreeFrames, FlushStream and EndStream are the writer's; the ring's two ends are atomics, so the writer
  * never waits on either of the other threads.
  */
 class AudioMixer
@@ -168,6 +168,13 @@ public:
      * until then they still count against the free frames.
      */
     void FlushStream(AudioStreamHandle stream);
+
+    /**
+     * Writer thread. Marks the frames written so far as the last: running out once they are played is the end of the
+     * material, not a dry spell, and GetStreamUnderrunCount does not count it. The next WriteStream or FlushStream takes
+     * the mark back.
+     */
+    void EndStream(AudioStreamHandle stream);
 
     /** Main thread. Frames written and not yet played or flushed. */
     [[nodiscard]] u64 GetStreamQueuedFrames(AudioStreamHandle stream) const;
@@ -249,6 +256,8 @@ private:
 
     /** Enough segments, one per mix, to cover what a device holds at a few hundred frames a mix. */
     static constexpr u32 k_stream_history_size = 64;
+    /** StreamSlot::end_frame while the writer has not ended the stream. */
+    static constexpr u64 k_no_stream_end = ~0ull;
 
     struct StreamSlot
     {
@@ -263,10 +272,13 @@ private:
         /** Main thread: what PlayStream last started, so a second sound cannot read the ring at the same time. */
         SoundHandle sound;
 
-        // Frames since the stream was made. The writer owns write_frame and flush_frame, the audio thread read_frame.
+        // Frames since the stream was made. The writer owns write_frame, flush_frame and end_frame, the audio thread
+        // read_frame.
         Opal::Atomic<u64> write_frame = 0;
         Opal::Atomic<u64> read_frame = 0;
         Opal::Atomic<u64> flush_frame = 0;
+        /** Where EndStream put the end of the material, or k_no_stream_end. */
+        Opal::Atomic<u64> end_frame = k_no_stream_end;
         Opal::Atomic<u32> underrun_count = 0;
 
         // Audio thread only, from the CreateStream command to the DestroyStream one.

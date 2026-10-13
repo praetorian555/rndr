@@ -143,8 +143,12 @@ ended, its 2 ms stop ramp included. Pausing holds the read position. A stopped s
 next `PlayStream` carries on from there.
 
 **Running dry.** When the writer falls behind, the sound plays silence for what is missing and carries on once frames
-arrive. `GetStreamUnderrunCount` counts the dry spells, once each however long they last. The end of the material is a
-dry spell too, unless the caller stops the sound once `GetStreamQueuedFrames` reaches zero.
+arrive. `GetStreamUnderrunCount` counts the dry spells, once each however long they last. Running out at the end of
+the material is not one when the writer says so: `EndStream`, called after the last `WriteStream`, marks what has been
+written as the end, and the sound plays out to silence without a count. The next `WriteStream` or `FlushStream` takes
+the mark back, so a seek after the end starts counting again. Stopping the sound once `GetStreamQueuedFrames` reaches
+zero does not stand in for it: the mix that empties the ring comes up short, and counts, before the caller can see it
+empty.
 
 **Seeking.** `FlushStream` drops everything written and not yet played; what is written after it plays next. It is the
 writer's call, or any thread's while nothing writes. The audio thread drops the frames at its next mix, so for one
@@ -186,7 +190,9 @@ The audio thread never allocates, locks or blocks.
 
 **Streams.** The ring is single-producer single-consumer: the writer owns the write end and the audio thread the read
 end, both atomic frame counts that only grow, so neither side waits on the other. A flush is a third count the writer
-sets to its write end; the audio thread moves its read end up to it at the start of the next mix. The ring's memory
+sets to its write end; the audio thread moves its read end up to it at the start of the next mix. The end of the
+material is a fourth, which the writer sets to its write end in `EndStream` and back to none with its next write or
+flush; a mix that comes up short with its read end at that count marks the stream dry without counting. The ring's memory
 is freed on the main thread two mixes after `DestroyStream`, as a clip's is.
 
 **Stream position.** The device tells the mixer, with every buffer, how many frames it already holds ahead of it and

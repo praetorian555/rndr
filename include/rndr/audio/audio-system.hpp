@@ -39,8 +39,8 @@ struct AudioSystemDesc
  * fine and every call on it is a no-op. A sound also ends when a sound of at least its priority needs a voice and
  * there is none free, so a handle can go stale without the game asking for it - see PlaySoundDesc::priority.
  *
- * Every method is for the main thread - or any single thread, as long as it is the same one - except the three a
- * stream's writer calls, WriteStream, GetStreamFreeFrames and FlushStream. Nothing needs to be called per frame.
+ * Every method is for the main thread - or any single thread, as long as it is the same one - except the four a
+ * stream's writer calls, WriteStream, GetStreamFreeFrames, FlushStream and EndStream. Nothing needs to be called per frame.
  *
  * A stream is a sound whose samples arrive while it plays, such as the sound of a video being decoded: CreateStream
  * makes a ring buffer, PlayStream plays it as a sound the usual calls control, and a thread of the caller's keeps
@@ -110,6 +110,11 @@ public:
      * seek. The frames still count in GetStreamPosition, which goes on from where the writer's count is.
      */
     void FlushStream(AudioStreamHandle stream);
+    /**
+     * The writer's thread. Marks what has been written as the end of the material, so running out once it is played is
+     * not counted as a dry spell. The next WriteStream or FlushStream takes the mark back.
+     */
+    void EndStream(AudioStreamHandle stream);
 
     /** Frames written and not yet played or flushed. */
     [[nodiscard]] u64 GetStreamQueuedFrames(AudioStreamHandle stream) const;
