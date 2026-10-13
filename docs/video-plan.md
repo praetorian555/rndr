@@ -171,6 +171,25 @@ interface.
   `Opal::GetSeconds` through the swap chain's time domain; Facet keeps, for each frame, the time its tick began and
   gives the window the smoothed time from a tick to its first pixel. Where the extension is missing - Android, unless
   `VK_GOOGLE_display_timing` or the choreographer's expected presentation time stands in - the estimate stays.
+- **Pacing pictures that come as often as the display refreshes.** Each update shows the last picture due by the
+  clock, so 60 pictures a second on a 60 Hz display come due one an update only while the update's own jitter stays
+  clear of the boundary between two pictures. Matroska's millisecond times put 60 pictures a second 17, 17 and 16 ms
+  apart against a steady 16.7 ms refresh, and on an unlucky phase that alone tips the choice back and forth: Jellyfin's
+  4K Dolby Vision 8.1 test file had a repeated picture and a dropped one every fifth update for its whole 30 seconds,
+  with eight pictures decoded ahead the whole time, and a 1080p HEVC file dropped 787 of its 1797 pictures while a
+  download loaded the machine. An update advances one picture, and more only once the clock is a whole update past the
+  next one, which needs the playback to know how long an update is; pictures that come more often than the display
+  refreshes are chosen as now.
+- **Dolby Vision profile 5.** A profile 5 stream has no HDR10 base layer: its pictures are in IPTPQc2 and are shown
+  right only through the reshaping and colour conversion each picture's RPU gives. Drawn as YCbCr they come out green
+  and purple. Web releases on Real-Debrid carry it often. First the player reads the Dolby Vision configuration
+  record from the track's `BlockAdditionMapping` and says in the log that a profile 5 stream is shown without its
+  colour; then it parses the RPU NAL units and converts IPTPQc2 to RGB in the shader, the reshaping curves and the
+  matrices included. Profile 8.1 and 8.4 streams play as their HDR10 or HLG base layer and need nothing.
+- **An MP4 demultiplexer.** Some Real-Debrid files, and every test file Jellyfin publishes, are MP4, which the player
+  cannot open; its tests remux them to Matroska first. The demultiplexer reads `moov` - the tracks, their sample tables
+  and the `avcC`, `hvcC` and `dvcC` boxes - over the range reader, and the samples of `mdat` the tables point at, so a
+  file whose `moov` comes after `mdat` costs one range request to its end.
 
 ## Open questions
 
