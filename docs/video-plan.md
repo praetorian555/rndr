@@ -161,6 +161,17 @@ link), the HTTPS reader with range requests, the Matroska and MP4 demultiplexers
 the clock that paces frames against the audio position, subtitles, tone mapping HDR to the display, and the user
 interface.
 
+## Planned in the player
+
+- **Writing the audio stream from the reader thread.** The player decodes audio on its reader thread, but the main
+  thread takes the decoded chunks and writes them into the stream once a frame. When the main thread stalls - a
+  window dragged or resized holds it in the Win32 modal loop - nothing writes the ring, and the sound runs dry once
+  the second it holds ahead of the speaker is played, though decoded audio waits in the reader. The reader thread
+  writes the ring instead: the ring has one writer and one reader, so only the writer's thread changes. The anchor
+  that ties a stream frame to the file's time moves with it and is published to the main thread atomically, the
+  flush for a seek is made on the reader thread where the seek already runs, and the main thread still decides when
+  the sound starts, since that waits for the first pictures. No change in the mixer is needed.
+
 ## Open questions
 
 - Whether the phone offers Vulkan Video at all: `adb shell cmd gpu vkjson` lists its extensions. If it does, the
