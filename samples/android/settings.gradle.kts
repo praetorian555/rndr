@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "rndr-android"
 include(":modern-vulkan")
+include(":android-video")

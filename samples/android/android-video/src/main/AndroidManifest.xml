@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Forge asks for Vulkan 1.3 and refuses anything less, so the installer and the store refuse it first. -->
+    <uses-feature
+        android:name="android.hardware.vulkan.version"
+        android:required="true"
+        android:version="0x403000" />
+
+    <application
+        android:hasCode="true"
+        android:label="rndr android-video">
+
+        <activity
+            android:name="dev.rndr.RndrActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="android-video" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

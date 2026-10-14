@@ -215,6 +215,16 @@ if (${RNDR_BUILD_SAMPLES})
         target_link_libraries(modern-vulkan shared imgui)
         rndr_deploy_runtime(modern-vulkan)
 
+        # Frames in Android hardware buffers - a test card and a clip MediaCodec decodes - imported and drawn through a
+        # sampler YCbCr conversion. samples/android/ packages it beside modern-vulkan.
+        if (ANDROID)
+            add_library(android-video SHARED samples/android-video/android-video.cpp)
+            rndr_android_activity(android-video)
+            rndr_compile_shader(android-video samples/android-video/android-video.slang main_vertex vertex)
+            rndr_compile_shader(android-video samples/android-video/android-video.slang main_fragment fragment)
+            target_link_libraries(android-video shared mediandk nativewindow)
+        endif ()
+
         # One still NV12 frame drawn through a sampler YCbCr conversion; desktop only, like the practice samples.
         if (NOT ANDROID)
             add_executable(video-frame samples/video-frame/video-frame.cpp)
