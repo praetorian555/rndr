@@ -8,8 +8,10 @@
 #include "opal/container/ref.h"
 
 #include "rndr/bitmap.hpp"
+#include "rndr/definitions.hpp"
 #include "rndr/error-codes.hpp"
 #include "rndr/forge/forward.hpp"
+#include "rndr/forge/physical-device.hpp"
 #include "rndr/forge/types.hpp"
 #include "rndr/forge/video.hpp"
 #include "rndr/graphics-types.hpp"
@@ -17,6 +19,10 @@
 
 // Forward declare handle to avoid vma includes in headers.
 using VmaAllocation = struct VmaAllocation_T*;
+
+#if RNDR_ANDROID
+struct AHardwareBuffer;
+#endif
 
 namespace Rndr::Forge
 {
@@ -82,6 +88,30 @@ public:
     [[nodiscard]] static Opal::Expected<Texture, ErrorCode> Create(const Device& device, VkImage native_image,
                                                                    const TextureDesc& desc = {});
 
+#if RNDR_ANDROID
+    /**
+     * Import an Android hardware buffer - a frame a video decoder wrote into an AImageReader, a camera image - as a
+     * texture shaders sample. Nothing is copied: the texture's memory is the buffer's, in a dedicated allocation.
+     *
+     * A buffer in a format Vulkan has a name for becomes a texture of that format. One in a format only the driver
+     * understands, which is what a decoder usually hands out, becomes a texture of PixelFormat::Undefined whose
+     * GetExternalFormat is the driver's value; like a YCbCr texture it has no view of its own and is read through a
+     * SamplerYcbcrConversion over that external format (GetHardwareBufferProperties gives one). The usage is Sampled.
+     *
+     * Vulkan holds a reference to the buffer while the texture lives, but nothing keeps whoever handed it out from
+     * writing into it again: an AImage is kept until a fence says the GPU has finished every command reading the
+     * texture, and only then given back. A frame that reads the texture acquires it from k_foreign_queue_family first
+     * (TextureBarrier::AcquireFromForeign) and releases it back after (TextureBarrier::ReleaseToForeign).
+     *
+     * @param device Device created with DeviceFeatures::android_hardware_buffer. Has to outlive the texture.
+     * @param buffer The buffer: one layer, created with AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE.
+     * @return The texture, ErrorCode::InvalidArgument when the device lacks the feature, the buffer is null, has more
+     *         than one layer or was not made to be sampled, or a YCbCr format's rules refuse it (see Create above), or
+     *         whatever the failing query, creation or allocation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<Texture, ErrorCode> Create(const Device& device, AHardwareBuffer* buffer);
+#endif
+
     Texture(const Texture&) = delete;
     Texture& operator=(const Texture&) = delete;
     Texture(Texture&& other) noexcept;
@@ -94,6 +124,11 @@ public:
     /** Null for a texture whose usage is transfer only, since Vulkan allows no view on one. */
     [[nodiscard]] VkImageView GetNativeImageView() const { return m_view; }
     [[nodiscard]] const TextureDesc& GetDesc() const { return m_desc; }
+    /**
+     * The driver's format of an imported Android hardware buffer that Vulkan has no name for, or zero for every other
+     * texture. One that has it is of PixelFormat::Undefined and is read through a conversion over the same value.
+     */
+    [[nodiscard]] u64 GetExternalFormat() const { return m_external_format; }
 
     /**
      * Where the image's memory landed. A transient attachment lands in LazilyAllocated memory when the device
@@ -153,6 +188,11 @@ private:
     VkImage m_image = VK_NULL_HANDLE;
     VkImageView m_view = VK_NULL_HANDLE;
     VmaAllocation m_image_allocation = VK_NULL_HANDLE;
+    /** The memory of an imported hardware buffer, which VMA does not know about. */
+    VkDeviceMemory m_imported_memory = VK_NULL_HANDLE;
+    /** The image was created here for an imported buffer, and is destroyed here with the memory beside it. */
+    bool m_is_imported = false;
+    u64 m_external_format = 0;
 };
 
 /** The matrix a SamplerYcbcrConversion turns YCbCr into RGB with. Mirrors VkSamplerYcbcrModelConversion. */
@@ -189,13 +229,36 @@ enum class ChromaLocation : u8
 };
 
 /**
+ * A format only the driver understands, which an Android hardware buffer can be in (GetHardwareBufferProperties). Vulkan
+ * samples an image of one only through a conversion created for the same value, and says what that conversion may do
+ * in the buffer's format features rather than in the device's, so they travel with the value.
+ */
+struct ExternalFormat
+{
+    /** The driver's value. Zero for none, which is every format but an Android hardware buffer's. */
+    u64 value = 0;
+    /**
+     * What a conversion over the format may do. combined_image_sampler_descriptor_count is zero: Vulkan has no query
+     * for an external format, and a pool sized for three per descriptor covers a format of up to three planes.
+     */
+    YcbcrFormatSupport support;
+    /** How the driver's components map onto Y, Cb and Cr, which the conversion has to apply. Identity for most. */
+    VkComponentMapping components{};
+};
+
+/**
  * How a SamplerYcbcrConversion reads a video frame. The defaults are those of high definition H.264 and HEVC: BT.709,
  * narrow range, chroma level with the left luma column and between the two rows, rebuilt linearly.
  */
 struct SamplerYcbcrConversionDesc
 {
-    /** The format of the frames it reads, one that IsYcbcrFormat reports. Views and textures of it have to match. */
+    /**
+     * The format of the frames it reads, one that IsYcbcrFormat reports. Views and textures of it have to match.
+     * PixelFormat::Undefined with an external_format instead.
+     */
     PixelFormat format = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    /** The external format of an imported Android hardware buffer, which needs format Undefined. Only on Android. */
+    ExternalFormat external_format;
     YcbcrModel model = YcbcrModel::Bt709;
     YcbcrRange range = YcbcrRange::Narrow;
     ChromaLocation x_chroma_offset = ChromaLocation::CositedEven;
@@ -224,9 +287,10 @@ public:
     /**
      * @param desc The format and how to read it.
      * @return The conversion, or ErrorCode::InvalidArgument when the device was created without
-     *         DeviceFeatures::sampler_ycbcr_conversion, the format is not a YCbCr one, or the desc asks for what the
-     *         device does not allow of the format (see PhysicalDevice::GetYcbcrFormatSupport) - the log names which -
-     *         or whatever the failing creation maps to.
+     *         DeviceFeatures::sampler_ycbcr_conversion, the format is not a YCbCr one, an external format is given
+     *         beside a format, off Android or without DeviceFeatures::android_hardware_buffer, or the desc asks for
+     *         what the device does not allow of the format (see PhysicalDevice::GetYcbcrFormatSupport, or the external
+     *         format's support) - the log names which - or whatever the failing creation maps to.
      */
     [[nodiscard]] static Opal::Expected<SamplerYcbcrConversion, ErrorCode> Create(const Device& device,
                                                                                   const SamplerYcbcrConversionDesc& desc = {});
@@ -241,12 +305,50 @@ public:
     [[nodiscard]] bool IsValid() const { return m_conversion != VK_NULL_HANDLE; }
     [[nodiscard]] VkSamplerYcbcrConversion GetNativeConversion() const { return m_conversion; }
     [[nodiscard]] const SamplerYcbcrConversionDesc& GetDesc() const { return m_desc; }
+    /** What the format it reads allows: the device's answer for a format, the buffer's for an external one. */
+    [[nodiscard]] const YcbcrFormatSupport& GetFormatSupport() const { return m_support; }
 
 private:
     Opal::Ref<const Device> m_device;
     VkSamplerYcbcrConversion m_conversion = VK_NULL_HANDLE;
     SamplerYcbcrConversionDesc m_desc;
+    YcbcrFormatSupport m_support;
 };
+
+#if RNDR_ANDROID
+/** What the driver says of an Android hardware buffer: how Texture::Create imports it, and how it is read. */
+struct HardwareBufferProperties
+{
+    u32 width = 0;
+    u32 height = 0;
+    /** The buffer's format where Vulkan has a name for it, PixelFormat::Undefined where only the driver knows it. */
+    PixelFormat format = PixelFormat::Undefined;
+    /**
+     * The driver's own format, which a texture of PixelFormat::Undefined is imported in and its conversion created
+     * for. Set for every buffer, but only used when format is Undefined.
+     */
+    ExternalFormat external_format;
+    /**
+     * A conversion for the buffer, with its format or external format filled in and the matrix, range and chroma siting
+     * the driver suggests - what it believes the writer used. A decoder that reports the stream's colour (the colour
+     * standard and range of AMediaCodec's output format) knows better. The chroma filter is linear where allowed.
+     */
+    SamplerYcbcrConversionDesc suggested_conversion;
+};
+
+/**
+ * Ask the driver about an Android hardware buffer before importing it. A stream's frames come in a handful of buffers
+ * that share these, so it is asked once to build the conversion, the layout and the pipeline the frames are drawn with;
+ * a change of external format means those are built again.
+ *
+ * @param device Device created with DeviceFeatures::android_hardware_buffer.
+ * @param buffer The buffer.
+ * @return The properties, ErrorCode::InvalidArgument when the device lacks the feature or the buffer is null, or what
+ *         the failing query maps to.
+ */
+[[nodiscard]] Opal::Expected<HardwareBufferProperties, ErrorCode> GetHardwareBufferProperties(const Device& device,
+                                                                                              AHardwareBuffer* buffer);
+#endif
 
 /** What a TextureView sees of its texture: how the image is interpreted, and which part of it. */
 struct TextureViewDesc
@@ -297,9 +399,10 @@ public:
      * A view of a video frame, read as RGB through a conversion. The only way to sample a texture of a YCbCr format,
      * which has no view of its own; it is bound through a CombinedImageSampler binding whose immutable sampler carries
      * the same conversion.
-     * @param conversion How the frame is read. It has to outlive the view, and its format has to be the texture's.
-     * @return The view, ErrorCode::InvalidArgument when the conversion is empty or of another format, or what the
-     *         overload above refuses.
+     * @param conversion How the frame is read. It has to outlive the view, and its format and external format have to
+     *                   be the texture's.
+     * @return The view, ErrorCode::InvalidArgument when the conversion is empty or of another format or external
+     *         format, or what the overload above refuses.
      */
     [[nodiscard]] static Opal::Expected<TextureView, ErrorCode> Create(const Device& device, const Texture& texture,
                                                                        const SamplerYcbcrConversion& conversion,

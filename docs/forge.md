@@ -329,6 +329,85 @@ the display wants; an sRGB target would encode it a second time. HDR content - B
 needs tone mapping after the conversion. `samples/video-frame` draws one frame this way in each of the three formats,
 Space switching between them.
 
+### Android hardware buffers
+
+On Android a video frame arrives in an `AHardwareBuffer`: `AMediaCodec` decodes into the surface of an `AImageReader`,
+and each `AImage` the reader hands out is a buffer the GPU samples where the decoder wrote it. Forge imports such a
+buffer as a texture without copying it. The device is created with `DeviceFeatures::android_hardware_buffer`, which
+turns on `VK_ANDROID_external_memory_android_hardware_buffer` and `VK_EXT_queue_family_foreign` (what they build on is
+core in 1.1), and with `sampler_ycbcr_conversion` for anything but an RGB buffer. Off Android the feature is never
+supported.
+
+`GetHardwareBufferProperties` asks the driver about a buffer before it is imported. A buffer is in a format Vulkan
+has a name for - `PixelFormat` then says which - or, as a decoder's output usually is, in an *external format*: a
+64-bit value only the driver understands. The properties give both, what the format allows a conversion
+(`ExternalFormat::support`, read from the buffer's format features rather than from the device), and a conversion
+desc with the matrix, the range and the chroma siting the driver suggests. The decoder knows the stream's colour
+better than the driver guesses it: the colour standard and range in `AMediaCodec`'s output format override the
+suggestion where they are given.
+
+```cpp
+const HardwareBufferProperties properties = GetHardwareBufferProperties(device, buffer).GetValue();
+SamplerYcbcrConversionDesc desc = properties.suggested_conversion;  // format Undefined, external_format set
+const auto conversion = SamplerYcbcrConversion::Create(device, desc);
+const auto sampler = Sampler::Create(device, {.min_filter = desc.chroma_filter, .mag_filter = desc.chroma_filter, /* Clamp */}, conversion.GetValue());
+const auto texture = Texture::Create(device, buffer);
+const auto view = TextureView::Create(device, texture.GetValue(), conversion.GetValue());
+```
+
+`Texture::Create` from a buffer creates the image with the external memory flags - with `PixelFormat::Undefined` and
+the external format chained when only the driver knows the format - and imports the buffer's memory into a dedicated
+allocation of its own, outside VMA. The usage is `Sampled` alone, so copies and barriers into other layouts are
+refused the way they are for any texture without the usage. An external-format texture, like a YCbCr one, has no view
+of its own, and `GetExternalFormat` says which value it was imported with. A conversion over an external format takes
+`format = PixelFormat::Undefined` and `external_format` from the properties, applies the component swizzle the
+driver gives, and is checked against the buffer's format features; a view checks that its conversion is for the
+texture's external format, and a sampler that its filters are what that format allows. That last one matters more
+here than on the desktop: an external format often allows no linear filtering at all
+(`YcbcrFormatSupport::linear_filter`), and a sampler whose min, mag or mip filter is `Linear` - `SamplerDesc`'s
+default - then breaks a rule Vulkan only checks at draw time. The suggested conversion's chroma filter is linear only
+where both linear filters are allowed. Where the buffer's format has a name, the import is checked against what the
+device reports it can import; an external format has no such query.
+
+The rest of what was said of a YCbCr frame holds: the sampler goes into the layout as an immutable sampler, so the
+layout and the pipeline are built for one external format and one colour. A stream keeps one external format for its
+frames, but a new decoder, or a stream that changes resolution, can hand out another, and then they are built again.
+Vulkan has no query for how many descriptors a combined image sampler of an external format takes, so a pool is sized
+for three per descriptor, which covers a format of up to three planes.
+
+**Lifetime.** The texture holds a reference to the buffer through Vulkan for as long as it lives, but nothing in it
+keeps the decoder from writing into that buffer again: the `AImage` it came in is kept until a fence says the GPU has
+finished every frame that read it, and only then deleted, which gives the buffer back to the reader. A decoder cycles
+through a fixed set of buffers - more than the reader's image count: seventeen on the emulator for a reader of six -
+so importing each once and keeping the texture, the view and the descriptor set by buffer is what a player does, with
+room for more buffers than it expects; Forge does not cache. A cached buffer is kept with a reference of the caller's own
+(`AHardwareBuffer_acquire`), so that its pointer is not reused for another buffer while it is a key.
+
+**Ownership.** The decoder writes the buffer outside Vulkan, so each frame that samples it acquires it from
+`k_foreign_queue_family` first and releases it back after: `TextureBarrier::AcquireFromForeign(texture, queue)` before
+the pass, `TextureBarrier::ReleaseToForeign(texture, queue)` after it. The acquire's old layout is `Undefined`
+whatever the texture tracks, since the writer leaves it in no layout Vulkan knows; coming from the foreign family that
+keeps the contents rather than discarding them, which the test card below checks. A barrier naming the foreign family
+on a device without the feature is refused.
+
+`samples/android-video` draws both kinds: a test card the CPU writes into a YUV buffer of its own
+(`AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420`, the picture `samples/video-frame` draws), and a clip pushed to the app's
+external files directory, decoded by `AMediaCodec` into an `AImageReader` and played in a loop; a tap switches between
+them. It is packaged by `samples/android/` beside `modern-vulkan`, debuggable with the validation layer:
+
+    cd samples/android
+    ./gradlew :android-video:installDebug '-Prndr.abis=x86_64'     # the emulator; arm64-v8a, the default, for a phone
+    adb push clip.mkv /sdcard/Android/data/dev.rndr.androidvideo/files/clip.mkv
+    adb shell am start -n dev.rndr.androidvideo/dev.rndr.RndrActivity
+
+Checked on the emulator (API 36, `-gpu host` on an RTX 5060 Ti) on 2026-10-14: the test card and an H.264 clip both
+draw right, the clip paced at its 30 frames a second, each of its buffers imported once, through a background and a
+return. Both kinds of buffer come as `AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420` in an external format (`YV12`'s fourcc).
+The validation layer reports `VUID-VkImportAndroidHardwareBufferInfoANDROID-buffer-09863` - import not supported - for
+every import, and nothing else. The driver reports importing `G8_B8R8_2PLANE_420_UNORM` from such a buffer as
+supported, and the frames import and draw, so the report looks like the layer's own query rather than the import; a
+phone is what settles it.
+
 ---
 
 ## Video decode

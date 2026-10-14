@@ -43,6 +43,12 @@ struct YcbcrFormatSupport
     bool midpoint_chroma = false;
     /** A conversion may rebuild the chroma between its samples with a linear filter. */
     bool linear_chroma_filter = false;
+    /**
+     * A sampler may filter linearly between texels and between mips: a sampler whose min_filter, mag_filter or
+     * mip_map_filter is Linear needs it. Desktop drivers allow it for their YCbCr formats; a hardware buffer's
+     * external format often does not.
+     */
+    bool linear_filter = false;
     /** A sampler of the format may filter with something other than the conversion's chroma filter. */
     bool separate_reconstruction_filter = false;
     /** A conversion may set force_explicit_reconstruction. */
@@ -53,6 +59,16 @@ struct YcbcrFormatSupport
      */
     u32 combined_image_sampler_descriptor_count = 0;
 };
+
+/**
+ * What a set of format features allows a conversion, apart from combined_image_sampler_descriptor_count, which the
+ * features do not say. PhysicalDevice::GetYcbcrFormatSupport reads a format's through this, and an Android hardware
+ * buffer's format features (GetHardwareBufferProperties) go through it too.
+ *
+ * @param features The features of an optimally tiled image of the format.
+ * @return Everything false when the features do not include sampling.
+ */
+[[nodiscard]] YcbcrFormatSupport ReadYcbcrFormatFeatures(VkFormatFeatureFlags features);
 
 class PhysicalDevice
 {

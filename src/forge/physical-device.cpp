@@ -247,14 +247,9 @@ bool Rndr::Forge::PhysicalDevice::SupportsBlit(PixelFormat format, bool as_sourc
     return (features & required) != 0;
 }
 
-Rndr::Forge::YcbcrFormatSupport Rndr::Forge::PhysicalDevice::GetYcbcrFormatSupport(PixelFormat format) const
+Rndr::Forge::YcbcrFormatSupport Rndr::Forge::ReadYcbcrFormatFeatures(VkFormatFeatureFlags features)
 {
     YcbcrFormatSupport support;
-    if (!IsYcbcrFormat(format))
-    {
-        return support;
-    }
-    const VkFormatFeatureFlags features = GetOptimalTilingFeatures(m_physical_device, format);
     support.sampled = (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0;
     if (!support.sampled)
     {
@@ -264,9 +259,25 @@ Rndr::Forge::YcbcrFormatSupport Rndr::Forge::PhysicalDevice::GetYcbcrFormatSuppo
     support.cosited_chroma = (features & VK_FORMAT_FEATURE_COSITED_CHROMA_SAMPLES_BIT) != 0;
     support.midpoint_chroma = (features & VK_FORMAT_FEATURE_MIDPOINT_CHROMA_SAMPLES_BIT) != 0;
     support.linear_chroma_filter = (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER_BIT) != 0;
+    support.linear_filter = (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
     support.separate_reconstruction_filter = (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_SEPARATE_RECONSTRUCTION_FILTER_BIT) != 0;
     support.explicit_reconstruction_forceable =
         (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_CHROMA_RECONSTRUCTION_EXPLICIT_FORCEABLE_BIT) != 0;
+    return support;
+}
+
+Rndr::Forge::YcbcrFormatSupport Rndr::Forge::PhysicalDevice::GetYcbcrFormatSupport(PixelFormat format) const
+{
+    YcbcrFormatSupport support;
+    if (!IsYcbcrFormat(format))
+    {
+        return support;
+    }
+    support = ReadYcbcrFormatFeatures(GetOptimalTilingFeatures(m_physical_device, format));
+    if (!support.sampled)
+    {
+        return support;
+    }
 
     const VkPhysicalDeviceImageFormatInfo2 format_info{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
                                                        .format = ToVkFormat(format),

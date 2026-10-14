@@ -336,6 +336,43 @@ Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::ToPresent(Texture& text
             .texture = texture};
 }
 
+Rndr::Forge::TextureBarrier Rndr::Forge::TextureBarrier::AcquireFromForeign(Texture& texture, const DeviceQueue& queue,
+                                                                            PipelineStageBits reader)
+{
+    // The writer's side of the transfer is outside Vulkan, so nothing on this side waits for it.
+    return {.stages_must_finish = PipelineStageBits::None,
+            .stages_must_finish_access = PipelineStageAccessBits::None,
+            .before_stages_start = reader,
+            .before_stages_start_access = PipelineStageAccessBits::ShaderRead,
+            .old_layout = ImageLayout::Undefined,
+            .new_layout = ImageLayout::ShaderReadOnly,
+            .source_queue_family = k_foreign_queue_family,
+            .destination_queue_family = queue.GetQueueFamilyIndex(),
+            .texture = texture};
+}
+
+Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ReleaseToForeign(Texture& texture,
+                                                                                                           const DeviceQueue& queue,
+                                                                                                           PipelineStageBits reader)
+{
+    using Result = Opal::Expected<TextureBarrier, ErrorCode>;
+
+    const Opal::Expected<ImageLayout, ErrorCode> layout = texture.GetCurrentLayout();
+    if (!layout.HasValue())
+    {
+        return Result(layout.GetError());
+    }
+    return Result(TextureBarrier{.stages_must_finish = reader,
+                                 .stages_must_finish_access = PipelineStageAccessBits::ShaderRead,
+                                 .before_stages_start = PipelineStageBits::None,
+                                 .before_stages_start_access = PipelineStageAccessBits::None,
+                                 .old_layout = layout.GetValue(),
+                                 .new_layout = layout.GetValue(),
+                                 .source_queue_family = queue.GetQueueFamilyIndex(),
+                                 .destination_queue_family = k_foreign_queue_family,
+                                 .texture = texture});
+}
+
 Opal::Expected<Rndr::Forge::TextureBarrier, Rndr::ErrorCode> Rndr::Forge::TextureBarrier::ToColorAttachment(Texture& texture)
 {
     return FromCurrentLayout(texture, [](Texture& t, ImageLayout layout) { return ToColorAttachment(t, layout); });

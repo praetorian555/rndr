@@ -587,6 +587,12 @@ OPAL_ENUM_CLASS_FLAGS(PipelineStageAccessBits)
 /** Everything a queue family index can be when a barrier is not transferring ownership. Mirrors VK_QUEUE_FAMILY_IGNORED. */
 static constexpr u32 k_ignored_queue_family = 0xFFFFFFFF;
 
+/**
+ * The queue family of everything outside Vulkan that shares a resource with it - on Android, the video decoder or the
+ * camera writing into a hardware buffer. Mirrors VK_QUEUE_FAMILY_FOREIGN_EXT, and needs DeviceFeatures::android_hardware_buffer.
+ */
+static constexpr u32 k_foreign_queue_family = 0xFFFFFFFD;
+
 /** What a dependency covers beyond the resources it names. Mirrors VkDependencyFlagBits. */
 enum class DependencyFlagBits : u8
 {

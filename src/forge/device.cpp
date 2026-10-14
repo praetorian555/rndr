@@ -103,6 +103,13 @@ constexpr const char* k_dynamic_rendering_extensions[] = {
 #endif
 
 /**
+ * What DeviceFeatures::android_hardware_buffer pulls in. Spelled out rather than through the Android header's macro, so
+ * that a desktop build asks for the same names and finds them missing. What they depend on is core in 1.1.
+ */
+constexpr const char* k_android_hardware_buffer_extensions[] = {"VK_ANDROID_external_memory_android_hardware_buffer",
+                                                                VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME};
+
+/**
  * Every feature structure Vulkan keeps its features in, chained together once. It exists so that the mapping
  * from Forge's flat DeviceFeatures onto them is written in one place and used twice: to ask the device what
  * it supports, and to tell it what to enable.
@@ -151,6 +158,8 @@ struct FeatureChain
     /** Whether vk11, vk12 and vk13 are chained themselves, for a device used at 1.3, rather than the structures above. */
     bool uses_version_structures = false;
 #endif
+    /** Whether both android_hardware_buffer extensions are in, which carry no feature structure. */
+    bool has_android_hardware_buffer = false;
 
     /**
      * Chaining a structure that belongs to an extension the device does not have is not allowed, so each of
@@ -206,6 +215,11 @@ struct FeatureChain
         AppendIf(has_extension(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME), &local_read);
         AppendIf(has_extension(VK_EXT_PRESENT_TIMING_EXTENSION_NAME), &present_timing);
         AppendIf(has_extension(VK_KHR_PRESENT_ID_2_EXTENSION_NAME), &present_id2);
+        has_android_hardware_buffer = true;
+        for (const char* name : k_android_hardware_buffer_extensions)
+        {
+            has_android_hardware_buffer = has_android_hardware_buffer && has_extension(name);
+        }
     }
 
     FeatureChain(const FeatureChain&) = delete;
@@ -414,6 +428,7 @@ struct FeatureChain
         features.index_type_uint8 = index_type_uint8.indexTypeUint8 == VK_TRUE;
         features.dynamic_rendering_local_read = local_read.dynamicRenderingLocalRead == VK_TRUE;
         features.present_timing = present_timing.presentTiming == VK_TRUE && present_id2.presentId2 == VK_TRUE;
+        features.android_hardware_buffer = has_android_hardware_buffer;
     }
 
 private:
@@ -502,6 +517,13 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
         extensions.PushBack(VK_EXT_PRESENT_TIMING_EXTENSION_NAME);
         extensions.PushBack(VK_KHR_PRESENT_ID_2_EXTENSION_NAME);
         extensions.PushBack(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+    }
+    if (features.android_hardware_buffer)
+    {
+        for (const char* name : k_android_hardware_buffer_extensions)
+        {
+            extensions.PushBack(name);
+        }
     }
     if (desc.use_decode_queue)
     {
@@ -720,6 +742,7 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     require(requested.present_timing,
             has_present_timing_extensions && supported.present_timing.presentTiming == VK_TRUE ? supported.present_id2.presentId2 : VK_FALSE,
             "present_timing");
+    require(requested.android_hardware_buffer, supported.has_android_hardware_buffer ? VK_TRUE : VK_FALSE, "android_hardware_buffer");
     return missing;
 }
 

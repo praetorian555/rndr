@@ -18210,6 +18210,40 @@ TEST_CASE("Forge a video frame sampled through a YCbCr conversion", "[forge]")
     }
 }
 
+TEST_CASE("Forge refuses what an Android hardware buffer needs on a device without the feature", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+#if !RNDR_ANDROID
+    // The extensions are Android's, so no desktop device has them.
+    REQUIRE_FALSE(CanCreateDevice({.android_hardware_buffer = true}));
+#endif
+    constexpr Forge::DeviceFeatures k_ycbcr{.sampler_ycbcr_conversion = true};
+    if (!CanCreateDevice(k_ycbcr))
+    {
+        SKIP("This device has no sampler YCbCr conversion.");
+    }
+    ForgeFixture fixture(k_ycbcr);
+
+    // A conversion over an external format needs the feature, and Undefined as its format.
+    const Forge::SamplerYcbcrConversionDesc external{.format = PixelFormat::Undefined, .external_format = {.value = 1}};
+    REQUIRE(Forge::SamplerYcbcrConversion::Create(fixture.device, external).GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+
+    // So does a barrier that hands a texture to or from the foreign queue family.
+    Forge::Texture texture =
+        ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = PixelFormat::R8G8B8A8_UNORM, .width = 4, .height = 4}));
+    REQUIRE(Forge::ImmediateSubmit(fixture.device, fixture.GetQueue(),
+                                   [&](Forge::CommandBuffer& command_buffer)
+                                   {
+                                       REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::AcquireFromForeign(
+                                                   texture, fixture.GetQueue())) == ErrorCode::InvalidArgument);
+                                       REQUIRE(texture.GetCurrentLayout().GetValue() == Forge::ImageLayout::Undefined);
+                                   }) == ErrorCode::Success);
+    REQUIRE_NO_VALIDATION_ERROR(fixture);
+}
+
 namespace
 {
 

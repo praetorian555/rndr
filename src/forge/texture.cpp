@@ -1,5 +1,9 @@
 #include "rndr/forge/texture.hpp"
 
+#if RNDR_ANDROID
+#include <android/hardware_buffer.h>
+#endif
+
 #include "vk_mem_alloc.h"
 
 #include "rndr/forge/buffer.hpp"
@@ -459,6 +463,234 @@ Rndr::ErrorCode Rndr::Forge::Texture::Init(const Device& device, const TextureDe
     return ErrorCode::Success;
 }
 
+#if RNDR_ANDROID
+namespace
+{
+/** A buffer's desc and what the driver says of it, asked together. Points into itself, so it is never copied. */
+struct HardwareBufferQuery
+{
+    AHardwareBuffer_Desc desc{};
+    VkAndroidHardwareBufferFormatPropertiesANDROID format{.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID};
+    VkAndroidHardwareBufferPropertiesANDROID properties{.sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID};
+
+    HardwareBufferQuery() = default;
+    HardwareBufferQuery(const HardwareBufferQuery&) = delete;
+    HardwareBufferQuery& operator=(const HardwareBufferQuery&) = delete;
+};
+}  // namespace
+
+static Rndr::ErrorCode QueryHardwareBuffer(const Rndr::Forge::Device& device, AHardwareBuffer* buffer, HardwareBufferQuery& query)
+{
+    using namespace Rndr;
+    if (!device.GetEnabledFeatures().android_hardware_buffer)
+    {
+        RNDR_LOG_ERROR("Forge: an Android hardware buffer needs the device created with DeviceFeatures::android_hardware_buffer");
+        return ErrorCode::InvalidArgument;
+    }
+    if (buffer == nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: the Android hardware buffer is null");
+        return ErrorCode::InvalidArgument;
+    }
+    AHardwareBuffer_describe(buffer, &query.desc);
+    query.properties.pNext = &query.format;
+    RNDR_FORGE_VK_CHECK(vkGetAndroidHardwareBufferPropertiesANDROID(device.GetNativeDevice(), buffer, &query.properties),
+                        "vkGetAndroidHardwareBufferPropertiesANDROID");
+    return ErrorCode::Success;
+}
+
+/** The buffer's format where PixelFormat has it, Undefined where it does not or only the driver knows it. */
+static Rndr::PixelFormat FromHardwareBufferFormat(VkFormat format)
+{
+    const Rndr::PixelFormat pixel_format = Rndr::FromVkFormat(format);
+    return Rndr::ToVkFormat(pixel_format) == format ? pixel_format : Rndr::PixelFormat::Undefined;
+}
+
+static Rndr::Forge::ExternalFormat ReadExternalFormat(const HardwareBufferQuery& query)
+{
+    return {.value = query.format.externalFormat,
+            .support = Rndr::Forge::ReadYcbcrFormatFeatures(query.format.formatFeatures),
+            .components = query.format.samplerYcbcrConversionComponents};
+}
+
+Opal::Expected<Rndr::Forge::HardwareBufferProperties, Rndr::ErrorCode> Rndr::Forge::GetHardwareBufferProperties(const Device& device,
+                                                                                                                AHardwareBuffer* buffer)
+{
+    using Result = Opal::Expected<HardwareBufferProperties, ErrorCode>;
+
+    HardwareBufferQuery query;
+    RNDR_FORGE_CHECK_EXPECTED(QueryHardwareBuffer(device, buffer, query), Result);
+    HardwareBufferProperties properties;
+    properties.width = query.desc.width;
+    properties.height = query.desc.height;
+    properties.format = FromHardwareBufferFormat(query.format.format);
+    properties.external_format = ReadExternalFormat(query);
+
+    // The suggestions are Vulkan's enums, which the Forge ones mirror; one past them is left at the desc's default.
+    SamplerYcbcrConversionDesc& conversion = properties.suggested_conversion;
+    const bool is_external = properties.format == PixelFormat::Undefined;
+    conversion.format = properties.format;
+    if (is_external)
+    {
+        conversion.external_format = properties.external_format;
+    }
+    if (query.format.suggestedYcbcrModel <= VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_2020)
+    {
+        conversion.model = static_cast<YcbcrModel>(query.format.suggestedYcbcrModel);
+    }
+    if (query.format.suggestedYcbcrRange <= VK_SAMPLER_YCBCR_RANGE_ITU_NARROW)
+    {
+        conversion.range = static_cast<YcbcrRange>(query.format.suggestedYcbcrRange);
+    }
+    if (query.format.suggestedXChromaOffset <= VK_CHROMA_LOCATION_MIDPOINT)
+    {
+        conversion.x_chroma_offset = static_cast<ChromaLocation>(query.format.suggestedXChromaOffset);
+    }
+    if (query.format.suggestedYChromaOffset <= VK_CHROMA_LOCATION_MIDPOINT)
+    {
+        conversion.y_chroma_offset = static_cast<ChromaLocation>(query.format.suggestedYChromaOffset);
+    }
+    const YcbcrFormatSupport support =
+        is_external ? properties.external_format.support : device.GetPhysicalDevice().GetYcbcrFormatSupport(properties.format);
+    // A sampler filters the way the conversion does, so linear chroma also needs linear filtering of the format.
+    conversion.chroma_filter = support.linear_chroma_filter && support.linear_filter ? ImageFilter::Linear : ImageFilter::Nearest;
+    return Result(std::move(properties));
+}
+
+Opal::Expected<Rndr::Forge::Texture, Rndr::ErrorCode> Rndr::Forge::Texture::Create(const Device& device, AHardwareBuffer* buffer)
+{
+    using Result = Opal::Expected<Texture, ErrorCode>;
+
+    HardwareBufferQuery query;
+    RNDR_FORGE_CHECK_EXPECTED(QueryHardwareBuffer(device, buffer, query), Result);
+    if (query.desc.layers != 1)
+    {
+        RNDR_LOG_ERROR("Forge: an imported Android hardware buffer has one layer, and this one has {}", query.desc.layers);
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if ((query.desc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) == 0)
+    {
+        RNDR_LOG_ERROR("Forge: an imported Android hardware buffer is created with AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (query.properties.memoryTypeBits == 0)
+    {
+        RNDR_LOG_ERROR("Forge: the driver offers no memory type to import this Android hardware buffer into");
+        return Result(ErrorCode::FeatureNotSupported);
+    }
+
+    const PixelFormat format = FromHardwareBufferFormat(query.format.format);
+    const bool is_external = format == PixelFormat::Undefined;
+    // A buffer that says its mips are all there has to be imported with all of them.
+    const u32 mip_level_count =
+        (query.desc.usage & AHARDWAREBUFFER_USAGE_GPU_MIPMAP_COMPLETE) != 0 ? FullMipCount(query.desc.width, query.desc.height, 1) : 1;
+    const TextureDesc desc{.format = format,
+                           .width = query.desc.width,
+                           .height = query.desc.height,
+                           .mip_level_count = mip_level_count,
+                           .usage = TextureUsageBits::Sampled};
+    if (IsYcbcrFormat(format))
+    {
+        RNDR_FORGE_CHECK_EXPECTED(CheckYcbcrTexture(device, desc), Result);
+    }
+    // Vulkan asks that the import be one the device reports it can make, which it can only be asked of a format it has
+    // a name for; for an external format the buffer's properties are the whole answer.
+    if (!is_external)
+    {
+        const VkPhysicalDeviceExternalImageFormatInfo external_info{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
+            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID};
+        const VkPhysicalDeviceImageFormatInfo2 format_info{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+                                                           .pNext = &external_info,
+                                                           .format = ToVkFormat(format),
+                                                           .type = VK_IMAGE_TYPE_2D,
+                                                           .tiling = VK_IMAGE_TILING_OPTIMAL,
+                                                           .usage = VK_IMAGE_USAGE_SAMPLED_BIT};
+        VkExternalImageFormatProperties external_properties{.sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES};
+        VkImageFormatProperties2 format_properties{.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, .pNext = &external_properties};
+        const VkResult result = vkGetPhysicalDeviceImageFormatProperties2(device.GetPhysicalDevice().GetNativePhysicalDevice(),
+                                                                          &format_info, &format_properties);
+        if (result != VK_SUCCESS ||
+            (external_properties.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT) == 0)
+        {
+            RNDR_LOG_ERROR("Forge: this device cannot import an Android hardware buffer of format {} to be sampled",
+                           static_cast<u32>(format));
+            return Result(ErrorCode::FeatureNotSupported);
+        }
+    }
+
+    Texture texture;
+    texture.m_device = device;
+    texture.m_desc = desc;
+    texture.m_layouts = Opal::DynamicArray<ImageLayout>(SubresourceCount(desc), ImageLayout::Undefined);
+    texture.m_external_format = is_external ? query.format.externalFormat : 0;
+    texture.m_is_imported = true;
+
+    // A zero external format chained says there is none, which the known-format path relies on.
+    const VkExternalFormatANDROID external_format{.sType = VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID,
+                                                  .externalFormat = texture.m_external_format};
+    const VkExternalMemoryImageCreateInfo external_memory{
+        .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+        .pNext = &external_format,
+        .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID};
+    const VkImageCreateInfo image_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext = &external_memory,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = ToVkFormat(format),
+        .extent = {.width = desc.width, .height = desc.height, .depth = 1},
+        .mipLevels = desc.mip_level_count,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateImage(device.GetNativeDevice(), &image_create_info, nullptr, &texture.m_image), "vkCreateImage",
+                                 Result);
+
+    // Any of the types the driver offers takes the buffer; the lowest is as good as the rest.
+    u32 memory_type_index = 0;
+    while ((query.properties.memoryTypeBits & (1u << memory_type_index)) == 0)
+    {
+        ++memory_type_index;
+    }
+    const VkImportAndroidHardwareBufferInfoANDROID import_info{.sType = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID,
+                                                               .buffer = buffer};
+    const VkMemoryDedicatedAllocateInfo dedicated_info{
+        .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .pNext = &import_info, .image = texture.m_image};
+    const VkMemoryAllocateInfo allocate_info{.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                             .pNext = &dedicated_info,
+                                             .allocationSize = query.properties.allocationSize,
+                                             .memoryTypeIndex = memory_type_index};
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkAllocateMemory(device.GetNativeDevice(), &allocate_info, nullptr, &texture.m_imported_memory),
+                                 "vkAllocateMemory", Result);
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkBindImageMemory(device.GetNativeDevice(), texture.m_image, texture.m_imported_memory, 0),
+                                 "vkBindImageMemory", Result);
+
+    // Read through a conversion, like any YCbCr texture, when the format is the driver's or a YCbCr one.
+    if (is_external || IsYcbcrFormat(format))
+    {
+        return Result(std::move(texture));
+    }
+    const VkImageViewCreateInfo image_view_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = texture.m_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = ToVkFormat(format),
+        .subresourceRange = {.aspectMask = static_cast<VkImageAspectFlags>(desc.subresource_range.ResolveAspectMask(format)),
+                             .baseMipLevel = 0,
+                             .levelCount = desc.mip_level_count,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1},
+    };
+    RNDR_FORGE_VK_CHECK_EXPECTED(vkCreateImageView(device.GetNativeDevice(), &image_view_create_info, nullptr, &texture.m_view),
+                                 "vkCreateImageView", Result);
+    return Result(std::move(texture));
+}
+#endif
+
 Rndr::Forge::Texture::~Texture()
 {
     Destroy();
@@ -470,12 +702,18 @@ Rndr::Forge::Texture::Texture(Texture&& other) noexcept
       m_device(std::move(other.m_device)),
       m_image(other.m_image),
       m_view(other.m_view),
-      m_image_allocation(other.m_image_allocation)
+      m_image_allocation(other.m_image_allocation),
+      m_imported_memory(other.m_imported_memory),
+      m_is_imported(other.m_is_imported),
+      m_external_format(other.m_external_format)
 {
     other.m_layouts.Clear();
     other.m_image = VK_NULL_HANDLE;
     other.m_image_allocation = VK_NULL_HANDLE;
     other.m_view = VK_NULL_HANDLE;
+    other.m_imported_memory = VK_NULL_HANDLE;
+    other.m_is_imported = false;
+    other.m_external_format = 0;
     other.m_device = nullptr;
 }
 
@@ -490,10 +728,16 @@ Rndr::Forge::Texture& Rndr::Forge::Texture::operator=(Texture&& other) noexcept
         m_image = other.m_image;
         m_image_allocation = other.m_image_allocation;
         m_view = other.m_view;
+        m_imported_memory = other.m_imported_memory;
+        m_is_imported = other.m_is_imported;
+        m_external_format = other.m_external_format;
         other.m_layouts.Clear();
         other.m_image = VK_NULL_HANDLE;
         other.m_image_allocation = VK_NULL_HANDLE;
         other.m_view = VK_NULL_HANDLE;
+        other.m_imported_memory = VK_NULL_HANDLE;
+        other.m_is_imported = false;
+        other.m_external_format = 0;
         other.m_device = nullptr;
     }
     return *this;
@@ -506,7 +750,23 @@ void Rndr::Forge::Texture::Destroy()
         vkDestroyImageView(m_device->GetNativeDevice(), m_view, nullptr);
         m_view = VK_NULL_HANDLE;
     }
-    if (m_image != VK_NULL_HANDLE && m_image_allocation != VK_NULL_HANDLE)
+    m_external_format = 0;
+    if (m_is_imported)
+    {
+        // The image goes before the memory bound to it.
+        if (m_image != VK_NULL_HANDLE)
+        {
+            vkDestroyImage(m_device->GetNativeDevice(), m_image, nullptr);
+            m_image = VK_NULL_HANDLE;
+        }
+        if (m_imported_memory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(m_device->GetNativeDevice(), m_imported_memory, nullptr);
+            m_imported_memory = VK_NULL_HANDLE;
+        }
+        m_is_imported = false;
+    }
+    else if (m_image != VK_NULL_HANDLE && m_image_allocation != VK_NULL_HANDLE)
     {
         vmaDestroyImage(m_device->GetGPUAllocator(), m_image, m_image_allocation);
         m_image = VK_NULL_HANDLE;
@@ -642,10 +902,12 @@ Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureVi
 {
     // Only a view that is sampled reads through a conversion; one a video decode writes does not.
     const TextureUsageBits view_usage = desc.usage != TextureUsageBits::None ? desc.usage : texture.GetDesc().usage;
-    if (texture.IsValid() && IsYcbcrFormat(texture.GetDesc().format) && !!(view_usage & TextureUsageBits::Sampled))
+    const bool needs_conversion = IsYcbcrFormat(texture.GetDesc().format) || texture.GetExternalFormat() != 0;
+    if (texture.IsValid() && needs_conversion && !!(view_usage & TextureUsageBits::Sampled))
     {
-        RNDR_LOG_ERROR("Forge: a sampled view of a YCbCr texture needs a SamplerYcbcrConversion, which the other TextureView::Create takes; "
-                       "a view that is not sampled says so in TextureViewDesc::usage");
+        RNDR_LOG_ERROR(
+            "Forge: a sampled view of a YCbCr texture, or of one in an external format, needs a SamplerYcbcrConversion, which "
+            "the other TextureView::Create takes; a view that is not sampled says so in TextureViewDesc::usage");
         return Opal::Expected<TextureView, ErrorCode>(ErrorCode::InvalidArgument);
     }
     return CreateView(device, texture, nullptr, desc);
@@ -666,6 +928,12 @@ Opal::Expected<Rndr::Forge::TextureView, Rndr::ErrorCode> Rndr::Forge::TextureVi
     {
         RNDR_LOG_ERROR("Forge: a view's conversion has to be for the texture's format, {}, and is for {}", static_cast<u32>(texture.GetDesc().format),
                        static_cast<u32>(conversion.GetDesc().format));
+        return Result(ErrorCode::InvalidArgument);
+    }
+    if (texture.IsValid() && texture.GetExternalFormat() != conversion.GetDesc().external_format.value)
+    {
+        RNDR_LOG_ERROR("Forge: a view's conversion has to be for the texture's external format, {}, and is for {}",
+                       texture.GetExternalFormat(), conversion.GetDesc().external_format.value);
         return Result(ErrorCode::InvalidArgument);
     }
     return CreateView(device, texture, &conversion, desc);
@@ -891,8 +1159,14 @@ Opal::Expected<Rndr::Forge::Sampler, Rndr::ErrorCode> Rndr::Forge::Sampler::Crea
     {
         broken = "it neither compares nor reduces";
     }
+    else if ((desc.min_filter == ImageFilter::Linear || desc.mag_filter == ImageFilter::Linear ||
+              desc.mip_map_filter == ImageFilter::Linear) &&
+             !conversion.GetFormatSupport().linear_filter)
+    {
+        broken = "every filter, mip_map_filter included, is Nearest, since the format allows no linear filtering";
+    }
     else if ((desc.min_filter != conversion.GetDesc().chroma_filter || desc.mag_filter != conversion.GetDesc().chroma_filter) &&
-             !device.GetPhysicalDevice().GetYcbcrFormatSupport(conversion.GetDesc().format).separate_reconstruction_filter)
+             !conversion.GetFormatSupport().separate_reconstruction_filter)
     {
         broken = "min_filter and mag_filter equal the conversion's chroma_filter, since the format allows no separate one";
     }
@@ -1080,7 +1354,28 @@ Opal::Expected<Rndr::Forge::SamplerYcbcrConversion, Rndr::ErrorCode> Rndr::Forge
         RNDR_LOG_ERROR("Forge: a SamplerYcbcrConversion needs the device created with DeviceFeatures::sampler_ycbcr_conversion");
         return Result(ErrorCode::InvalidArgument);
     }
-    if (!IsYcbcrFormat(desc.format))
+    const bool is_external = desc.external_format.value != 0;
+    if (is_external)
+    {
+#if RNDR_ANDROID
+        if (!device.GetEnabledFeatures().android_hardware_buffer)
+        {
+            RNDR_LOG_ERROR(
+                "Forge: a SamplerYcbcrConversion over an external format needs the device created with "
+                "DeviceFeatures::android_hardware_buffer");
+            return Result(ErrorCode::InvalidArgument);
+        }
+        if (desc.format != PixelFormat::Undefined)
+        {
+            RNDR_LOG_ERROR("Forge: a SamplerYcbcrConversion over an external format has PixelFormat::Undefined as its format");
+            return Result(ErrorCode::InvalidArgument);
+        }
+#else
+        RNDR_LOG_ERROR("Forge: an external format is an Android hardware buffer's, and this is not Android");
+        return Result(ErrorCode::InvalidArgument);
+#endif
+    }
+    else if (!IsYcbcrFormat(desc.format))
     {
         RNDR_LOG_ERROR("Forge: a SamplerYcbcrConversion is for a YCbCr format, and {} is not one", static_cast<u32>(desc.format));
         return Result(ErrorCode::InvalidArgument);
@@ -1091,7 +1386,8 @@ Opal::Expected<Rndr::Forge::SamplerYcbcrConversion, Rndr::ErrorCode> Rndr::Forge
     RNDR_FORGE_TRANSLATE_EXPECTED(y_offset, ToVkChromaLocation(desc.y_chroma_offset), "SamplerYcbcrConversionDesc::y_chroma_offset", Result);
 
     // What the format allows decides what the conversion may ask for, and a device is free to allow little.
-    const YcbcrFormatSupport support = device.GetPhysicalDevice().GetYcbcrFormatSupport(desc.format);
+    const YcbcrFormatSupport support =
+        is_external ? desc.external_format.support : device.GetPhysicalDevice().GetYcbcrFormatSupport(desc.format);
     const bool wants_cosited = desc.x_chroma_offset == ChromaLocation::CositedEven || desc.y_chroma_offset == ChromaLocation::CositedEven;
     const bool wants_midpoint = desc.x_chroma_offset == ChromaLocation::Midpoint || desc.y_chroma_offset == ChromaLocation::Midpoint;
     const char* missing = nullptr;
@@ -1117,22 +1413,39 @@ Opal::Expected<Rndr::Forge::SamplerYcbcrConversion, Rndr::ErrorCode> Rndr::Forge
     }
     if (missing != nullptr)
     {
-        RNDR_LOG_ERROR("Forge: this device does not allow {} for the YCbCr format {}", missing, static_cast<u32>(desc.format));
+        if (is_external)
+        {
+            RNDR_LOG_ERROR("Forge: this buffer does not allow {} for its external format {}", missing, desc.external_format.value);
+        }
+        else
+        {
+            RNDR_LOG_ERROR("Forge: this device does not allow {} for the YCbCr format {}", missing, static_cast<u32>(desc.format));
+        }
         return Result(ErrorCode::InvalidArgument);
     }
 
     SamplerYcbcrConversion conversion;
     conversion.m_device = device;
     conversion.m_desc = desc;
+    conversion.m_support = support;
+#if RNDR_ANDROID
+    const VkExternalFormatANDROID external_format{.sType = VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID,
+                                                  .externalFormat = desc.external_format.value};
+    const void* next = is_external ? &external_format : nullptr;
+#else
+    const void* next = nullptr;
+#endif
+    constexpr VkComponentMapping k_identity = {.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                                               .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                                               .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                                               .a = VK_COMPONENT_SWIZZLE_IDENTITY};
     const VkSamplerYcbcrConversionCreateInfo create_info{
         .sType = VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO,
+        .pNext = next,
         .format = ToVkFormat(desc.format),
         .ycbcrModel = model,
         .ycbcrRange = range,
-        .components = {.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                       .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                       .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                       .a = VK_COMPONENT_SWIZZLE_IDENTITY},
+        .components = is_external ? desc.external_format.components : k_identity,
         .xChromaOffset = x_offset,
         .yChromaOffset = y_offset,
         .chromaFilter = ToVkFilter(desc.chroma_filter),
@@ -1149,7 +1462,7 @@ Rndr::Forge::SamplerYcbcrConversion::~SamplerYcbcrConversion()
 }
 
 Rndr::Forge::SamplerYcbcrConversion::SamplerYcbcrConversion(SamplerYcbcrConversion&& other) noexcept
-    : m_device(std::move(other.m_device)), m_conversion(other.m_conversion), m_desc(other.m_desc)
+    : m_device(std::move(other.m_device)), m_conversion(other.m_conversion), m_desc(other.m_desc), m_support(other.m_support)
 {
     other.m_conversion = VK_NULL_HANDLE;
     other.m_device = nullptr;
@@ -1163,6 +1476,7 @@ Rndr::Forge::SamplerYcbcrConversion& Rndr::Forge::SamplerYcbcrConversion::operat
         m_device = std::move(other.m_device);
         m_conversion = other.m_conversion;
         m_desc = other.m_desc;
+        m_support = other.m_support;
         other.m_conversion = VK_NULL_HANDLE;
         other.m_device = nullptr;
     }

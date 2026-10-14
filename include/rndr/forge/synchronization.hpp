@@ -299,6 +299,28 @@ struct TextureBarrier : Opal::ClonableBase<TextureBarrier>
     [[nodiscard]] static TextureBarrier ToPresent(Texture& texture, ImageLayout old_layout);
 
     /**
+     * Take a texture over from outside Vulkan - an imported Android hardware buffer a video decoder or a camera has
+     * just written - and make it ready to be sampled, before the first command of the frame that reads it. The old
+     * layout is Undefined whatever the texture tracks, since the writer leaves it in none Vulkan knows; coming from
+     * k_foreign_queue_family that keeps the contents rather than discarding them.
+     *
+     * @param queue The queue the commands reading it are submitted to.
+     * @param reader The stage that samples it.
+     */
+    [[nodiscard]] static TextureBarrier AcquireFromForeign(Texture& texture, const DeviceQueue& queue,
+                                                           PipelineStageBits reader = PipelineStageBits::FragmentShader);
+
+    /**
+     * Hand a texture taken with AcquireFromForeign back after the last command reading it, so that its writer may fill
+     * it again once the frame's fence has signalled. The layout stays the one the texture tracks.
+     *
+     * @param queue The queue the commands reading it were submitted to.
+     * @param reader The stage that sampled it.
+     */
+    [[nodiscard]] static Opal::Expected<TextureBarrier, ErrorCode> ReleaseToForeign(
+        Texture& texture, const DeviceQueue& queue, PipelineStageBits reader = PipelineStageBits::FragmentShader);
+
+    /**
      * The preset for a destination layout that is not known while writing the call - a function handed the
      * layout to leave a texture in dispatches through this rather than spelling the switch out again. Refuses
      * a layout that has no preset above.

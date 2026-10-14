@@ -193,6 +193,23 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBarriers(const Barriers& barriers
         RNDR_LOG_ERROR("Forge: a barrier naming the task or mesh stage needs VK_EXT_mesh_shader, which the device did not enable");
         return ErrorCode::InvalidArgument;
     }
+    // Likewise the foreign queue family, which is VK_EXT_queue_family_foreign's.
+    const auto is_foreign = [](u32 family) { return family == k_foreign_queue_family; };
+    bool names_foreign = false;
+    for (const BufferBarrier& barrier : barriers.buffer)
+    {
+        names_foreign = names_foreign || is_foreign(barrier.source_queue_family) || is_foreign(barrier.destination_queue_family);
+    }
+    for (const TextureBarrier& barrier : barriers.texture)
+    {
+        names_foreign = names_foreign || is_foreign(barrier.source_queue_family) || is_foreign(barrier.destination_queue_family);
+    }
+    if (names_foreign && !m_device->IsExtensionEnabled(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME))
+    {
+        RNDR_LOG_ERROR(
+            "Forge: a barrier naming k_foreign_queue_family needs the device created with DeviceFeatures::android_hardware_buffer");
+        return ErrorCode::InvalidArgument;
+    }
     // Every range is checked before anything is recorded. A range past the end of its resource is a barrier the
     // driver would be handed and the layer would object to, and the layout bookkeeping below would otherwise
     // have moved the textures ahead of the one that failed while the command itself was already in the buffer.

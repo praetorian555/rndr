@@ -218,6 +218,12 @@ struct DeviceFeatures
      * (GraphicsContext::HasSurfaceCapabilities2). A swap chain whose surface cannot report it presents without.
      */
     bool present_timing = false;
+    /**
+     * Importing an Android hardware buffer as a texture (Texture::Create from an AHardwareBuffer) and handing it
+     * between Vulkan and its writer through k_foreign_queue_family. Pulls in
+     * VK_ANDROID_external_memory_android_hardware_buffer and VK_EXT_queue_family_foreign. Never supported off Android.
+     */
+    bool android_hardware_buffer = false;
 };
 
 /**
