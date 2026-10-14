@@ -414,7 +414,7 @@ Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::SwapC
     };
     // A timed present asks when its first pixel goes out. What earlier ones reported is taken first, so the queue the
     // presentation engine reports into has room.
-    const u64 present_id = m_timing.next_present_id;
+    const uint64_t present_id = m_timing.next_present_id;
     const VkPresentId2KHR present_id_info{.sType = VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR, .swapchainCount = 1, .pPresentIds = &present_id};
     const VkPresentTimingInfoEXT timing_info{.sType = VK_STRUCTURE_TYPE_PRESENT_TIMING_INFO_EXT,
                                              .timeDomainId = m_timing.time_domain_id,
@@ -537,12 +537,12 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::SelectTimeDomain()
     // A few at most: the host's clocks and the swap chain's own; the first that many are enough to choose from.
     constexpr u32 k_max_domains = 8;
     VkTimeDomainKHR domains[k_max_domains] = {};
-    u64 ids[k_max_domains] = {};
+    uint64_t ids[k_max_domains] = {};
     VkSwapchainTimeDomainPropertiesEXT properties{.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_TIME_DOMAIN_PROPERTIES_EXT,
                                                   .timeDomainCount = k_max_domains,
                                                   .pTimeDomains = domains,
                                                   .pTimeDomainIds = ids};
-    u64 counter = 0;
+    uint64_t counter = 0;
     const VkResult result = vkGetSwapchainTimeDomainPropertiesEXT(m_device->GetNativeDevice(), m_swap_chain, &properties, &counter);
     if (result != VK_SUCCESS && result != VK_INCOMPLETE)
     {
@@ -651,8 +651,8 @@ bool Rndr::Forge::SwapChain::Calibrate()
     const VkCalibratedTimestampInfoKHR infos[2] = {
         {.sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR, .pNext = &swap_chain_info, .timeDomain = m_timing.time_domain},
         {.sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR, .timeDomain = k_host_time_domain}};
-    u64 timestamps[2] = {};
-    u64 max_deviation = 0;
+    uint64_t timestamps[2] = {};
+    uint64_t max_deviation = 0;
     const VkResult result = vkGetCalibratedTimestampsKHR(m_device->GetNativeDevice(), 2, infos, timestamps, &max_deviation);
     if (result != VK_SUCCESS)
     {
