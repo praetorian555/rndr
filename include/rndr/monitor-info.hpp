@@ -10,6 +10,7 @@ namespace Rndr
 
 struct MonitorInfo
 {
+    /** The monitor's place in the list Application::GetMonitors returns, which GenericWindowDesc::monitor_index takes. */
     i32 index = 0;
     Opal::StringUtf8 name;
     Vector2i position;

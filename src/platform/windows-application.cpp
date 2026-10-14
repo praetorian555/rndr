@@ -703,6 +703,33 @@ BOOL CALLBACK EnumMonitorsCallback(HMONITOR hmonitor, HDC, LPRECT, LPARAM user_d
     return TRUE;
 }
 
+struct FindMonitorData
+{
+    HMONITOR target;
+    Rndr::i32 current_index;
+    Rndr::i32 found_index;
+};
+
+BOOL CALLBACK FindMonitorCallback(HMONITOR hmonitor, HDC, LPRECT, LPARAM user_data)
+{
+    auto* data = reinterpret_cast<FindMonitorData*>(user_data);
+    if (hmonitor == data->target)
+    {
+        data->found_index = data->current_index;
+        return FALSE;
+    }
+    data->current_index++;
+    return TRUE;
+}
+
+/** @return The monitor's info, with its index in the order GetMonitors lists the monitors. */
+Rndr::MonitorInfo MonitorInfoWithIndex(HMONITOR hmonitor)
+{
+    FindMonitorData data = {hmonitor, 0, 0};
+    ::EnumDisplayMonitors(nullptr, nullptr, FindMonitorCallback, reinterpret_cast<LPARAM>(&data));
+    return MonitorInfoFromHMONITOR(hmonitor, data.found_index);
+}
+
 }  // namespace
 
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::WindowsApplication::GetMonitors() const
@@ -717,21 +744,21 @@ Rndr::MonitorInfo Rndr::WindowsApplication::GetPrimaryMonitor() const
 {
     const POINT origin = {0, 0};
     HMONITOR hmonitor = ::MonitorFromPoint(origin, MONITOR_DEFAULTTOPRIMARY);
-    return MonitorInfoFromHMONITOR(hmonitor, 0);
+    return MonitorInfoWithIndex(hmonitor);
 }
 
 Rndr::MonitorInfo Rndr::WindowsApplication::GetMonitorAtPosition(const Vector2i& pos) const
 {
     const POINT point = {pos.x, pos.y};
     HMONITOR hmonitor = ::MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
-    return MonitorInfoFromHMONITOR(hmonitor, 0);
+    return MonitorInfoWithIndex(hmonitor);
 }
 
 Rndr::MonitorInfo Rndr::WindowsApplication::GetMonitorForWindow(const GenericWindow& window) const
 {
     HWND hwnd = reinterpret_cast<HWND>(window.GetNativeHandle());
     HMONITOR hmonitor = ::MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-    return MonitorInfoFromHMONITOR(hmonitor, 0);
+    return MonitorInfoWithIndex(hmonitor);
 }
 
 bool Rndr::WindowsApplication::GetInputPrimitive(InputPrimitive& out_primitive, i32 virtual_key)
