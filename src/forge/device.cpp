@@ -125,6 +125,8 @@ struct FeatureChain
     VkPhysicalDeviceIndexTypeUint8Features index_type_uint8{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES};
     VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR local_read{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR};
+    VkPhysicalDevicePresentTimingFeaturesEXT present_timing{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT};
+    VkPhysicalDevicePresentId2FeaturesKHR present_id2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR};
 #if defined(RNDR_FORGE_VULKAN_1_1)
     VkPhysicalDeviceMultiviewFeatures multiview{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES};
     VkPhysicalDeviceSamplerYcbcrConversionFeatures ycbcr{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES};
@@ -202,6 +204,8 @@ struct FeatureChain
         AppendIf(has_extension(VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME) || has_extension(VK_KHR_INDEX_TYPE_UINT8_EXTENSION_NAME),
                  &index_type_uint8);
         AppendIf(has_extension(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME), &local_read);
+        AppendIf(has_extension(VK_EXT_PRESENT_TIMING_EXTENSION_NAME), &present_timing);
+        AppendIf(has_extension(VK_KHR_PRESENT_ID_2_EXTENSION_NAME), &present_id2);
     }
 
     FeatureChain(const FeatureChain&) = delete;
@@ -318,6 +322,8 @@ struct FeatureChain
         mesh.taskShader = features.task_shader;
         index_type_uint8.indexTypeUint8 = features.index_type_uint8;
         local_read.dynamicRenderingLocalRead = features.dynamic_rendering_local_read;
+        present_timing.presentTiming = features.present_timing;
+        present_id2.presentId2 = features.present_timing;
 
 #if defined(RNDR_FORGE_VULKAN_1_1)
         // The features whose extension has no structure are turned on by enabling it, which
@@ -407,6 +413,7 @@ struct FeatureChain
         features.task_shader = mesh.taskShader == VK_TRUE;
         features.index_type_uint8 = index_type_uint8.indexTypeUint8 == VK_TRUE;
         features.dynamic_rendering_local_read = local_read.dynamicRenderingLocalRead == VK_TRUE;
+        features.present_timing = present_timing.presentTiming == VK_TRUE && present_id2.presentId2 == VK_TRUE;
     }
 
 private:
@@ -489,6 +496,12 @@ Opal::DynamicArray<const char*> CollectDeviceExtensions(const Forge::PhysicalDev
     if (features.dynamic_rendering_local_read)
     {
         extensions.PushBack(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
+    }
+    if (features.present_timing)
+    {
+        extensions.PushBack(VK_EXT_PRESENT_TIMING_EXTENSION_NAME);
+        extensions.PushBack(VK_KHR_PRESENT_ID_2_EXTENSION_NAME);
+        extensions.PushBack(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
     }
     if (desc.use_decode_queue)
     {
@@ -615,6 +628,9 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
     const bool has_mesh_extension = physical_device.IsExtensionSupported(VK_EXT_MESH_SHADER_EXTENSION_NAME);
     const char* index_type_uint8_extension = FindIndexTypeUint8Extension(physical_device);
     const bool has_local_read_extension = physical_device.IsExtensionSupported(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
+    const bool has_present_timing_extensions = physical_device.IsExtensionSupported(VK_EXT_PRESENT_TIMING_EXTENSION_NAME) &&
+                                               physical_device.IsExtensionSupported(VK_KHR_PRESENT_ID_2_EXTENSION_NAME) &&
+                                               physical_device.IsExtensionSupported(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
     FeatureChain supported(IsUsedAtVulkan13(physical_device),
                            [&physical_device](const char* name) { return physical_device.IsExtensionSupported(name); });
     supported.Query(physical_device.GetNativePhysicalDevice());
@@ -701,6 +717,9 @@ const char* FindUnsupportedFeature(const Forge::PhysicalDevice& physical_device,
             "index_type_uint8");
     require(requested.dynamic_rendering_local_read, has_local_read_extension ? supported.local_read.dynamicRenderingLocalRead : VK_FALSE,
             "dynamic_rendering_local_read");
+    require(requested.present_timing,
+            has_present_timing_extensions && supported.present_timing.presentTiming == VK_TRUE ? supported.present_id2.presentId2 : VK_FALSE,
+            "present_timing");
     return missing;
 }
 
@@ -927,6 +946,15 @@ Opal::Expected<Rndr::Forge::Device, Rndr::ErrorCode> Rndr::Forge::Device::Create
         supported.Query(device.m_physical_device.GetNativePhysicalDevice());
         supported.Read(device.m_features);
     }
+    // Present timing only serves a swap chain, and asks the surface through the instance.
+    const bool can_time_presents = (device.m_desc.surface.IsValid() || device.m_desc.enable_presentation) &&
+                                   graphics_context.HasSurfaceCapabilities2();
+    if (device.m_desc.features.present_timing && !can_time_presents)
+    {
+        RNDR_LOG_ERROR("Forge: present_timing needs presentation and an instance with VK_KHR_get_surface_capabilities2");
+        return Result(ErrorCode::FeatureNotSupported);
+    }
+    device.m_features.present_timing = device.m_features.present_timing && can_time_presents;
 
     // After the features are settled, since an extension-backed one brings its extension along. What the merge added
     // passes this by construction - a feature only reads as supported where its extension is - so what it still

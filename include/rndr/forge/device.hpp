@@ -211,6 +211,13 @@ struct DeviceFeatures
      * has the newer name.
      */
     bool index_type_uint8 = false;
+    /**
+     * When each present reaches the display, which SwapChain::TakePresentTimes hands out. Pulls in
+     * VK_EXT_present_timing, VK_KHR_present_id2 and VK_KHR_calibrated_timestamps, and needs presentation -
+     * DeviceDesc::surface or enable_presentation - and an instance with VK_KHR_get_surface_capabilities2
+     * (GraphicsContext::HasSurfaceCapabilities2). A swap chain whose surface cannot report it presents without.
+     */
+    bool present_timing = false;
 };
 
 /**

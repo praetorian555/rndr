@@ -192,6 +192,12 @@ public:
      */
     [[nodiscard]] bool AreDebugUtilsEnabled() const { return m_debug_utils_enabled; }
 
+    /**
+     * Whether VK_KHR_get_surface_capabilities2 went to vkCreateInstance, which it does wherever the loader offers it.
+     * DeviceFeatures::present_timing needs it to ask a surface whether it can report when presents reach the display.
+     */
+    [[nodiscard]] bool HasSurfaceCapabilities2() const { return m_surface_capabilities2_enabled; }
+
 private:
     static Opal::DynamicArray<const char*> GetRequiredInstanceExtensions(const GraphicsContextDesc& desc, bool use_validation_layer);
     static Opal::DynamicArray<VkExtensionProperties> GetSupportedInstanceExtensions();
@@ -202,6 +208,7 @@ private:
     VkDebugUtilsMessengerEXT m_debug_messenger = VK_NULL_HANDLE;
     Opal::SharedPtr<DebugMessageLog> m_debug_log;
     bool m_debug_utils_enabled = false;
+    bool m_surface_capabilities2_enabled = false;
 };
 
 }  // namespace Rndr::Forge

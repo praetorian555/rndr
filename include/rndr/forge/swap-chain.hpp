@@ -80,6 +80,15 @@ struct AcquiredTexture
     u32 texture_index = k_invalid_texture_index;
 };
 
+/** When one present reached the display. */
+struct PresentTime
+{
+    /** The present's id, which SwapChain::GetLastPresentId gave right after it. */
+    u64 present_id = 0;
+    /** When the first pixel of the presented texture went out to the display, in seconds on the clock Opal::GetSeconds reads. */
+    f64 first_pixel_time = 0;
+};
+
 class Surface
 {
 public:
@@ -220,7 +229,63 @@ public:
      */
     Opal::Expected<SwapChainStatus, ErrorCode> Present(DeviceQueue& queue, const Semaphore& semaphore);
 
+    /**
+     * Whether presents are timed: the device has DeviceFeatures::present_timing, and the surface reports when the first
+     * pixel of a present goes out, on the clock Opal::GetSeconds reads. Settled each time the swap chain is made.
+     */
+    [[nodiscard]] bool HasPresentTiming() const { return m_timing.is_on; }
+
+    /** @return The id of the last present, counted from 1 over the swap chain's life; 0 before the first and without timing. */
+    [[nodiscard]] u64 GetLastPresentId() const { return m_timing.is_on ? m_timing.next_present_id - 1 : 0; }
+
+    /**
+     * Hands out when the presents since the last call reached the display, as far as the presentation engine has
+     * reported them: one it has not reported yet comes in a later call, and one it never shows, replaced by the next
+     * before a refresh, never does. Nothing without present timing.
+     *
+     * @param out_times Takes the times, oldest first, after what it holds.
+     *
+     * @return ErrorCode::Success, or what the query reported.
+     */
+    ErrorCode TakePresentTimes(Opal::DynamicArray<PresentTime>& out_times);
+
 private:
+    /** Present timing, set up again with each swap chain. */
+    struct Timing
+    {
+        bool is_on = false;
+        /** The stage asked for: the first pixel out, or visible where the surface reports only that. */
+        VkPresentStageFlagsEXT stage = 0;
+        VkTimeDomainKHR time_domain = VK_TIME_DOMAIN_DEVICE_KHR;
+        u64 time_domain_id = 0;
+        u64 time_domains_counter = 0;
+        /** What one unit of the time domain is in seconds, for a domain the host's clock reads. */
+        f64 seconds_per_tick = 0;
+        /** A domain of the swap chain's own, in nanoseconds, read against the host's clock at a moment calibrated now and then. */
+        bool is_calibrated = false;
+        u64 calibrated_time = 0;
+        f64 calibrated_seconds = 0;
+        u64 next_present_id = 1;
+        /** Timed presents not reported yet, each holding a place in the queue the presentation engine reports into. */
+        u32 waiting = 0;
+        /** Times collected at each present, so the queue the presentation engine reports into never fills. */
+        Opal::DynamicArray<PresentTime> reported;
+    };
+
+    /** Turn present timing on for a swap chain just made, when the device and the surface allow it. */
+    ErrorCode SetUpPresentTiming();
+    /**
+     * Picks the time domain of the swap chain to time presents in: one the host's clock reads, or one of the swap chain's
+     * own calibrated against it. Turns timing off when there is neither.
+     */
+    ErrorCode SelectTimeDomain();
+    /** Reads the swap chain's own time domain and the host's clock at one moment; false when the device cannot. */
+    bool Calibrate();
+    /** @return A time of the chosen domain in seconds on the clock Opal::GetSeconds reads. */
+    [[nodiscard]] f64 ToHostSeconds(u64 time) const;
+    /** Moves what the presentation engine has reported into m_timing.reported. */
+    ErrorCode CollectPresentTimes();
+
     /** Destroy the color textures, their views and the depth texture, leaving the swap chain handle alone. */
     void DestroyTextures();
 
@@ -237,6 +302,7 @@ private:
     Texture m_depth_texture;
     /** The texture AcquireTexture handed out, until Present gives it back. */
     u32 m_current_texture_index = k_invalid_texture_index;
+    Timing m_timing;
 };
 
 }  // namespace Rndr::Forge

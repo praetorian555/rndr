@@ -148,6 +148,36 @@ surface that does not offer it is refused rather than handing back textures whos
 images do not have. The windowed tests are what it exists for; copy the swap chain texture inside the
 frame that drew it rather than reading it after the present, which races the presentation engine.
 
+### When a present reaches the display
+
+A swap chain can say when each present it made reached the display: the moment the first pixel of the presented
+texture went out to it, on the clock `Opal::GetSeconds` reads. A video player shows each picture that much early, and
+anything that wants to know how far behind its frames are can ask the same. It comes from `VK_EXT_present_timing`,
+which `DeviceFeatures::present_timing` enables along with `VK_KHR_present_id2` and `VK_KHR_calibrated_timestamps`. Like
+every feature it is turned on wherever it is supported, but only on a device that presents and on an instance with
+`VK_KHR_get_surface_capabilities2`, which the context takes wherever the loader offers it
+(`GraphicsContext::HasSurfaceCapabilities2`).
+
+- A swap chain is timed when the device has the feature and its surface reports the stage, first pixel out or, where
+  that is missing, first pixel visible. `HasPresentTiming` says whether it is, settled again each time the swap chain is
+  made.
+- Each present gets an id, counted from 1 over the swap chain's life; `GetLastPresentId` gives the last one.
+  `TakePresentTimes` hands out the times of the presents reported since the last call, oldest first, each with its id,
+  so a caller pairs them with whatever it remembered about the frame. A present the display never shows is never
+  reported.
+- The times are reported in one of the swap chain's time domains. One the host's clock reads -
+  QueryPerformanceCounter on Windows, `CLOCK_MONOTONIC` elsewhere - is taken as it is. The NVIDIA driver offers only
+  the swap chain's own, in nanoseconds, so it is read against the host's clock with `vkGetCalibratedTimestampsKHR`,
+  once when it is chosen and again each second, which keeps the drift between the two below what a frame cares about.
+- The presentation engine keeps a report until it is taken, in a queue of sixteen. `Present` takes what is there
+  before each present, so a caller that never asks still never fills it. A window that is never scanned out, kept
+  hidden or covered, never has its presents reported; once sixteen wait, presents go out untimed until reports come
+  again, rather than failing with `VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT`.
+
+On the desktop's RTX 5060 Ti a window on a 60 Hz and on a 75 Hz monitor measured about six refreshes from a tick to
+the first pixel out, through FIFO and the desktop compositor. Present timing can also ask for a present to be shown at
+a time (`presentAtAbsoluteTime`, `presentAtRelativeTime`); Forge does not use that.
+
 ---
 
 ## The frame loop

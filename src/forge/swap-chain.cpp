@@ -1,6 +1,7 @@
 #include "rndr/forge/swap-chain.hpp"
 
 #include "opal/math-base.h"
+#include "opal/time.h"
 
 #if RNDR_WINDOWS
 #include "rndr/platform/windows-header.hpp"
@@ -18,6 +19,12 @@
 #include "rndr/generic-window.hpp"
 #include "rndr/log.hpp"
 #include "rndr/pixel-format.hpp"
+
+namespace
+{
+/** How many presents the presentation engine keeps a report for until it is taken. */
+constexpr Rndr::u32 k_timing_queue_size = 16;
+}  // namespace
 
 namespace
 {
@@ -205,8 +212,10 @@ Rndr::Forge::SwapChain::SwapChain(SwapChain&& other) noexcept
       m_surface(std::move(other.m_surface)),
       m_color_textures(std::move(other.m_color_textures)),
       m_depth_texture(std::move(other.m_depth_texture)),
-      m_current_texture_index(other.m_current_texture_index)
+      m_current_texture_index(other.m_current_texture_index),
+      m_timing(std::move(other.m_timing))
 {
+    other.m_timing = {};
     other.m_swap_chain = VK_NULL_HANDLE;
     other.m_device = nullptr;
     other.m_surface = nullptr;
@@ -230,7 +239,9 @@ Rndr::Forge::SwapChain& Rndr::Forge::SwapChain::operator=(SwapChain&& other) noe
     m_extent = other.m_extent;
     m_rotation = other.m_rotation;
     m_current_texture_index = other.m_current_texture_index;
+    m_timing = std::move(other.m_timing);
 
+    other.m_timing = {};
     other.m_swap_chain = VK_NULL_HANDLE;
     other.m_device = nullptr;
     other.m_surface = nullptr;
@@ -282,6 +293,7 @@ void Rndr::Forge::SwapChain::Destroy()
     m_desc = {};
     m_extent = {};
     m_rotation = SurfaceRotation::None;
+    m_timing = {};
 }
 
 Opal::Expected<const Rndr::Forge::Texture&, Rndr::ErrorCode> Rndr::Forge::SwapChain::GetCurrentColorTexture() const
@@ -392,7 +404,7 @@ Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::SwapC
     m_current_texture_index = k_invalid_texture_index;
 
     const VkSemaphore wait_semaphore = semaphore.GetNativeSemaphore();
-    const VkPresentInfoKHR present_info = {
+    VkPresentInfoKHR present_info = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &wait_semaphore,
@@ -400,6 +412,31 @@ Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::SwapC
         .pSwapchains = &m_swap_chain,
         .pImageIndices = &texture_index,
     };
+    // A timed present asks when its first pixel goes out. What earlier ones reported is taken first, so the queue the
+    // presentation engine reports into has room.
+    const u64 present_id = m_timing.next_present_id;
+    const VkPresentId2KHR present_id_info{.sType = VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR, .swapchainCount = 1, .pPresentIds = &present_id};
+    const VkPresentTimingInfoEXT timing_info{.sType = VK_STRUCTURE_TYPE_PRESENT_TIMING_INFO_EXT,
+                                             .timeDomainId = m_timing.time_domain_id,
+                                             .presentStageQueries = m_timing.stage};
+    const VkPresentTimingsInfoEXT timings_info{
+        .sType = VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT, .pNext = &present_id_info, .swapchainCount = 1, .pTimingInfos = &timing_info};
+    if (m_timing.is_on)
+    {
+        RNDR_FORGE_CHECK_EXPECTED(CollectPresentTimes(), Result);
+        // A present that is never shown, as in a window kept hidden, is never reported and keeps its place, so one
+        // that would fill the queue goes untimed.
+        if (m_timing.waiting < k_timing_queue_size)
+        {
+            present_info.pNext = &timings_info;
+            ++m_timing.waiting;
+        }
+        else
+        {
+            present_info.pNext = &present_id_info;
+        }
+        ++m_timing.next_present_id;
+    }
     const VkResult result = vkQueuePresentKHR(queue.GetNativeQueue(), &present_info);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
@@ -412,6 +449,230 @@ Opal::Expected<Rndr::Forge::SwapChainStatus, Rndr::ErrorCode> Rndr::Forge::SwapC
         return Result(VkResultToErrorCode(result));
     }
     return Result(SwapChainStatus::Success);
+}
+
+namespace
+{
+/** The stage nearest the screen that the surface reports present times for, or 0 when it reports none or the device cannot ask. */
+VkPresentStageFlagsEXT SelectPresentStage(const Rndr::Forge::Device& device, const Rndr::Forge::Surface& surface)
+{
+    if (!device.GetEnabledFeatures().present_timing)
+    {
+        return 0;
+    }
+    VkPresentTimingSurfaceCapabilitiesEXT timing{.sType = VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT};
+    VkSurfaceCapabilitiesPresentId2KHR present_id2{.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR, .pNext = &timing};
+    VkSurfaceCapabilities2KHR capabilities{.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR, .pNext = &present_id2};
+    const VkPhysicalDeviceSurfaceInfo2KHR surface_info{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
+                                                       .surface = surface.GetNativeSurface()};
+    if (vkGetPhysicalDeviceSurfaceCapabilities2KHR(device.GetPhysicalDevice().GetNativePhysicalDevice(), &surface_info, &capabilities) !=
+            VK_SUCCESS ||
+        timing.presentTimingSupported == VK_FALSE || present_id2.presentId2Supported == VK_FALSE)
+    {
+        return 0;
+    }
+    if ((timing.presentStageQueries & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT) != 0)
+    {
+        return VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
+    }
+    if ((timing.presentStageQueries & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT) != 0)
+    {
+        return VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT;
+    }
+    return 0;
+}
+
+/** The time domain Opal::GetSeconds reads. */
+#if RNDR_WINDOWS
+constexpr VkTimeDomainKHR k_host_time_domain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR;
+#else
+constexpr VkTimeDomainKHR k_host_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+#endif
+
+/** What one unit of a time domain is in seconds, for a domain Opal::GetSeconds reads; 0 for any other. */
+Rndr::f64 GetSecondsPerTick(VkTimeDomainKHR time_domain)
+{
+#if RNDR_WINDOWS
+    if (time_domain == VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR)
+    {
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        return frequency.QuadPart > 0 ? 1.0 / static_cast<Rndr::f64>(frequency.QuadPart) : 0.0;
+    }
+#else
+    if (time_domain == VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR)
+    {
+        return 1e-9;
+    }
+#endif
+    return 0.0;
+}
+}  // namespace
+
+Rndr::ErrorCode Rndr::Forge::SwapChain::TakePresentTimes(Opal::DynamicArray<PresentTime>& out_times)
+{
+    if (!m_timing.is_on)
+    {
+        return ErrorCode::Success;
+    }
+    RNDR_FORGE_CHECK(CollectPresentTimes());
+    for (const PresentTime& time : m_timing.reported)
+    {
+        out_times.PushBack(time);
+    }
+    m_timing.reported.Clear();
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::SwapChain::SetUpPresentTiming()
+{
+    m_timing.waiting = 0;
+    RNDR_FORGE_VK_CHECK(vkSetSwapchainPresentTimingQueueSizeEXT(m_device->GetNativeDevice(), m_swap_chain, k_timing_queue_size),
+                        "vkSetSwapchainPresentTimingQueueSizeEXT");
+    return SelectTimeDomain();
+}
+
+Rndr::ErrorCode Rndr::Forge::SwapChain::SelectTimeDomain()
+{
+    // A few at most: the host's clocks and the swap chain's own; the first that many are enough to choose from.
+    constexpr u32 k_max_domains = 8;
+    VkTimeDomainKHR domains[k_max_domains] = {};
+    u64 ids[k_max_domains] = {};
+    VkSwapchainTimeDomainPropertiesEXT properties{.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_TIME_DOMAIN_PROPERTIES_EXT,
+                                                  .timeDomainCount = k_max_domains,
+                                                  .pTimeDomains = domains,
+                                                  .pTimeDomainIds = ids};
+    u64 counter = 0;
+    const VkResult result = vkGetSwapchainTimeDomainPropertiesEXT(m_device->GetNativeDevice(), m_swap_chain, &properties, &counter);
+    if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+    {
+        RNDR_LOG_ERROR("Forge: {} failed: {}", "vkGetSwapchainTimeDomainPropertiesEXT", VkResultToString(result));
+        return VkResultToErrorCode(result);
+    }
+    m_timing.is_on = false;
+    m_timing.time_domains_counter = counter;
+    properties.timeDomainCount = Opal::Min(properties.timeDomainCount, k_max_domains);
+    for (u32 i = 0; i < properties.timeDomainCount && !m_timing.is_on; ++i)
+    {
+        const f64 seconds_per_tick = GetSecondsPerTick(domains[i]);
+        m_timing.is_on = seconds_per_tick > 0.0;
+        m_timing.is_calibrated = false;
+        m_timing.time_domain = domains[i];
+        m_timing.time_domain_id = ids[i];
+        m_timing.seconds_per_tick = seconds_per_tick;
+    }
+    // A domain of the swap chain's own, in nanoseconds, read against the host's clock.
+    for (u32 i = 0; i < properties.timeDomainCount && !m_timing.is_on; ++i)
+    {
+        if (domains[i] == VK_TIME_DOMAIN_SWAPCHAIN_LOCAL_EXT || domains[i] == VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT)
+        {
+            m_timing.is_calibrated = true;
+            m_timing.time_domain = domains[i];
+            m_timing.time_domain_id = ids[i];
+            m_timing.is_on = Calibrate();
+        }
+    }
+    if (!m_timing.is_on)
+    {
+        RNDR_LOG_WARNING("Forge: the swap chain reports present times on no clock the host reads, so presents are not timed");
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::Forge::SwapChain::CollectPresentTimes()
+{
+    constexpr u32 k_batch = 16;
+    // What is kept for a caller that does not take it, past which the oldest go.
+    constexpr u64 k_max_reported = 256;
+    while (true)
+    {
+        VkPresentStageTimeEXT stages[k_batch] = {};
+        VkPastPresentationTimingEXT timings[k_batch] = {};
+        for (u32 i = 0; i < k_batch; ++i)
+        {
+            stages[i].stage = m_timing.stage;
+            timings[i] = {.sType = VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_EXT, .presentStageCount = 1, .pPresentStages = &stages[i]};
+        }
+        const VkPastPresentationTimingInfoEXT info{.sType = VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_INFO_EXT, .swapchain = m_swap_chain};
+        VkPastPresentationTimingPropertiesEXT properties{.sType = VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_PROPERTIES_EXT,
+                                                        .presentationTimingCount = k_batch,
+                                                        .pPresentationTimings = timings};
+        const VkResult result = vkGetPastPresentationTimingEXT(m_device->GetNativeDevice(), &info, &properties);
+        if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+        {
+            RNDR_LOG_ERROR("Forge: {} failed: {}", "vkGetPastPresentationTimingEXT", VkResultToString(result));
+            return VkResultToErrorCode(result);
+        }
+        for (u32 i = 0; i < properties.presentationTimingCount && i < k_batch; ++i)
+        {
+            const VkPastPresentationTimingEXT& timing = timings[i];
+            m_timing.waiting -= m_timing.waiting > 0 ? 1 : 0;
+            if (timing.reportComplete == VK_FALSE || timing.timeDomainId != m_timing.time_domain_id || timing.presentStageCount == 0 ||
+                stages[i].time == 0)
+            {
+                continue;
+            }
+            if (m_timing.reported.GetSize() >= k_max_reported)
+            {
+                m_timing.reported.Erase(m_timing.reported.begin());
+            }
+            m_timing.reported.PushBack({.present_id = timing.presentId, .first_pixel_time = ToHostSeconds(stages[i].time)});
+        }
+        // The swap chain's time domains changed: what comes from here is read against the new choice.
+        if (properties.timeDomainsCounter != m_timing.time_domains_counter)
+        {
+            RNDR_FORGE_CHECK(SelectTimeDomain());
+            if (!m_timing.is_on)
+            {
+                return ErrorCode::Success;
+            }
+        }
+        if (result != VK_INCOMPLETE)
+        {
+            break;
+        }
+    }
+    // The two clocks drift apart, so the moment they are read together is taken again once a second.
+    constexpr f64 k_calibration_interval = 1.0;
+    if (m_timing.is_calibrated && Opal::GetSeconds() - m_timing.calibrated_seconds > k_calibration_interval)
+    {
+        m_timing.is_on = Calibrate();
+    }
+    return ErrorCode::Success;
+}
+
+bool Rndr::Forge::SwapChain::Calibrate()
+{
+    const VkSwapchainCalibratedTimestampInfoEXT swap_chain_info{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CALIBRATED_TIMESTAMP_INFO_EXT,
+        .swapchain = m_swap_chain,
+        .presentStage = m_timing.time_domain == VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT ? m_timing.stage : 0,
+        .timeDomainId = m_timing.time_domain_id};
+    const VkCalibratedTimestampInfoKHR infos[2] = {
+        {.sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR, .pNext = &swap_chain_info, .timeDomain = m_timing.time_domain},
+        {.sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR, .timeDomain = k_host_time_domain}};
+    u64 timestamps[2] = {};
+    u64 max_deviation = 0;
+    const VkResult result = vkGetCalibratedTimestampsKHR(m_device->GetNativeDevice(), 2, infos, timestamps, &max_deviation);
+    if (result != VK_SUCCESS)
+    {
+        RNDR_LOG_WARNING("Forge: the swap chain's clock cannot be read against the host's, so presents are not timed: {}",
+                         VkResultToString(result));
+        return false;
+    }
+    m_timing.calibrated_time = timestamps[0];
+    m_timing.calibrated_seconds = static_cast<f64>(timestamps[1]) * GetSecondsPerTick(k_host_time_domain);
+    return true;
+}
+
+Rndr::f64 Rndr::Forge::SwapChain::ToHostSeconds(u64 time) const
+{
+    if (!m_timing.is_calibrated)
+    {
+        return static_cast<f64>(time) * m_timing.seconds_per_tick;
+    }
+    const i64 since = static_cast<i64>(time - m_timing.calibrated_time);
+    return m_timing.calibrated_seconds + static_cast<f64>(since) * 1e-9;
 }
 
 namespace
@@ -692,6 +953,12 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
     create_info.clipped = VK_TRUE;
     // Letting the driver reuse the resources of the swap chain we are replacing.
     create_info.oldSwapchain = m_swap_chain;
+    m_timing.is_on = false;
+    m_timing.stage = SelectPresentStage(*m_device, *m_surface);
+    if (m_timing.stage != 0)
+    {
+        create_info.flags |= VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT | VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR;
+    }
 
     VkSwapchainKHR new_swap_chain = VK_NULL_HANDLE;
     VkResult result = vkCreateSwapchainKHR(m_device->GetNativeDevice(), &create_info, nullptr, &new_swap_chain);
@@ -705,6 +972,11 @@ Rndr::ErrorCode Rndr::Forge::SwapChain::Recreate()
     m_swap_chain = new_swap_chain;
     m_extent = extent;
     m_rotation = rotation;
+    m_timing.reported.Clear();
+    if (m_timing.stage != 0)
+    {
+        RNDR_FORGE_CHECK(SetUpPresentTiming());
+    }
 
     result = vkGetSwapchainImagesKHR(m_device->GetNativeDevice(), m_swap_chain, &image_count, nullptr);
     if (result != VK_SUCCESS)

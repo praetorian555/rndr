@@ -357,6 +357,22 @@ Opal::Expected<Rndr::Forge::GraphicsContext, Rndr::ErrorCode> Rndr::Forge::Graph
             return Result(ErrorCode::FeatureNotSupported);
         }
     }
+    // Taken where it is offered: present timing builds on it, and nothing else changes with it.
+    bool is_requested = false;
+    for (const char* required_extension_name : required_extensions)
+    {
+        is_requested = is_requested || strcmp(required_extension_name, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME) == 0;
+    }
+    bool is_offered = false;
+    for (const VkExtensionProperties& supported_extension : supported_extensions)
+    {
+        is_offered = is_offered || strcmp(supported_extension.extensionName, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME) == 0;
+    }
+    if (is_offered && !is_requested)
+    {
+        required_extensions.PushBack(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+    }
+    context.m_surface_capabilities2_enabled = is_requested || is_offered;
 
     // Creation of instance
     VkApplicationInfo app_info{};
@@ -481,7 +497,8 @@ Rndr::Forge::GraphicsContext::GraphicsContext(Rndr::Forge::GraphicsContext&& oth
       m_api_version(other.m_api_version),
       m_debug_messenger(other.m_debug_messenger),
       m_debug_log(Opal::Move(other.m_debug_log)),
-      m_debug_utils_enabled(other.m_debug_utils_enabled)
+      m_debug_utils_enabled(other.m_debug_utils_enabled),
+      m_surface_capabilities2_enabled(other.m_surface_capabilities2_enabled)
 {
     other.m_instance = VK_NULL_HANDLE;
     other.m_api_version = 0;
@@ -489,6 +506,7 @@ Rndr::Forge::GraphicsContext::GraphicsContext(Rndr::Forge::GraphicsContext&& oth
     other.m_desc = {};
     other.m_debug_log = {};
     other.m_debug_utils_enabled = false;
+    other.m_surface_capabilities2_enabled = false;
 }
 
 Rndr::Forge::GraphicsContext& Rndr::Forge::GraphicsContext::operator=(Rndr::Forge::GraphicsContext&& other) noexcept
@@ -505,6 +523,7 @@ Rndr::Forge::GraphicsContext& Rndr::Forge::GraphicsContext::operator=(Rndr::Forg
     m_desc = Opal::Move(other.m_desc);
     m_debug_log = Opal::Move(other.m_debug_log);
     m_debug_utils_enabled = other.m_debug_utils_enabled;
+    m_surface_capabilities2_enabled = other.m_surface_capabilities2_enabled;
 
     other.m_instance = VK_NULL_HANDLE;
     other.m_api_version = 0;
@@ -512,6 +531,7 @@ Rndr::Forge::GraphicsContext& Rndr::Forge::GraphicsContext::operator=(Rndr::Forg
     other.m_desc = {};
     other.m_debug_log = {};
     other.m_debug_utils_enabled = false;
+    other.m_surface_capabilities2_enabled = false;
 
     return *this;
 }

@@ -4,6 +4,7 @@
 #include "opal/container/in-place-array.h"
 #include "opal/container/scope-ptr.h"
 #include "opal/exceptions.h"
+#include "opal/time.h"
 
 #include "rndr/application.hpp"
 #include "rndr/forge/command-buffer.hpp"
@@ -673,6 +674,74 @@ TEST_CASE("Forge frame context runs frames past the end of its timeline", "[forg
     REQUIRE(CountWrongPixels(pixels, last_color) == 0);
 
     readback.Destroy();
+    frame_context.Destroy();
+    swap_chain.Destroy();
+    REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);
+}
+
+TEST_CASE("Forge swap chain reports when its presents reach the display", "[forge-window]")
+{
+    if (!IsForgeWindowAvailable())
+    {
+        SKIP("No window system with a Vulkan device that can present to it on this machine.");
+    }
+    ForgeWindowFixture fixture;
+    if (!SupportsSwapChainFormat(fixture))
+    {
+        SKIP("This surface does not offer B8G8R8A8_SRGB with the sRGB non-linear colour space.");
+    }
+    Forge::SwapChain swap_chain =
+        ForgeTest::Unwrap(Forge::SwapChain::Create(fixture.device, fixture.surface, {.use_depth = false, .pixel_format = k_swap_chain_format}));
+    Opal::DynamicArray<Forge::PresentTime> times;
+    if (!swap_chain.HasPresentTiming())
+    {
+        // Untimed: no ids and no times, rather than made-up ones.
+        REQUIRE(swap_chain.GetLastPresentId() == 0);
+        REQUIRE(swap_chain.TakePresentTimes(times) == ErrorCode::Success);
+        REQUIRE(times.IsEmpty());
+        swap_chain.Destroy();
+        SKIP("This device or surface does not report when presents reach the display.");
+    }
+
+    Forge::FrameContext frame_context = ForgeTest::Unwrap(
+        Forge::FrameContext::Create(fixture.device, swap_chain, fixture.GetGraphicsQueue(), fixture.GetPresentQueue(), {.frames_in_flight = 2}));
+    const f64 started = Opal::GetSeconds();
+    u64 last_id = 0;
+    for (i32 frame = 0; frame < 240 && times.GetSize() < 20; ++frame)
+    {
+        if (ForgeTest::Unwrap(frame_context.BeginFrame()) == Forge::SwapChainStatus::OutOfDate)
+        {
+            continue;
+        }
+        RecordClearFrame(ForgeTest::Unwrap(frame_context.GetCommandBuffer()), ForgeTest::Unwrap(frame_context.GetColorTexture()), nullptr,
+                         swap_chain.GetExtent(), GetFrameColor(frame), nullptr);
+        ForgeTest::Unwrap(frame_context.EndFrame());
+        // One id a present, counted on across a swap chain made again.
+        REQUIRE(swap_chain.GetLastPresentId() == last_id + 1);
+        last_id = swap_chain.GetLastPresentId();
+        REQUIRE(swap_chain.TakePresentTimes(times) == ErrorCode::Success);
+    }
+    REQUIRE(fixture.device.WaitForAll() == ErrorCode::Success);
+    REQUIRE(swap_chain.TakePresentTimes(times) == ErrorCode::Success);
+    const f64 finished = Opal::GetSeconds();
+
+    // A window that is never shown may never be scanned out, which leaves nothing to check the times against.
+    INFO(times.GetSize() << " times reported for " << last_id << " presents");
+    for (u64 i = 0; i < times.GetSize(); ++i)
+    {
+        INFO("time " << i << ": present " << times[i].present_id << " at " << times[i].first_pixel_time - started << " s");
+        REQUIRE(times[i].present_id >= 1);
+        REQUIRE(times[i].present_id <= last_id);
+        // On the host's clock: after the first present was made, and not long after the last.
+        REQUIRE(times[i].first_pixel_time >= started);
+        REQUIRE(times[i].first_pixel_time <= finished + 1.0);
+        if (i > 0)
+        {
+            REQUIRE(times[i].present_id > times[i - 1].present_id);
+            REQUIRE(times[i].first_pixel_time > times[i - 1].first_pixel_time);
+        }
+    }
+
     frame_context.Destroy();
     swap_chain.Destroy();
     REQUIRE_NO_VALIDATION_ERROR_AT_TEARDOWN(fixture);

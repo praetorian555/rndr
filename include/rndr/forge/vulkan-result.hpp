@@ -70,6 +70,8 @@ inline const char* VkResultToString(VkResult result)
         case VK_ERROR_OUT_OF_DATE_KHR:
             return "VK_ERROR_OUT_OF_DATE_KHR: A surface has changed such that it is no longer compatible with the swap "
                    "chain. Recreate the swap chain.";
+        case VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT:
+            return "VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT: The swap chain's queue of present timing reports is full.";
         case VK_ERROR_VALIDATION_FAILED_EXT:
             return "VK_ERROR_VALIDATION_FAILED_EXT: A validation layer found an error.";
         default:
