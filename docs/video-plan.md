@@ -177,10 +177,6 @@ interface.
   record from the track's `BlockAdditionMapping` and says in the log that a profile 5 stream is shown without its
   colour; then it parses the RPU NAL units and converts IPTPQc2 to RGB in the shader, the reshaping curves and the
   matrices included. Profile 8.1 and 8.4 streams play as their HDR10 or HLG base layer and need nothing.
-- **An MP4 demultiplexer.** Some Real-Debrid files, and every test file Jellyfin publishes, are MP4, which the player
-  cannot open; its tests remux them to Matroska first. The demultiplexer reads `moov` - the tracks, their sample tables
-  and the `avcC`, `hvcC` and `dvcC` boxes - over the range reader, and the samples of `mdat` the tables point at, so a
-  file whose `moov` comes after `mdat` costs one range request to its end.
 
 ## Open questions
 
