@@ -18216,10 +18216,15 @@ TEST_CASE("Forge refuses what an Android hardware buffer needs on a device witho
     {
         SKIP("No Vulkan device on this machine.");
     }
-#if !RNDR_ANDROID
-    // The extensions are Android's, so no desktop device has them.
-    REQUIRE_FALSE(CanCreateDevice({.android_hardware_buffer = true}));
-#endif
+    // The feature comes exactly when the device lists both extensions. They are Android's, but a desktop driver may list
+    // them anyway: Mesa's llvmpipe does.
+    {
+        const ForgeFixture probe;
+        const Forge::PhysicalDevice& physical_device = probe.device.GetPhysicalDevice();
+        const bool listed = physical_device.IsExtensionSupported("VK_ANDROID_external_memory_android_hardware_buffer") &&
+                            physical_device.IsExtensionSupported(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME);
+        REQUIRE(CanCreateDevice({.android_hardware_buffer = true}) == listed);
+    }
     constexpr Forge::DeviceFeatures k_ycbcr{.sampler_ycbcr_conversion = true};
     if (!CanCreateDevice(k_ycbcr))
     {

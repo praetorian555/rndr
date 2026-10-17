@@ -221,7 +221,8 @@ struct DeviceFeatures
     /**
      * Importing an Android hardware buffer as a texture (Texture::Create from an AHardwareBuffer) and handing it
      * between Vulkan and its writer through k_foreign_queue_family. Pulls in
-     * VK_ANDROID_external_memory_android_hardware_buffer and VK_EXT_queue_family_foreign. Never supported off Android.
+     * VK_ANDROID_external_memory_android_hardware_buffer and VK_EXT_queue_family_foreign: Android's, though a desktop
+     * driver may list them too (Mesa's llvmpipe does), and then the feature comes with them.
      */
     bool android_hardware_buffer = false;
 };
