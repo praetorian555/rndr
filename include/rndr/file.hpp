@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "opal/container/array-view.h"
 #include "opal/container/dynamic-array.h"
 #include "opal/container/expected.h"
 #include "opal/container/string.h"
@@ -106,6 +107,25 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
  * a file no loader here could decode. The reason is logged at error level.
  */
 [[nodiscard]] Opal::Expected<Bitmap, ErrorCode> LoadImage(const Opal::StringUtf8& file_path, bool flip_vertically, bool generate_mips);
+
+/** The widest and the tallest image DecodeImage decodes, in pixels. */
+inline constexpr i32 k_max_image_dimension = 16384;
+
+/**
+ * Decode an image that is already in memory: PNG, JPEG, BMP, TGA, GIF's first frame, PSD, PIC, PNM or Radiance HDR, through
+ * stbi. What LoadImage calls for everything but KTX once it has read the file. The header is read first, and an image wider or
+ * taller than k_max_image_dimension is refused before its pixels are allocated. The channel bit depth is auto-detected
+ * (8-bit, 16-bit, or 32-bit HDR) and the image is always decoded as RGBA. Safe to call from any thread.
+ *
+ * @param file_bytes The whole file image.
+ * @param flip_vertically If true, the image will be flipped vertically.
+ * @param generate_mips If true, mip maps will be generated.
+ *
+ * @return The bitmap, or ErrorCode::InvalidArgument for no bytes, ErrorCode::OutOfBounds for more bytes than the decoder
+ * reads (2 GiB) or an image larger than k_max_image_dimension, or ErrorCode::CorruptData for bytes no decoder here could
+ * decode. The reason is logged at error level.
+ */
+[[nodiscard]] Opal::Expected<Bitmap, ErrorCode> DecodeImage(Opal::ArrayView<const u8> file_bytes, bool flip_vertically, bool generate_mips);
 
 #if RNDR_AUDIO
 /**

@@ -1,5 +1,7 @@
 #include "rndr/file.hpp"
 
+#include <climits>
+
 #include "stb_image/stb_image.h"
 #include "stb_image/stb_image_write.h"
 
@@ -289,35 +291,70 @@ Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode> Rndr::File::LoadImage(const Opal::
     }
 #endif
 
-    stbi_set_flip_vertically_on_load(flip_vertically);
+    const Opal::DynamicArray<u8> file_bytes = ReadEntireFile(file_path);
+    if (file_bytes.GetSize() == 0)
+    {
+        RNDR_LOG_ERROR("Failed to read image {}", *file_path);
+        return ResultType(ErrorCode::CorruptData);
+    }
+    return DecodeImage({file_bytes.GetData(), file_bytes.GetSize()}, flip_vertically, generate_mips);
+}
 
+Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode> Rndr::File::DecodeImage(Opal::ArrayView<const u8> file_bytes, bool flip_vertically,
+                                                                      bool generate_mips)
+{
+    using ResultType = Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode>;
+    if (file_bytes.GetSize() == 0)
+    {
+        RNDR_LOG_ERROR("DecodeImage: no bytes to decode");
+        return ResultType(ErrorCode::InvalidArgument);
+    }
+    if (file_bytes.GetSize() > static_cast<u64>(INT_MAX))
+    {
+        RNDR_LOG_ERROR("DecodeImage: {} bytes is more than the decoder reads", file_bytes.GetSize());
+        return ResultType(ErrorCode::OutOfBounds);
+    }
+    const stbi_uc* bytes = file_bytes.GetData();
+    const int byte_count = static_cast<int>(file_bytes.GetSize());
+
+    // The header alone, so that a huge size is refused before anything is allocated for it.
     int width = 0;
     int height = 0;
     int channels_in_file = 0;
-    constexpr int k_desired_channels = 4;
+    if (stbi_info_from_memory(bytes, byte_count, &width, &height, &channels_in_file) == 0)
+    {
+        RNDR_LOG_ERROR("DecodeImage: not an image any decoder here reads: {}", stbi_failure_reason());
+        return ResultType(ErrorCode::CorruptData);
+    }
+    if (width <= 0 || height <= 0 || width > k_max_image_dimension || height > k_max_image_dimension)
+    {
+        RNDR_LOG_ERROR("DecodeImage: a {}x{} image is larger than {} pixels a side", width, height, k_max_image_dimension);
+        return ResultType(ErrorCode::OutOfBounds);
+    }
 
+    stbi_set_flip_vertically_on_load_thread(flip_vertically ? 1 : 0);
+    constexpr int k_desired_channels = 4;
     PixelFormat pixel_format = PixelFormat::Undefined;
     u8* pixel_data = nullptr;
     u64 data_size = 0;
-
-    if (stbi_is_hdr(*file_path) > 0)
+    if (stbi_is_hdr_from_memory(bytes, byte_count) > 0)
     {
-        f32* data = stbi_loadf(*file_path, &width, &height, &channels_in_file, k_desired_channels);
+        f32* data = stbi_loadf_from_memory(bytes, byte_count, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
-            RNDR_LOG_ERROR("Failed to load HDR image {}: {}", *file_path, stbi_failure_reason());
+            RNDR_LOG_ERROR("DecodeImage: failed to decode an HDR image: {}", stbi_failure_reason());
             return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = reinterpret_cast<u8*>(data);
         pixel_format = PixelFormat::R32G32B32A32_SFLOAT;
         data_size = static_cast<u64>(width) * height * k_desired_channels * sizeof(f32);
     }
-    else if (stbi_is_16_bit(*file_path) > 0)
+    else if (stbi_is_16_bit_from_memory(bytes, byte_count) > 0)
     {
-        u16* data = stbi_load_16(*file_path, &width, &height, &channels_in_file, k_desired_channels);
+        u16* data = stbi_load_16_from_memory(bytes, byte_count, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
-            RNDR_LOG_ERROR("Failed to load 16-bit image {}: {}", *file_path, stbi_failure_reason());
+            RNDR_LOG_ERROR("DecodeImage: failed to decode a 16-bit image: {}", stbi_failure_reason());
             return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = reinterpret_cast<u8*>(data);
@@ -326,10 +363,10 @@ Opal::Expected<Rndr::Bitmap, Rndr::ErrorCode> Rndr::File::LoadImage(const Opal::
     }
     else
     {
-        u8* data = stbi_load(*file_path, &width, &height, &channels_in_file, k_desired_channels);
+        u8* data = stbi_load_from_memory(bytes, byte_count, &width, &height, &channels_in_file, k_desired_channels);
         if (data == nullptr)
         {
-            RNDR_LOG_ERROR("Failed to load image {}: {}", *file_path, stbi_failure_reason());
+            RNDR_LOG_ERROR("DecodeImage: failed to decode an image: {}", stbi_failure_reason());
             return ResultType(ErrorCode::CorruptData);
         }
         pixel_data = data;

@@ -119,6 +119,7 @@ if (${RNDR_BUILD_TESTS})
     set(RNDR_TEST_FILES
             test/base-test.cpp
             test/bitmap-test.cpp
+            test/image-decode-test.cpp
             test/camera-test.cpp
             test/frames-per-second-counter-test.cpp
             test/input-test.cpp
