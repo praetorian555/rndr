@@ -273,6 +273,8 @@ void Rndr::Forge::SwapChain::DestroySwapChain()
         vkDestroySwapchainKHR(m_device->GetNativeDevice(), m_swap_chain, nullptr);
         m_swap_chain = VK_NULL_HANDLE;
     }
+    // Present timing is the swap chain's; the next one sets it up again.
+    m_timing.is_on = false;
 }
 
 void Rndr::Forge::SwapChain::Destroy()
