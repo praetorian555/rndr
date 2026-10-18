@@ -30,7 +30,7 @@ Rndr::Forge::VideoProfileChain::VideoProfileChain(const VideoProfile& video_prof
             break;
         case VideoCodec::Av1:
             av1.stdProfile = static_cast<StdVideoAV1Profile>(video_profile.codec_profile);
-            av1.filmGrainSupport = VK_FALSE;
+            av1.filmGrainSupport = video_profile.film_grain ? VK_TRUE : VK_FALSE;
             profile.pNext = &av1;
             break;
     }
@@ -76,6 +76,11 @@ Rndr::ErrorCode Rndr::Forge::CheckVideoProfile(const VideoProfile& profile)
     if (profile.bit_depth != 8 && profile.bit_depth != 10)
     {
         RNDR_LOG_ERROR("Forge: a video profile has 8 or 10 bits per sample, and this one {}", profile.bit_depth);
+        return ErrorCode::InvalidArgument;
+    }
+    if (profile.film_grain && profile.codec != VideoCodec::Av1)
+    {
+        RNDR_LOG_ERROR("Forge: VideoProfile::film_grain is for AV1 profiles only");
         return ErrorCode::InvalidArgument;
     }
     return ErrorCode::Success;
@@ -572,6 +577,7 @@ Opal::Expected<Rndr::Forge::VideoSessionParameters, Rndr::ErrorCode> Rndr::Forge
     }
     VideoSessionParameters parameters;
     parameters.m_device = device;
+    parameters.m_codec = VideoCodec::H264;
     RNDR_FORGE_CHECK_EXPECTED(parameters.TakeIds(sets), Result);
 
     const VkVideoDecodeH264SessionParametersAddInfoKHR add_info{
@@ -607,6 +613,7 @@ Opal::Expected<Rndr::Forge::VideoSessionParameters, Rndr::ErrorCode> Rndr::Forge
     }
     VideoSessionParameters parameters;
     parameters.m_device = device;
+    parameters.m_codec = VideoCodec::H265;
     RNDR_FORGE_CHECK_EXPECTED(parameters.TakeIds(sets), Result);
 
     const VkVideoDecodeH265SessionParametersAddInfoKHR add_info{
@@ -634,6 +641,50 @@ Opal::Expected<Rndr::Forge::VideoSessionParameters, Rndr::ErrorCode> Rndr::Forge
     return Result(std::move(parameters));
 }
 
+Opal::Expected<Rndr::Forge::VideoSessionParameters, Rndr::ErrorCode> Rndr::Forge::VideoSessionParameters::CreateAv1(
+    const Device& device, const VideoSession& session, const StdVideoAV1SequenceHeader& sequence_header)
+{
+    using Result = Opal::Expected<VideoSessionParameters, ErrorCode>;
+
+    if (!session.IsValid() || session.GetDesc().profile.codec != VideoCodec::Av1)
+    {
+        RNDR_LOG_ERROR("Forge: AV1 session parameters need an AV1 video session");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    const StdVideoAV1ColorConfig* color_config = sequence_header.pColorConfig;
+    if (color_config == nullptr || (sequence_header.flags.timing_info_present_flag != 0 && sequence_header.pTimingInfo == nullptr))
+    {
+        RNDR_LOG_ERROR("Forge: an AV1 sequence header points at its colour config, and at its timing info when it says that is present");
+        return Result(ErrorCode::InvalidArgument);
+    }
+    const VideoProfile& profile = session.GetDesc().profile;
+    if (static_cast<u32>(sequence_header.seq_profile) != profile.codec_profile || color_config->BitDepth != profile.bit_depth ||
+        color_config->flags.mono_chrome != 0 || color_config->subsampling_x != 1 || color_config->subsampling_y != 1)
+    {
+        RNDR_LOG_ERROR(
+            "Forge: an AV1 sequence header of profile {} at {} bits, {}, does not fit a session of profile {} at {} bits in 4:2:0",
+            static_cast<u32>(sequence_header.seq_profile), color_config->BitDepth,
+            color_config->flags.mono_chrome != 0                                   ? "monochrome"
+            : color_config->subsampling_x != 1 || color_config->subsampling_y != 1 ? "not 4:2:0"
+                                                                                   : "4:2:0",
+            profile.codec_profile, profile.bit_depth);
+        return Result(ErrorCode::InvalidArgument);
+    }
+    VideoSessionParameters parameters;
+    parameters.m_device = device;
+    parameters.m_codec = VideoCodec::Av1;
+
+    const VkVideoDecodeAV1SessionParametersCreateInfoKHR av1_info{
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_SESSION_PARAMETERS_CREATE_INFO_KHR, .pStdSequenceHeader = &sequence_header};
+    const VkVideoSessionParametersCreateInfoKHR create_info{.sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_PARAMETERS_CREATE_INFO_KHR,
+                                                            .pNext = &av1_info,
+                                                            .videoSession = session.GetNativeSession()};
+    RNDR_FORGE_VK_CHECK_EXPECTED(
+        vkCreateVideoSessionParametersKHR(device.GetNativeDevice(), &create_info, nullptr, &parameters.m_parameters),
+        "vkCreateVideoSessionParametersKHR", Result);
+    return Result(std::move(parameters));
+}
+
 Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::Update(const void* add_info)
 {
     // Each update counts on by one from the last, starting at one.
@@ -647,9 +698,9 @@ Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::Update(const void* add_info
 
 Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::AddH264(const H264ParameterSets& sets)
 {
-    if (!IsValid())
+    if (!IsValid() || m_codec != VideoCodec::H264)
     {
-        RNDR_LOG_ERROR("Forge: AddH264 on empty session parameters");
+        RNDR_LOG_ERROR("Forge: AddH264 on session parameters that are empty or not H.264's");
         return ErrorCode::InvalidArgument;
     }
     RNDR_FORGE_CHECK(TakeIds(sets));
@@ -665,9 +716,9 @@ Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::AddH264(const H264Parameter
 
 Rndr::ErrorCode Rndr::Forge::VideoSessionParameters::AddH265(const H265ParameterSets& sets)
 {
-    if (!IsValid())
+    if (!IsValid() || m_codec != VideoCodec::H265)
     {
-        RNDR_LOG_ERROR("Forge: AddH265 on empty session parameters");
+        RNDR_LOG_ERROR("Forge: AddH265 on session parameters that are empty or not H.265's; AV1 parameters are never updated");
         return ErrorCode::InvalidArgument;
     }
     RNDR_FORGE_CHECK(TakeIds(sets));
@@ -691,6 +742,7 @@ Rndr::Forge::VideoSessionParameters::~VideoSessionParameters()
 Rndr::Forge::VideoSessionParameters::VideoSessionParameters(VideoSessionParameters&& other) noexcept
     : m_device(std::move(other.m_device)),
       m_parameters(other.m_parameters),
+      m_codec(other.m_codec),
       m_update_count(other.m_update_count),
       m_held(std::move(other.m_held))
 {
@@ -706,6 +758,7 @@ Rndr::Forge::VideoSessionParameters& Rndr::Forge::VideoSessionParameters::operat
         Destroy();
         m_device = std::move(other.m_device);
         m_parameters = other.m_parameters;
+        m_codec = other.m_codec;
         m_update_count = other.m_update_count;
         m_held = std::move(other.m_held);
         other.m_parameters = VK_NULL_HANDLE;

@@ -42,6 +42,12 @@ struct VideoProfile
     u32 codec_profile = 100;
     /** Bits per sample, luma and chroma alike: 8, or 10 for HEVC Main 10 and 10-bit AV1. */
     u32 bit_depth = 8;
+    /**
+     * AV1 only: whether the device applies the film grain of the pictures it decodes, Vulkan's filmGrainSupport. A device
+     * may offer the profile with it and without; a picture with StdVideoDecodeAV1PictureInfo::flags.apply_grain set is
+     * decoded only under a profile with it.
+     */
+    bool film_grain = false;
 
     bool operator==(const VideoProfile& other) const = default;
 };
@@ -256,13 +262,15 @@ struct VideoReferenceSlot
     StdVideoDecodeH264ReferenceInfo h264_reference{};
     /** H.265: the same - its picture order count, and whether it is a long-term reference. */
     StdVideoDecodeH265ReferenceInfo h265_reference{};
+    /** AV1: the same - its frame type, its order hint and those it saved of its own references. */
+    StdVideoDecodeAV1ReferenceInfo av1_reference{};
 };
 
 /** What a video coding scope is over, from CmdBeginVideoCoding to CmdEndVideoCoding. */
 struct VideoCodingDesc
 {
     Opal::Ref<const VideoSession> session;
-    /** The stream's parameter sets. May be empty for a scope that only resets the session. */
+    /** The stream's parameter sets. May be empty for a scope of an H.264 or H.265 session that only resets it; AV1 needs them. */
     Opal::Ref<const VideoSessionParameters> parameters;
     /** Every slot the decodes in the scope read or fill, with the picture each holds or is about to. */
     Opal::ArrayView<const VideoReferenceSlot> reference_slots;
@@ -288,6 +296,23 @@ struct VideoDecodeDesc
     Opal::ArrayView<const VideoReferenceSlot> references;
     /** Where each slice (H.264) or slice segment (H.265) of the picture starts in the bitstream range. */
     Opal::ArrayView<const u32> slice_offsets;
+    /**
+     * AV1: the picture's parameters from its frame header, with the structures it points at, which need only last until
+     * CmdDecodeVideo returns: pTileInfo with its four arrays, pQuantization, pLoopFilter and pGlobalMotion always,
+     * pSegmentation when segmentation is enabled, pFilmGrain when apply_grain is set, and pCDEF and pLoopRestoration when
+     * the sequence header enables them.
+     */
+    StdVideoDecodeAV1PictureInfo av1_picture{};
+    /**
+     * AV1: the slot of each of the picture's seven references, LAST_FRAME to ALTREF_FRAME, or -1 for one it does not use.
+     * Each slot named is one of `references`, and each of `references` is named.
+     */
+    i32 av1_reference_name_slots[STD_VIDEO_AV1_REFS_PER_FRAME] = {-1, -1, -1, -1, -1, -1, -1};
+    /** AV1: where the frame header OBU starts in the bitstream range. */
+    u32 av1_frame_header_offset = 0;
+    /** AV1: where each of the picture's tiles starts in the bitstream range, and how many bytes it takes; one entry per tile. */
+    Opal::ArrayView<const u32> av1_tile_offsets;
+    Opal::ArrayView<const u32> av1_tile_sizes;
     /** H.264: the picture's parameters from its slice header. */
     StdVideoDecodeH264PictureInfo h264_picture{};
     /**
@@ -366,9 +391,21 @@ public:
     VideoSessionParameters& operator=(VideoSessionParameters&& other) noexcept;
 
     /**
-     * Hand over parameter sets the stream brought after the start.
-     * @return ErrorCode::InvalidArgument for an id these parameters already hold or one past what H.264 allows - a
-     *         changed set needs parameters of its own - or whatever the failing update maps to.
+     * @param session The session the parameters are for, an AV1 one. It has to outlive them.
+     * @param sequence_header The stream's sequence header, with its colour config and, when it says timing info is
+     *                        present, its timing info; they need only last until the call returns.
+     * @return The parameters, ErrorCode::InvalidArgument for a session that is empty or not AV1, a sequence header without
+     *         its colour config or timing info, or one of another profile, bit depth or chroma format than the session's,
+     *         or whatever the failing creation maps to.
+     */
+    [[nodiscard]] static Opal::Expected<VideoSessionParameters, ErrorCode> CreateAv1(const Device& device, const VideoSession& session,
+                                                                                     const StdVideoAV1SequenceHeader& sequence_header);
+
+    /**
+     * Hand over parameter sets the stream brought after the start. AV1 parameters take nothing after they are made: Vulkan
+     * does not update them, so a new sequence header needs parameters of its own.
+     * @return ErrorCode::InvalidArgument for parameters that are not H.264's, an id these parameters already hold or one
+     *         past what H.264 allows - a changed set needs parameters of its own - or whatever the failing update maps to.
      */
     ErrorCode AddH264(const H264ParameterSets& sets);
 
@@ -389,6 +426,8 @@ private:
 
     Opal::Ref<const Device> m_device;
     VkVideoSessionParametersKHR m_parameters = VK_NULL_HANDLE;
+    /** The codec of the session the parameters are for. */
+    VideoCodec m_codec = VideoCodec::H264;
     /** How many updates have been made, which each update has to count on from. */
     u32 m_update_count = 0;
     /** The sets held, each as a key of its kind and ids, so that none is given twice. */

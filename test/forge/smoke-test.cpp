@@ -18329,10 +18329,39 @@ TEST_CASE("Forge video decode queues and what a profile decodes", "[forge]")
         REQUIRE(ContainsFormat(capabilities.output_formats, PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16));
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
+    SECTION("AV1 Main decodes 8 bits into NV12 and 10 into P010, with film grain where the device applies it")
+    {
+        if (!physical_device.IsExtensionSupported(VK_KHR_VIDEO_DECODE_AV1_EXTENSION_NAME))
+        {
+            SKIP("This device does not decode AV1.");
+        }
+        const Forge::VideoCapabilities main_8 =
+            ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(physical_device, {.codec = Forge::VideoCodec::Av1, .codec_profile = 0}));
+        INFO("min extent " << main_8.min_coded_extent.x << "x" << main_8.min_coded_extent.y << ", max level " << main_8.max_level
+                           << ", dpb slots " << main_8.max_dpb_slots);
+        // Eight reference frames and the one being decoded.
+        REQUIRE(main_8.max_dpb_slots >= 9);
+        REQUIRE(main_8.max_active_reference_pictures >= 7);
+        REQUIRE(ContainsFormat(main_8.dpb_formats, PixelFormat::G8_B8R8_2PLANE_420_UNORM));
+        REQUIRE(ContainsFormat(main_8.output_formats, PixelFormat::G8_B8R8_2PLANE_420_UNORM));
+        const Forge::VideoCapabilities main_10 = ForgeTest::Unwrap(
+            Forge::GetVideoDecodeCapabilities(physical_device, {.codec = Forge::VideoCodec::Av1, .codec_profile = 0, .bit_depth = 10}));
+        REQUIRE(ContainsFormat(main_10.dpb_formats, PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16));
+        REQUIRE(ContainsFormat(main_10.output_formats, PixelFormat::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16));
+        const Opal::Expected<Forge::VideoCapabilities, ErrorCode> film_grain = Forge::GetVideoDecodeCapabilities(
+            physical_device, {.codec = Forge::VideoCodec::Av1, .codec_profile = 0, .bit_depth = 10, .film_grain = true});
+        INFO("film grain " << (film_grain.HasValue() ? "applied" : "not applied"));
+        REQUIRE((film_grain.HasValue() || film_grain.GetError() == ErrorCode::FeatureNotSupported));
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
     SECTION("A profile Forge cannot describe is refused before the device is asked")
     {
         REQUIRE(Forge::GetVideoDecodeCapabilities(physical_device, {.codec = Forge::VideoCodec::H264, .bit_depth = 12})
                     .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
+        // Film grain is AV1's alone.
+        REQUIRE(
+            Forge::GetVideoDecodeCapabilities(physical_device, {.codec = Forge::VideoCodec::H265, .codec_profile = 1, .film_grain = true})
+                .GetErrorOr(ErrorCode::Success) == ErrorCode::InvalidArgument);
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }
@@ -18669,6 +18698,363 @@ TEST_CASE("Forge a video session and its H.265 parameter sets", "[forge]")
                                            REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
                                            REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
                                        }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+}
+
+namespace
+{
+
+/** A 1080p AV1 Main sequence header, with the colour config it points at. */
+struct Av1SequenceStorage
+{
+    StdVideoAV1ColorConfig color_config{.BitDepth = 8,
+                                        .subsampling_x = 1,
+                                        .subsampling_y = 1,
+                                        .color_primaries = STD_VIDEO_AV1_COLOR_PRIMARIES_BT_709,
+                                        .transfer_characteristics = STD_VIDEO_AV1_TRANSFER_CHARACTERISTICS_BT_709,
+                                        .matrix_coefficients = STD_VIDEO_AV1_MATRIX_COEFFICIENTS_BT_709};
+    StdVideoAV1SequenceHeader sequence_header{};
+
+    explicit Av1SequenceStorage(u8 bit_depth, bool film_grain = false)
+    {
+        color_config.BitDepth = bit_depth;
+        sequence_header.seq_profile = STD_VIDEO_AV1_PROFILE_MAIN;
+        sequence_header.flags.enable_order_hint = 1;
+        sequence_header.flags.enable_cdef = 1;
+        sequence_header.flags.film_grain_params_present = film_grain ? 1 : 0;
+        sequence_header.frame_width_bits_minus_1 = 10;
+        sequence_header.frame_height_bits_minus_1 = 10;
+        sequence_header.max_frame_width_minus_1 = 1919;
+        sequence_header.max_frame_height_minus_1 = 1079;
+        sequence_header.order_hint_bits_minus_1 = 6;
+        sequence_header.pColorConfig = &color_config;
+    }
+    Av1SequenceStorage(const Av1SequenceStorage&) = delete;
+    Av1SequenceStorage& operator=(const Av1SequenceStorage&) = delete;
+};
+
+/** A 1080p AV1 key frame of one tile, with every structure its picture information points at. */
+struct Av1PictureStorage
+{
+    u16 mi_col_start = 0;
+    u16 mi_row_start = 0;
+    u16 width_in_sbs_minus_1 = 29;
+    u16 height_in_sbs_minus_1 = 16;
+    StdVideoAV1TileInfo tile_info{};
+    StdVideoAV1Quantization quantization{.base_q_idx = 100};
+    StdVideoAV1LoopFilter loop_filter{};
+    StdVideoAV1CDEF cdef{};
+    StdVideoAV1GlobalMotion global_motion{};
+    StdVideoAV1FilmGrain film_grain{};
+    u32 tile_offset = 16;
+    u32 tile_size = 0;
+
+    Av1PictureStorage()
+    {
+        tile_info.flags.uniform_tile_spacing_flag = 1;
+        tile_info.TileCols = 1;
+        tile_info.TileRows = 1;
+        tile_info.pMiColStarts = &mi_col_start;
+        tile_info.pMiRowStarts = &mi_row_start;
+        tile_info.pWidthInSbsMinus1 = &width_in_sbs_minus_1;
+        tile_info.pHeightInSbsMinus1 = &height_in_sbs_minus_1;
+        film_grain.grain_seed = 1234;
+    }
+    Av1PictureStorage(const Av1PictureStorage&) = delete;
+    Av1PictureStorage& operator=(const Av1PictureStorage&) = delete;
+
+    /** Fill a decode of a key frame of `bitstream_size` bytes that refreshes every reference, its one tile after the header. */
+    void Fill(Forge::VideoDecodeDesc& decode, u64 bitstream_size)
+    {
+        tile_size = static_cast<u32>(bitstream_size) - tile_offset;
+        decode.bitstream_size = bitstream_size;
+        decode.av1_picture.frame_type = STD_VIDEO_AV1_FRAME_TYPE_KEY;
+        decode.av1_picture.primary_ref_frame = STD_VIDEO_AV1_PRIMARY_REF_NONE;
+        decode.av1_picture.refresh_frame_flags = 0xFF;
+        decode.av1_picture.flags.disable_cdf_update = 0;
+        decode.av1_picture.pTileInfo = &tile_info;
+        decode.av1_picture.pQuantization = &quantization;
+        decode.av1_picture.pLoopFilter = &loop_filter;
+        decode.av1_picture.pCDEF = &cdef;
+        decode.av1_picture.pGlobalMotion = &global_motion;
+        decode.av1_frame_header_offset = 0;
+        decode.av1_tile_offsets = {&tile_offset, 1};
+        decode.av1_tile_sizes = {&tile_size, 1};
+    }
+};
+
+}  // namespace
+
+TEST_CASE("Forge a video session and its AV1 parameters", "[forge]")
+{
+    if (!IsForgeAvailable())
+    {
+        SKIP("No Vulkan device on this machine.");
+    }
+    constexpr ForgeQueues k_av1{.decode = Forge::VideoCodecBits::Av1};
+    if (!CanCreateDevice({}, k_av1))
+    {
+        SKIP("This device has no queue that decodes AV1.");
+    }
+    ForgeFixture fixture({}, k_av1);
+    Forge::DeviceQueue& decode_queue = fixture.GetQueue(Forge::QueueFamily::Decode);
+    const Forge::VideoProfile profile{.codec = Forge::VideoCodec::Av1, .codec_profile = 0};
+    const Forge::VideoCapabilities capabilities =
+        ForgeTest::Unwrap(Forge::GetVideoDecodeCapabilities(fixture.device.GetPhysicalDevice(), profile));
+    constexpr PixelFormat k_nv12 = PixelFormat::G8_B8R8_2PLANE_420_UNORM;
+    if (!ContainsFormat(capabilities.dpb_formats, k_nv12) || !ContainsFormat(capabilities.output_formats, k_nv12))
+    {
+        SKIP("This device does not decode AV1 Main into NV12.");
+    }
+    const Forge::VideoSession session = ForgeTest::Unwrap(Forge::VideoSession::Create(
+        fixture.device, {.profile = profile,
+                         .max_coded_extent = {1920, 1088},
+                         .max_dpb_slots = Opal::Min(9u, capabilities.max_dpb_slots),
+                         .max_active_reference_pictures = Opal::Min(7u, capabilities.max_active_reference_pictures)}));
+    const Av1SequenceStorage sequence(8);
+    const u64 size_alignment = session.GetBitstreamSizeAlignment();
+    const Vector2i extent{1920, 1080};
+
+    SECTION("AV1 parameters hold one sequence header of the session's profile, and are never added to")
+    {
+        Forge::VideoSessionParameters parameters =
+            ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateAv1(fixture.device, session, sequence.sequence_header));
+        REQUIRE(parameters.IsValid());
+        // Vulkan does not update AV1 parameters, so neither kind of Add takes them.
+        REQUIRE(parameters.AddH265({}) == ErrorCode::InvalidArgument);
+        REQUIRE(parameters.AddH264({}) == ErrorCode::InvalidArgument);
+        // Another bit depth than the session's, monochrome, or no colour config.
+        const Av1SequenceStorage ten_bits(10);
+        REQUIRE(
+            Forge::VideoSessionParameters::CreateAv1(fixture.device, session, ten_bits.sequence_header).GetErrorOr(ErrorCode::Success) ==
+            ErrorCode::InvalidArgument);
+        Av1SequenceStorage monochrome(8);
+        monochrome.color_config.flags.mono_chrome = 1;
+        REQUIRE(
+            Forge::VideoSessionParameters::CreateAv1(fixture.device, session, monochrome.sequence_header).GetErrorOr(ErrorCode::Success) ==
+            ErrorCode::InvalidArgument);
+        StdVideoAV1SequenceHeader no_colour = sequence.sequence_header;
+        no_colour.pColorConfig = nullptr;
+        REQUIRE(Forge::VideoSessionParameters::CreateAv1(fixture.device, session, no_colour).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        StdVideoAV1SequenceHeader no_timing = sequence.sequence_header;
+        no_timing.flags.timing_info_present_flag = 1;
+        REQUIRE(Forge::VideoSessionParameters::CreateAv1(fixture.device, session, no_timing).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        // H.265 sets have no place in an AV1 session's parameters.
+        REQUIRE(Forge::VideoSessionParameters::CreateH265(fixture.device, session).GetErrorOr(ErrorCode::Success) ==
+                ErrorCode::InvalidArgument);
+        // A scope over an AV1 session holds the sequence header through its parameters.
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, decode_queue,
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session}) == ErrorCode::InvalidArgument);
+                                           REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A key frame decodes into its slot, with every structure of its picture copied into the command buffer")
+    {
+        const Forge::VideoSessionParameters parameters =
+            ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateAv1(fixture.device, session, sequence.sequence_header));
+        const bool coincide = !capabilities.dpb_and_output_distinct;
+        const Forge::TextureUsageBits dpb_usage =
+            coincide ? Forge::TextureUsageBits::VideoDecodeDpb | Forge::TextureUsageBits::VideoDecodeDestination
+                     : Forge::TextureUsageBits::VideoDecodeDpb;
+        Forge::Texture dpb = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_nv12, .width = 1920, .height = 1088, .usage = dpb_usage, .video_profile = profile}));
+        const Forge::TextureView dpb_view = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, dpb, {.usage = dpb_usage}));
+        Forge::Texture output;
+        Forge::TextureView output_view;
+        if (!coincide)
+        {
+            output = ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_nv12,
+                                                                               .width = 1920,
+                                                                               .height = 1088,
+                                                                               .usage = Forge::TextureUsageBits::VideoDecodeDestination,
+                                                                               .video_profile = profile}));
+            output_view = ForgeTest::Unwrap(
+                Forge::TextureView::Create(fixture.device, output, {.usage = Forge::TextureUsageBits::VideoDecodeDestination}));
+        }
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size_alignment * 64, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = profile}));
+        const Opal::DynamicArray<u8> zeros(size_alignment * 64, static_cast<u8>(0));
+        REQUIRE(bitstream.Update({zeros.GetData(), zeros.GetSize()}) == ErrorCode::Success);
+        Forge::VideoDecodeDesc decode{.bitstream = bitstream,
+                                      .output = {.view = coincide ? dpb_view : output_view, .coded_extent = extent},
+                                      .setup = {.slot_index = 0, .picture = {.view = dpb_view, .coded_extent = extent}}};
+        decode.setup.av1_reference.frame_type = STD_VIDEO_AV1_FRAME_TYPE_KEY;
+        const Forge::VideoReferenceSlot scope_slot{.slot_index = -1, .picture = {.view = dpb_view, .coded_extent = extent}};
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, decode_queue,
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToVideoDecodeDpb(dpb)) == ErrorCode::Success);
+                        if (!coincide)
+                        {
+                            REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToVideoDecodeDestination(
+                                        output, Forge::ImageLayout::Undefined)) == ErrorCode::Success);
+                        }
+                        REQUIRE(command_buffer.CmdBeginVideoCoding(
+                                    {.session = session, .parameters = parameters, .reference_slots = {&scope_slot, 1}}) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                        Av1PictureStorage picture;
+                        picture.Fill(decode, size_alignment * 64);
+                        REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::Success);
+                        // Overwritten after the call and gone before the submit: the command buffer holds its own copy.
+                        picture.tile_info.TileCols = 0;
+                        picture.width_in_sbs_minus_1 = 0xFFFF;
+                        picture.quantization.base_q_idx = 0;
+                        REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("An AV1 decode with a reference name, a tile or a structure Vulkan would not take is refused")
+    {
+        const Forge::VideoSessionParameters parameters =
+            ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateAv1(fixture.device, session, sequence.sequence_header));
+        Forge::Texture dpb = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_nv12,
+                             .width = 1920,
+                             .height = 1088,
+                             .usage = Forge::TextureUsageBits::VideoDecodeDpb | Forge::TextureUsageBits::VideoDecodeDestination,
+                             .video_profile = profile}));
+        const Forge::TextureView dpb_view = ForgeTest::Unwrap(Forge::TextureView::Create(
+            fixture.device, dpb, {.usage = Forge::TextureUsageBits::VideoDecodeDpb | Forge::TextureUsageBits::VideoDecodeDestination}));
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device, {.size = size_alignment * 4, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = profile}));
+        const u64 size = size_alignment * 4;
+        const Forge::VideoReferenceSlot reference{.slot_index = 1, .picture = {.view = dpb_view, .coded_extent = extent}};
+        Av1PictureStorage picture;
+        const auto make_decode = [&]()
+        {
+            Forge::VideoDecodeDesc decode{.bitstream = bitstream,
+                                          .output = {.view = dpb_view, .coded_extent = extent},
+                                          .setup = {.slot_index = 0, .picture = {.view = dpb_view, .coded_extent = extent}}};
+            picture.Fill(decode, size);
+            return decode;
+        };
+        REQUIRE(Forge::ImmediateSubmit(fixture.device, decode_queue,
+                                       [&](Forge::CommandBuffer& command_buffer)
+                                       {
+                                           REQUIRE(command_buffer.CmdBeginVideoCoding({.session = session, .parameters = parameters}) ==
+                                                   ErrorCode::Success);
+                                           REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                                           // A reference name pointing at a slot that is not among the references, and a reference no name
+                                           // names.
+                                           Forge::VideoDecodeDesc decode = make_decode();
+                                           decode.av1_reference_name_slots[0] = 1;
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           decode = make_decode();
+                                           decode.references = {&reference, 1};
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           // No tile, an offset without a size, a tile past the range, and a frame header past it.
+                                           decode = make_decode();
+                                           decode.av1_tile_offsets = {};
+                                           decode.av1_tile_sizes = {};
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           decode = make_decode();
+                                           decode.av1_tile_sizes = {};
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           decode = make_decode();
+                                           picture.tile_size += 1;
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           decode = make_decode();
+                                           decode.av1_frame_header_offset = static_cast<u32>(size);
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           // A picture without its tile info or quantization, with no tile columns, or with segmentation
+                                           // but no segmentation to point at.
+                                           decode = make_decode();
+                                           decode.av1_picture.pTileInfo = nullptr;
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           decode = make_decode();
+                                           decode.av1_picture.pQuantization = nullptr;
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           decode = make_decode();
+                                           picture.tile_info.TileCols = 0;
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           picture.tile_info.TileCols = 1;
+                                           decode = make_decode();
+                                           decode.av1_picture.flags.segmentation_enabled = 1;
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           // Film grain under a profile without it.
+                                           decode = make_decode();
+                                           decode.av1_picture.flags.apply_grain = 1;
+                                           decode.av1_picture.pFilmGrain = &picture.film_grain;
+                                           REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::InvalidArgument);
+                                           REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                                       }) == ErrorCode::Success);
+        REQUIRE_NO_VALIDATION_ERROR(fixture);
+    }
+    SECTION("A picture with film grain is written apart from its slot, which keeps it without the grain")
+    {
+        const Forge::VideoProfile grain_profile{.codec = Forge::VideoCodec::Av1, .codec_profile = 0, .film_grain = true};
+        const Opal::Expected<Forge::VideoCapabilities, ErrorCode> grain_capabilities =
+            Forge::GetVideoDecodeCapabilities(fixture.device.GetPhysicalDevice(), grain_profile);
+        if (!grain_capabilities.HasValue())
+        {
+            SKIP("This device does not apply AV1 film grain.");
+        }
+        const Forge::VideoSession grain_session = ForgeTest::Unwrap(Forge::VideoSession::Create(
+            fixture.device, {.profile = grain_profile,
+                             .max_coded_extent = {1920, 1088},
+                             .max_dpb_slots = Opal::Min(9u, grain_capabilities.GetValue().max_dpb_slots),
+                             .max_active_reference_pictures = Opal::Min(7u, grain_capabilities.GetValue().max_active_reference_pictures)}));
+        const Av1SequenceStorage grain_sequence(8, true);
+        const Forge::VideoSessionParameters parameters =
+            ForgeTest::Unwrap(Forge::VideoSessionParameters::CreateAv1(fixture.device, grain_session, grain_sequence.sequence_header));
+        const Forge::TextureUsageBits dpb_usage = Forge::TextureUsageBits::VideoDecodeDpb | Forge::TextureUsageBits::VideoDecodeDestination;
+        Forge::Texture dpb = ForgeTest::Unwrap(Forge::Texture::Create(
+            fixture.device, {.format = k_nv12, .width = 1920, .height = 1088, .usage = dpb_usage, .video_profile = grain_profile}));
+        const Forge::TextureView dpb_view = ForgeTest::Unwrap(Forge::TextureView::Create(fixture.device, dpb, {.usage = dpb_usage}));
+        Forge::Texture output =
+            ForgeTest::Unwrap(Forge::Texture::Create(fixture.device, {.format = k_nv12,
+                                                                      .width = 1920,
+                                                                      .height = 1088,
+                                                                      .usage = Forge::TextureUsageBits::VideoDecodeDestination,
+                                                                      .video_profile = grain_profile}));
+        const Forge::TextureView output_view = ForgeTest::Unwrap(
+            Forge::TextureView::Create(fixture.device, output, {.usage = Forge::TextureUsageBits::VideoDecodeDestination}));
+        const Forge::Buffer bitstream = ForgeTest::Unwrap(Forge::Buffer::Create(
+            fixture.device,
+            {.size = size_alignment * 64, .usage = Forge::BufferUsageBits::VideoDecodeSource, .video_profile = grain_profile}));
+        const Opal::DynamicArray<u8> zeros(size_alignment * 64, static_cast<u8>(0));
+        REQUIRE(bitstream.Update({zeros.GetData(), zeros.GetSize()}) == ErrorCode::Success);
+        Av1PictureStorage picture;
+        const auto make_decode = [&](const Forge::TextureView& output_of)
+        {
+            Forge::VideoDecodeDesc decode{.bitstream = bitstream,
+                                          .output = {.view = output_of, .coded_extent = extent},
+                                          .setup = {.slot_index = 0, .picture = {.view = dpb_view, .coded_extent = extent}}};
+            decode.setup.av1_reference.frame_type = STD_VIDEO_AV1_FRAME_TYPE_KEY;
+            picture.Fill(decode, size_alignment * 64);
+            decode.av1_picture.flags.apply_grain = 1;
+            decode.av1_picture.pFilmGrain = &picture.film_grain;
+            return decode;
+        };
+        const Forge::VideoDecodeDesc decode = make_decode(output_view);
+        const Forge::VideoDecodeDesc into_slot = make_decode(dpb_view);
+        const Forge::VideoReferenceSlot scope_slot{.slot_index = -1, .picture = {.view = dpb_view, .coded_extent = extent}};
+        REQUIRE(Forge::ImmediateSubmit(
+                    fixture.device, decode_queue,
+                    [&](Forge::CommandBuffer& command_buffer)
+                    {
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToVideoDecodeDpb(dpb)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdTextureBarrier(Forge::TextureBarrier::ToVideoDecodeDestination(
+                                    output, Forge::ImageLayout::Undefined)) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdBeginVideoCoding(
+                                    {.session = grain_session, .parameters = parameters, .reference_slots = {&scope_slot, 1}}) ==
+                                ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdResetVideoCoding() == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdDecodeVideo(into_slot) == ErrorCode::InvalidArgument);
+                        REQUIRE(command_buffer.CmdDecodeVideo(decode) == ErrorCode::Success);
+                        REQUIRE(command_buffer.CmdEndVideoCoding() == ErrorCode::Success);
+                    }) == ErrorCode::Success);
         REQUIRE_NO_VALIDATION_ERROR(fixture);
     }
 }

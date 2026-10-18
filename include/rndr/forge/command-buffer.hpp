@@ -796,8 +796,8 @@ public:
      * Open a video coding scope over a session, which every decode is recorded inside. Only on a command buffer of a
      * decode queue whose family decodes the session's codec, and not inside another scope.
      * @param desc The session, the stream's parameters, and every reference slot the scope's decodes read or fill.
-     * @return ErrorCode::InvalidArgument for an empty session, parameters of another session, a slot past the session's,
-     *         a picture without a decode view, a queue that does not decode the codec, or a scope already open.
+     * @return ErrorCode::InvalidArgument for an empty session, an AV1 session without parameters, a slot past the
+     *         session's, a picture without a decode view, a queue that does not decode the codec, or a scope already open.
      */
     ErrorCode CmdBeginVideoCoding(const VideoCodingDesc& desc);
 
@@ -808,12 +808,16 @@ public:
     ErrorCode CmdResetVideoCoding();
 
     /**
-     * Decode one picture of an H.264 or H.265 session. With VideoDecodeDesc::status_query_pool set, the decode writes
-     * whether it succeeded into that query.
+     * Decode one picture of an H.264, H.265 or AV1 session. With VideoDecodeDesc::status_query_pool set, the decode writes
+     * whether it succeeded into that query. What the desc points at is copied, the AV1 picture's structures included, so
+     * it need only last until the call returns.
      * @return ErrorCode::InvalidArgument outside a scope, for a bitstream buffer without BufferUsageBits::VideoDecodeSource,
      *         a bitstream range that breaks the session's alignments or reaches past the buffer, no slice, a picture
      *         without a decode view, more references than the session takes, an H.265 reference picture set naming a slot
-     *         that is not among the references, or a status query pool for another profile;
+     *         that is not among the references, an AV1 reference name that is not among them or a reference no name
+     *         names, an AV1 picture without a tile, with a tile or its frame header outside the range, without a structure
+     *         its picture information has to point at, or applying film grain under a profile without it or into its own
+     *         setup slot, or a status query pool for another profile;
      *         OutOfBounds for a slot past the session's or a status query past its pool.
      */
     ErrorCode CmdDecodeVideo(const VideoDecodeDesc& desc);
@@ -861,6 +865,27 @@ private:
         StdVideoDecodeH265ReferenceInfo setup_h265_reference{};
         Opal::DynamicArray<VkVideoDecodeH265DpbSlotInfoKHR> reference_h265;
         Opal::DynamicArray<StdVideoDecodeH265ReferenceInfo> reference_h265_infos;
+        // AV1, with every structure its picture information points at
+        VkVideoDecodeAV1PictureInfoKHR av1_info{};
+        StdVideoDecodeAV1PictureInfo av1_picture{};
+        StdVideoAV1TileInfo av1_tile_info{};
+        Opal::DynamicArray<u16> av1_mi_col_starts;
+        Opal::DynamicArray<u16> av1_mi_row_starts;
+        Opal::DynamicArray<u16> av1_width_in_sbs_minus_1;
+        Opal::DynamicArray<u16> av1_height_in_sbs_minus_1;
+        StdVideoAV1Quantization av1_quantization{};
+        StdVideoAV1Segmentation av1_segmentation{};
+        StdVideoAV1LoopFilter av1_loop_filter{};
+        StdVideoAV1CDEF av1_cdef{};
+        StdVideoAV1LoopRestoration av1_loop_restoration{};
+        StdVideoAV1GlobalMotion av1_global_motion{};
+        StdVideoAV1FilmGrain av1_film_grain{};
+        Opal::DynamicArray<u32> av1_tile_offsets;
+        Opal::DynamicArray<u32> av1_tile_sizes;
+        VkVideoDecodeAV1DpbSlotInfoKHR setup_av1{};
+        StdVideoDecodeAV1ReferenceInfo setup_av1_reference{};
+        Opal::DynamicArray<VkVideoDecodeAV1DpbSlotInfoKHR> reference_av1;
+        Opal::DynamicArray<StdVideoDecodeAV1ReferenceInfo> reference_av1_infos;
     };
     /**
      * What each CmdDecodeVideo of this recording handed to Vulkan, kept like the framebuffers until the buffer is recorded

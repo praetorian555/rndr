@@ -414,16 +414,17 @@ phone is what settles it.
 
 Forge decodes video through Vulkan Video on a decode queue: it wraps the objects and commands, and checks what Vulkan
 requires of them. Reading a codec's bitstream is the caller's - parameter sets and slice headers arrive already parsed,
-as the `StdVideo*` structures Vulkan defines - and so is deciding which reference picture goes in which slot. H.264 and
-H.265 have session parameters and a decode command; AV1 has the profile, the capabilities and the resources, and gets the
-rest the same way.
+as the `StdVideo*` structures Vulkan defines - and so is deciding which reference picture goes in which slot. H.264,
+H.265 and AV1 each have their session parameters and their part of the decode command.
 
 **The device.** `DeviceDesc::use_decode_queue` takes a decode queue and `decode_codecs` names the codecs it has to
 decode, all on one family: the video extensions and one per codec are enabled with it, and a device whose decode queues
 cannot is passed over by `SelectPhysicalDevice`. `PhysicalDevice::GetVideoCodecOperations` says what each family decodes.
 
-**What a profile decodes.** A `VideoProfile` is the codec, its profile (`profile_idc` for H.264 and H.265) and the bit
-depth. `GetVideoDecodeCapabilities` answers for one: the picture sizes, the reference slots, the bitstream alignments,
+**What a profile decodes.** A `VideoProfile` is the codec, its profile (`profile_idc` for H.264 and H.265, `seq_profile`
+for AV1), the bit depth and, for AV1 alone, whether the device applies film grain (`film_grain`, Vulkan's
+`filmGrainSupport`); a device may offer an AV1 profile with film grain and without, and everything made for one is made
+for it and not the other. `GetVideoDecodeCapabilities` answers for one: the picture sizes, the reference slots, the bitstream alignments,
 the formats reference and output pictures can have, and whether the output is written into the reference picture image
 (`dpb_and_output_coincide`) or into an image of its own (`dpb_and_output_distinct`).
 
@@ -439,16 +440,36 @@ layouts, and `PipelineStageBits::VideoDecode` with `VideoDecodeRead` and `VideoD
 Forge binds; its desc is refused when it asks for more than the capabilities allow. `VideoSessionParameters::CreateH264`
 keeps the stream's SPS and PPS, and `AddH264` takes those a stream brings later; `CreateH265` and `AddH265` do the same with
 VPS, SPS and PPS. A set is given once: a changed set needs parameters of their own. An H.264 set is named by its id, an
-H.265 SPS by its VPS id and its own and an H.265 PPS by those and its own, as Vulkan keys them.
+H.265 SPS by its VPS id and its own and an H.265 PPS by those and its own, as Vulkan keys them. `CreateAv1` keeps an AV1
+stream's one sequence header, with the colour config it points at and the timing info when it says there is one; it is
+refused when its profile, bit depth or chroma format is not the session's, which decodes 4:2:0 only. AV1 parameters take
+nothing after they are made - Vulkan does not update them (`VUID-vkUpdateVideoSessionParametersKHR-videoSessionParameters-09260`),
+so `AddH264` and `AddH265` refuse them - and a new sequence header needs parameters of its own. An AV1 coding scope cannot
+go without its parameters, even to reset the session.
 
 **Decoding.** On a command buffer of the decode queue, `CmdBeginVideoCoding` opens a scope over the session, the
 parameters and every reference slot its decodes touch; `CmdResetVideoCoding` resets the session, which its first scope
 has to; `CmdDecodeVideo` decodes one picture from a bitstream range into an output, keeping it in a setup slot when
 later pictures refer to it; `CmdEndVideoCoding` closes the scope. `VideoDecodeDesc::slice_offsets` says where each H.264
 slice or H.265 slice segment starts, and the codec's picture information and each slot's reference information go beside
-it (`h264_picture` and `h264_reference`, `h265_picture` and `h265_reference`). An H.265 picture's reference picture set
-names DPB slots, so each slot in `RefPicSetStCurrBefore`, `RefPicSetStCurrAfter` and `RefPicSetLtCurr` has to be one of the
-decode's references, which `CmdDecodeVideo` checks. A decode outside a scope, on a queue that does not
+it (`h264_picture` and `h264_reference`, `h265_picture` and `h265_reference`, `av1_picture` and `av1_reference`). An H.265
+picture's reference picture set names DPB slots, so each slot in `RefPicSetStCurrBefore`, `RefPicSetStCurrAfter` and
+`RefPicSetLtCurr` has to be one of the decode's references, which `CmdDecodeVideo` checks.
+
+An AV1 decode has no slices. `av1_frame_header_offset` is where its frame header OBU starts in the bitstream range, and
+`av1_tile_offsets` and `av1_tile_sizes` where each tile starts and how long it is, all inside the range. Its seven
+references, LAST_FRAME to ALTREF_FRAME, are named by slot in `av1_reference_name_slots`, -1 for one the frame does not
+use; each slot named is one of `references`, and each of `references` is named, as Vulkan requires both ways. Several names
+may share a slot, since several of AV1's eight reference frames can be one picture. `av1_picture` points at the frame
+header's structures - the tile info with its four arrays, the quantization, the loop filter and the global motion always,
+the segmentation when it is enabled, the film grain when `apply_grain` is set, CDEF and loop restoration when the sequence
+header enables them - and `CmdDecodeVideo` refuses a picture without one it needs, or with no tile columns or rows or more
+than 64 of either. It copies them all into the command buffer, the tile info's arrays included, for the reason the NVIDIA
+notes below give, so what the caller passed may go as soon as the call returns. A picture that applies film grain needs a
+profile with `film_grain`, and is written to an output apart from its setup slot, which keeps the picture without the
+grain for the frames that refer to it: Vulkan requires that (`VUID-vkCmdDecodeVideoKHR-pDecodeInfo-09249`) and allows it
+on a device whose output otherwise coincides with the slot (`-07141`), which is all NVIDIA offers for AV1, with film grain
+or without. A decode outside a scope, on a queue that does not
 decode the codec, from a buffer or a range that breaks the session's rules, or with more references than it takes, is
 refused. The decoded picture moves to the graphics queue by a queue family ownership transfer: a barrier with
 `source_queue_family` and `destination_queue_family` set, recorded on both queues. Read or copy it there: on NVIDIA's
@@ -493,7 +514,8 @@ reports:
   bit, so it is the Vulkan driver and not the decoder. Long-term references are rare outside conferencing streams; x264
   does not write them unless asked. H.265's long-term references decode right on the same driver.
 
-What is not there yet: AV1 parameters and decode, and reference pictures as layers of one texture.
+What is not there yet: reference pictures as layers of one texture, and AV1's inline session parameters, which
+`VK_KHR_video_maintenance2` allows in place of parameters made again for each new sequence header.
 
 ---
 

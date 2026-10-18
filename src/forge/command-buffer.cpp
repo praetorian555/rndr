@@ -2263,6 +2263,129 @@ Rndr::ErrorCode CheckSlotIndex(const Rndr::Forge::VideoSession& session, Rndr::i
     return ErrorCode::OutOfBounds;
 }
 
+/** Whether two pictures are the same image, which a YCbCr texture of one layer is through any of its views. */
+bool IsSameImage(const Rndr::Forge::VideoPicture& a, const Rndr::Forge::VideoPicture& b)
+{
+    return a.view.IsValid() && b.view.IsValid() && a.view->IsValid() && b.view->IsValid() && &a.view->GetTexture() == &b.view->GetTexture();
+}
+
+/** What an AV1 decode asks beyond what every decode does: its reference names, its tiles and its picture's structures. */
+Rndr::ErrorCode CheckAv1Decode(const Rndr::Forge::VideoDecodeDesc& desc, const Rndr::Forge::VideoSession& session)
+{
+    using namespace Rndr;
+    for (const i32 slot : desc.av1_reference_name_slots)
+    {
+        if (slot < 0)
+        {
+            continue;
+        }
+        bool found = false;
+        for (const Forge::VideoReferenceSlot& reference : desc.references)
+        {
+            found = found || reference.slot_index == slot;
+        }
+        if (!found)
+        {
+            RNDR_LOG_ERROR("Forge: an AV1 reference name points at slot {}, which is not among the decode's references", slot);
+            return ErrorCode::InvalidArgument;
+        }
+    }
+    for (const Forge::VideoReferenceSlot& reference : desc.references)
+    {
+        bool named = false;
+        for (const i32 slot : desc.av1_reference_name_slots)
+        {
+            named = named || slot == reference.slot_index;
+        }
+        if (!named)
+        {
+            RNDR_LOG_ERROR("Forge: an AV1 decode's reference in slot {} is not named by any of av1_reference_name_slots",
+                           reference.slot_index);
+            return ErrorCode::InvalidArgument;
+        }
+    }
+
+    if (desc.av1_tile_offsets.IsEmpty() || desc.av1_tile_offsets.GetSize() != desc.av1_tile_sizes.GetSize())
+    {
+        RNDR_LOG_ERROR(
+            "Forge: an AV1 picture has at least one tile, with an offset and a size for each, and this one has {} offsets and {} sizes",
+            desc.av1_tile_offsets.GetSize(), desc.av1_tile_sizes.GetSize());
+        return ErrorCode::InvalidArgument;
+    }
+    if (desc.av1_frame_header_offset >= desc.bitstream_size)
+    {
+        RNDR_LOG_ERROR("Forge: an AV1 frame header starts at {}, past the decode's bitstream range of {} bytes",
+                       desc.av1_frame_header_offset, desc.bitstream_size);
+        return ErrorCode::InvalidArgument;
+    }
+    for (u64 i = 0; i < desc.av1_tile_offsets.GetSize(); ++i)
+    {
+        const u64 offset = desc.av1_tile_offsets[i];
+        if (offset >= desc.bitstream_size || desc.av1_tile_sizes[i] > desc.bitstream_size - offset)
+        {
+            RNDR_LOG_ERROR("Forge: AV1 tile {} at {}, {} bytes long, reaches past the decode's bitstream range of {} bytes", i, offset,
+                           desc.av1_tile_sizes[i], desc.bitstream_size);
+            return ErrorCode::InvalidArgument;
+        }
+    }
+
+    const StdVideoDecodeAV1PictureInfo& picture = desc.av1_picture;
+    const StdVideoAV1TileInfo* tile_info = picture.pTileInfo;
+    if (tile_info == nullptr || picture.pQuantization == nullptr || picture.pLoopFilter == nullptr || picture.pGlobalMotion == nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: an AV1 picture points at its tile info, quantization, loop filter and global motion");
+        return ErrorCode::InvalidArgument;
+    }
+    if (tile_info->TileCols == 0 || tile_info->TileRows == 0 || tile_info->TileCols > STD_VIDEO_AV1_MAX_TILE_COLS ||
+        tile_info->TileRows > STD_VIDEO_AV1_MAX_TILE_ROWS || tile_info->pMiColStarts == nullptr || tile_info->pMiRowStarts == nullptr ||
+        tile_info->pWidthInSbsMinus1 == nullptr || tile_info->pHeightInSbsMinus1 == nullptr)
+    {
+        RNDR_LOG_ERROR(
+            "Forge: an AV1 tile info has 1 to {} tile columns and 1 to {} rows, and points at the starts and sizes of each; this one "
+            "has {} by {}",
+            STD_VIDEO_AV1_MAX_TILE_COLS, STD_VIDEO_AV1_MAX_TILE_ROWS, tile_info->TileCols, tile_info->TileRows);
+        return ErrorCode::InvalidArgument;
+    }
+    if (picture.flags.segmentation_enabled != 0 && picture.pSegmentation == nullptr)
+    {
+        RNDR_LOG_ERROR("Forge: an AV1 picture with segmentation enabled points at its segmentation");
+        return ErrorCode::InvalidArgument;
+    }
+    if (picture.flags.apply_grain != 0)
+    {
+        if (!session.GetDesc().profile.film_grain)
+        {
+            RNDR_LOG_ERROR("Forge: an AV1 picture applies film grain only in a session whose profile has VideoProfile::film_grain");
+            return ErrorCode::InvalidArgument;
+        }
+        if (picture.pFilmGrain == nullptr)
+        {
+            RNDR_LOG_ERROR("Forge: an AV1 picture that applies film grain points at its film grain parameters");
+            return ErrorCode::InvalidArgument;
+        }
+        if (desc.setup.slot_index >= 0 && IsSameImage(desc.output, desc.setup.picture))
+        {
+            RNDR_LOG_ERROR(
+                "Forge: an AV1 picture that applies film grain is written to an output apart from its setup slot, which keeps it "
+                "without the grain");
+            return ErrorCode::InvalidArgument;
+        }
+    }
+    return ErrorCode::Success;
+}
+
+/** Copy a structure a picture's information points at into the record, and point at the copy; null stays null. */
+template <typename T>
+const T* CopyInto(const T* source, T& destination)
+{
+    if (source == nullptr)
+    {
+        return nullptr;
+    }
+    destination = *source;
+    return &destination;
+}
+
 }  // namespace
 
 Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginVideoCoding(const VideoCodingDesc& desc)
@@ -2284,6 +2407,11 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdBeginVideoCoding(const VideoCodin
         RNDR_LOG_ERROR("Forge: video coding is recorded on a decode queue that decodes the session's codec, and this command buffer's "
                        "family {} does not",
                        family);
+        return ErrorCode::InvalidArgument;
+    }
+    if (session.GetDesc().profile.codec == VideoCodec::Av1 && (!desc.parameters.IsValid() || !desc.parameters->IsValid()))
+    {
+        RNDR_LOG_ERROR("Forge: an AV1 video coding scope needs the stream's session parameters, which hold its sequence header");
         return ErrorCode::InvalidArgument;
     }
     Opal::DynamicArray<VkVideoPictureResourceInfoKHR> pictures(desc.reference_slots.GetSize());
@@ -2329,11 +2457,6 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
     }
     const VideoSession& session = *m_video_session;
     const VideoCodec codec = session.GetDesc().profile.codec;
-    if (codec != VideoCodec::H264 && codec != VideoCodec::H265)
-    {
-        RNDR_LOG_ERROR("Forge: CmdDecodeVideo decodes H.264 and H.265 only, so far");
-        return ErrorCode::InvalidArgument;
-    }
 
     // The bitstream: a buffer made for it, a range inside it, both ends on the session's alignments.
     if (!desc.bitstream.IsValid() || !(desc.bitstream->GetDesc().usage & BufferUsageBits::VideoDecodeSource))
@@ -2355,7 +2478,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         RNDR_LOG_ERROR("Forge: a decode's bitstream range reaches past the end of its buffer");
         return ErrorCode::InvalidArgument;
     }
-    if (desc.slice_offsets.IsEmpty())
+    if (codec != VideoCodec::Av1 && desc.slice_offsets.IsEmpty())
     {
         RNDR_LOG_ERROR("Forge: a picture has at least one slice, and slice_offsets names none");
         return ErrorCode::InvalidArgument;
@@ -2400,6 +2523,10 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
             }
         }
     }
+    if (codec == VideoCodec::Av1)
+    {
+        RNDR_FORGE_CHECK(CheckAv1Decode(desc, session));
+    }
 
     const bool has_status_query = desc.status_query_pool.IsValid();
     if (has_status_query)
@@ -2439,11 +2566,17 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
             r.setup_h264 = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H264_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.setup_h264_reference};
             codec_info = &r.setup_h264;
         }
-        else
+        else if (codec == VideoCodec::H265)
         {
             r.setup_h265_reference = desc.setup.h265_reference;
             r.setup_h265 = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.setup_h265_reference};
             codec_info = &r.setup_h265;
+        }
+        else
+        {
+            r.setup_av1_reference = desc.setup.av1_reference;
+            r.setup_av1 = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_DPB_SLOT_INFO_KHR, .pStdReferenceInfo = &r.setup_av1_reference};
+            codec_info = &r.setup_av1;
         }
         r.setup_slot = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
                         .pNext = codec_info,
@@ -2458,10 +2591,15 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
         r.reference_h264 = Opal::DynamicArray<VkVideoDecodeH264DpbSlotInfoKHR>(reference_count);
         r.reference_h264_infos = Opal::DynamicArray<StdVideoDecodeH264ReferenceInfo>(reference_count);
     }
-    else
+    else if (codec == VideoCodec::H265)
     {
         r.reference_h265 = Opal::DynamicArray<VkVideoDecodeH265DpbSlotInfoKHR>(reference_count);
         r.reference_h265_infos = Opal::DynamicArray<StdVideoDecodeH265ReferenceInfo>(reference_count);
+    }
+    else
+    {
+        r.reference_av1 = Opal::DynamicArray<VkVideoDecodeAV1DpbSlotInfoKHR>(reference_count);
+        r.reference_av1_infos = Opal::DynamicArray<StdVideoDecodeAV1ReferenceInfo>(reference_count);
     }
     for (i64 i = 0; i < reference_count; ++i)
     {
@@ -2476,12 +2614,19 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
                                    .pStdReferenceInfo = &r.reference_h264_infos[i]};
             codec_info = &r.reference_h264[i];
         }
-        else
+        else if (codec == VideoCodec::H265)
         {
             r.reference_h265_infos[i] = reference.h265_reference;
             r.reference_h265[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_DPB_SLOT_INFO_KHR,
                                    .pStdReferenceInfo = &r.reference_h265_infos[i]};
             codec_info = &r.reference_h265[i];
+        }
+        else
+        {
+            r.reference_av1_infos[i] = reference.av1_reference;
+            r.reference_av1[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_DPB_SLOT_INFO_KHR,
+                                  .pStdReferenceInfo = &r.reference_av1_infos[i]};
+            codec_info = &r.reference_av1[i];
         }
         r.reference_slots[i] = {.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
                                 .pNext = codec_info,
@@ -2500,7 +2645,7 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
                        .pSliceOffsets = r.slice_offsets.GetData()};
         picture_info = &r.h264_info;
     }
-    else
+    else if (codec == VideoCodec::H265)
     {
         r.h265_picture = desc.h265_picture;
         r.h265_info = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_PICTURE_INFO_KHR,
@@ -2508,6 +2653,41 @@ Rndr::ErrorCode Rndr::Forge::CommandBuffer::CmdDecodeVideo(const VideoDecodeDesc
                        .sliceSegmentCount = static_cast<u32>(r.slice_offsets.GetSize()),
                        .pSliceSegmentOffsets = r.slice_offsets.GetData()};
         picture_info = &r.h265_info;
+    }
+    else
+    {
+        r.av1_picture = desc.av1_picture;
+        const StdVideoAV1TileInfo& tile_info = *desc.av1_picture.pTileInfo;
+        r.av1_tile_info = tile_info;
+        r.av1_mi_col_starts = Opal::DynamicArray<u16>(tile_info.pMiColStarts, tile_info.TileCols);
+        r.av1_mi_row_starts = Opal::DynamicArray<u16>(tile_info.pMiRowStarts, tile_info.TileRows);
+        r.av1_width_in_sbs_minus_1 = Opal::DynamicArray<u16>(tile_info.pWidthInSbsMinus1, tile_info.TileCols);
+        r.av1_height_in_sbs_minus_1 = Opal::DynamicArray<u16>(tile_info.pHeightInSbsMinus1, tile_info.TileRows);
+        r.av1_tile_info.pMiColStarts = r.av1_mi_col_starts.GetData();
+        r.av1_tile_info.pMiRowStarts = r.av1_mi_row_starts.GetData();
+        r.av1_tile_info.pWidthInSbsMinus1 = r.av1_width_in_sbs_minus_1.GetData();
+        r.av1_tile_info.pHeightInSbsMinus1 = r.av1_height_in_sbs_minus_1.GetData();
+        r.av1_picture.pTileInfo = &r.av1_tile_info;
+        r.av1_picture.pQuantization = CopyInto(desc.av1_picture.pQuantization, r.av1_quantization);
+        r.av1_picture.pSegmentation = CopyInto(desc.av1_picture.pSegmentation, r.av1_segmentation);
+        r.av1_picture.pLoopFilter = CopyInto(desc.av1_picture.pLoopFilter, r.av1_loop_filter);
+        r.av1_picture.pCDEF = CopyInto(desc.av1_picture.pCDEF, r.av1_cdef);
+        r.av1_picture.pLoopRestoration = CopyInto(desc.av1_picture.pLoopRestoration, r.av1_loop_restoration);
+        r.av1_picture.pGlobalMotion = CopyInto(desc.av1_picture.pGlobalMotion, r.av1_global_motion);
+        r.av1_picture.pFilmGrain = CopyInto(desc.av1_picture.pFilmGrain, r.av1_film_grain);
+        r.av1_tile_offsets = Opal::DynamicArray<u32>(desc.av1_tile_offsets.GetData(), desc.av1_tile_offsets.GetSize());
+        r.av1_tile_sizes = Opal::DynamicArray<u32>(desc.av1_tile_sizes.GetData(), desc.av1_tile_sizes.GetSize());
+        r.av1_info = {.sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_PICTURE_INFO_KHR,
+                      .pStdPictureInfo = &r.av1_picture,
+                      .frameHeaderOffset = desc.av1_frame_header_offset,
+                      .tileCount = static_cast<u32>(r.av1_tile_offsets.GetSize()),
+                      .pTileOffsets = r.av1_tile_offsets.GetData(),
+                      .pTileSizes = r.av1_tile_sizes.GetData()};
+        for (u32 i = 0; i < STD_VIDEO_AV1_REFS_PER_FRAME; ++i)
+        {
+            r.av1_info.referenceNameSlotIndices[i] = desc.av1_reference_name_slots[i];
+        }
+        picture_info = &r.av1_info;
     }
     r.decode_info = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_INFO_KHR,
