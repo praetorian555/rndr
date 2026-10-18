@@ -112,8 +112,8 @@ bool SaveImage(const Bitmap& bitmap, const Opal::StringUtf8& file_path);
 inline constexpr i32 k_max_image_dimension = 16384;
 
 /**
- * Decode an image that is already in memory: PNG, JPEG, BMP, TGA, GIF's first frame, PSD, PIC, PNM or Radiance HDR, through
- * stbi. What LoadImage calls for everything but KTX once it has read the file. The header is read first, and an image wider or
+ * Decode an image that is already in memory: PNG, JPEG, BMP, TGA or Radiance HDR, through stbi, which is built without its
+ * GIF, PSD, PIC and PNM decoders. What LoadImage calls for everything but KTX once it has read the file. The header is read first, and an image wider or
  * taller than k_max_image_dimension is refused before its pixels are allocated. The channel bit depth is auto-detected
  * (8-bit, 16-bit, or 32-bit HDR) and the image is always decoded as RGBA. Safe to call from any thread.
  *

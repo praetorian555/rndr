@@ -26,6 +26,11 @@ constexpr Rndr::u8 k_huge_png_header[] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x
                                           0x52, 0x00, 0x01, 0x86, 0xA0, 0x00, 0x00, 0x00, 0x04, 0x08, 0x06, 0x00, 0x00, 0x00, 0x0D,
                                           0xB3, 0x87, 0x66, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82};
 
+// A 1x1 GIF, a format stbi is built without.
+constexpr Rndr::u8 k_gif[] = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0xFF, 0xFF,
+                              0xFF, 0x00, 0x00, 0x00, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x00,
+                              0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3B};
+
 }  // namespace
 
 TEST_CASE("An image in memory decodes to RGBA", "[bitmap]")
@@ -64,12 +69,13 @@ TEST_CASE("An image in memory decodes to RGBA", "[bitmap]")
     }
 }
 
-TEST_CASE("Bytes that are not an image, or too large a one, are refused", "[bitmap]")
+TEST_CASE("Bytes that are not an image, too large a one or a GIF are refused", "[bitmap]")
 {
     const Rndr::u8 text[] = {'n', 'o', 't', ' ', 'a', 'n', ' ', 'i', 'm', 'a', 'g', 'e'};
     REQUIRE(Rndr::File::DecodeImage({text, sizeof(text)}, false, false).GetError() == Rndr::ErrorCode::CorruptData);
     REQUIRE(Rndr::File::DecodeImage({k_rgba8_png, 40}, false, false).GetError() == Rndr::ErrorCode::CorruptData);
     REQUIRE(Rndr::File::DecodeImage({}, false, false).GetError() == Rndr::ErrorCode::InvalidArgument);
+    REQUIRE(Rndr::File::DecodeImage({k_gif, sizeof(k_gif)}, false, false).GetError() == Rndr::ErrorCode::CorruptData);
     REQUIRE(Rndr::File::DecodeImage({k_huge_png_header, sizeof(k_huge_png_header)}, false, false).GetError() ==
             Rndr::ErrorCode::OutOfBounds);
 }
