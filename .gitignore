@@ -4,3 +4,4 @@ assets/sample-models
 *.spv
 atlas.png
 imgui.ini
+out

@@ -67,6 +67,17 @@ and C: does not have it. When done with it, shut it down (`adb -e emu kill`) and
 `emulator` or `qemu-system-*` process left in `Get-Process` - before moving on. The kill leaves
 `emulator -kill <pid> -sleep 20` watchdogs behind for up to 20 seconds; wait them out and check again.
 
+rndr also builds with builder, the engine's own build system, from
+`builder.json` (options and pinned dependencies) and `*.rules.cpp` files: `rndr.rules.cpp` for rndr itself, and
+`third-party/` for the dependencies that ship no rules of their own. The CMake options are project options,
+given with `-D`; `RNDR_HARDENING` is `--sanitize=address`. Targets are named as in CMake with `_` for `-`.
+
+    builder build --build-dir=build/builder -Dforge=true -Dforge-validation=true
+    build/builder/windows-debug/bin/rndr_test.exe
+
+A file, option or dependency added to the CMake build goes into the rules too, until CMake is retired. The Forge
+practice samples and Android are CMake-only for now.
+
 ## Tests
 
 Catch2, single `rndr-test` binary, run a subset by tag:
