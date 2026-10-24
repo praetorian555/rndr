@@ -70,7 +70,8 @@ BUILDER_MODULE(Astcenc, m, t)
 
 BUILDER_MODULE(Ktx, m, t)
 {
-    m.public_includes = {"include"};
+    // System, as rndr's CMake has it: khr_df.h uses C-style casts, which rndr's warnings refuse.
+    m.public_system_includes = {"include"};
     m.private_includes = {"external/basisu/transcoder", "external", "external/basisu/zstd", "utils", "external/dfdutils"};
     m.private_system_includes = {"other_include"};
     m.private_deps = {"Astcenc"};
