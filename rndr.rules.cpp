@@ -330,6 +330,7 @@ BUILDER_TARGET(rndr_test, t, c)
 {
     t.kind = TargetKind::Test;
     t.modules = {"Rndr"};
+    t.test_framework = TestFramework::Catch2;
     t.enabled = c.GetBool("tests");
 }
 
