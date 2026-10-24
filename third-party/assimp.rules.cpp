@@ -69,11 +69,11 @@ BUILDER_MODULE(Assimp, m, t)
 
     if (t.platform.Is(Platform::Windows))
     {
-        m.private_defines.insert(m.private_defines.end(), {"WIN32_LEAN_AND_MEAN", "UNICODE", "_UNICODE"});
+        Append(m.private_defines, {"WIN32_LEAN_AND_MEAN", "UNICODE", "_UNICODE"});
     }
     if (t.toolchain.Is(Compiler::Msvc))
     {
-        m.private_defines.insert(m.private_defines.end(), {"_SCL_SECURE_NO_WARNINGS", "_CRT_SECURE_NO_WARNINGS"});
+        Append(m.private_defines, {"_SCL_SECURE_NO_WARNINGS", "_CRT_SECURE_NO_WARNINGS"});
         m.private_compile_flags = {"/bigobj"};
     }
     else
