@@ -14,8 +14,8 @@
     },
     "dependencies": {
         "opal": {
-            "url": "https://github.com/praetorian555/opal/archive/refs/tags/opal-0.8.0.tar.gz",
-            "sha256": "344dae52c3176e8ff70c8fd2c48de184d4ed8770bafd721beb505f87a10d834e",
+            "url": "https://github.com/praetorian555/opal/archive/refs/tags/opal-0.10.0.tar.gz",
+            "sha256": "b0cf75ff161b2f69f070b748e7350a71279e2529163805145782f713625edaed",
             "rules": "third-party/opal.rules.cpp"
         },
         "imgui": {

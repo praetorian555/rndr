@@ -6,7 +6,7 @@
 // for '-', since a target's name is a C++ identifier.
 
 // Keep in step with the latest rndr-* tag, which cmake/version.cmake reads.
-static constexpr const char* k_rndr_version = "0.9.2";
+static constexpr const char* k_rndr_version = "0.9.3";
 
 static bool RndrHasShaderCompiler(const Builder::Rules::ConfigurationInfo& c)
 {
