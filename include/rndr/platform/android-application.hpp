@@ -149,6 +149,13 @@ public:
     ErrorCode StopLocationUpdates() override;
 
     /**
+     * The ongoing notification through dev.rndr.RndrActivity's OngoingService. A plain NativeActivity has none and
+     * reports FeatureNotSupported.
+     */
+    ErrorCode ShowOngoingNotification(const Opal::StringUtf8& title, const Opal::StringUtf8& text) override;
+    ErrorCode HideOngoingNotification() override;
+
+    /**
      * A GPS fix, handed over by RndrActivity on the UI thread. Queued, and delivered as OnLocationFix at the next
      * ProcessSystemEvents, which the queueing wakes.
      */
@@ -250,6 +257,8 @@ private:
     _jmethodID* m_request_location_permission = nullptr;
     _jmethodID* m_start_location_updates = nullptr;
     _jmethodID* m_stop_location_updates = nullptr;
+    _jmethodID* m_show_ongoing_notification = nullptr;
+    _jmethodID* m_hide_ongoing_notification = nullptr;
 
     /** The choreographer the refresh rate callback is registered with, or null below API 30. */
     AChoreographer* m_choreographer = nullptr;

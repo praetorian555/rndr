@@ -470,6 +470,13 @@ void Rndr::AndroidApplication::SetUpJava()
         m_start_location_updates = nullptr;
         m_stop_location_updates = nullptr;
     }
+    m_show_ongoing_notification = jni->GetMethodID(activity_class, "showOngoingNotification", "(Ljava/lang/String;Ljava/lang/String;)V");
+    m_hide_ongoing_notification = jni->GetMethodID(activity_class, "hideOngoingNotification", "()V");
+    if (jni.Threw("looking up the ongoing notification methods of RndrActivity"))
+    {
+        m_show_ongoing_notification = nullptr;
+        m_hide_ongoing_notification = nullptr;
+    }
 }
 
 void Rndr::AndroidApplication::TearDownJava()
@@ -747,6 +754,50 @@ Rndr::ErrorCode Rndr::AndroidApplication::StopLocationUpdates()
     }
     jni->CallVoidMethod(jni.GetActivity(), m_stop_location_updates);
     if (jni.Threw("stopping location updates"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::ShowOngoingNotification(const Opal::StringUtf8& title, const Opal::StringUtf8& text)
+{
+    if (m_show_ongoing_notification == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jstring java_title = jni->NewStringUTF(title.GetData() != nullptr ? title.GetData() : "");
+    jstring java_text = jni->NewStringUTF(text.GetData() != nullptr ? text.GetData() : "");
+    if (jni.Threw("making the ongoing notification's text"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_show_ongoing_notification, java_title, java_text);
+    if (jni.Threw("showing the ongoing notification"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::HideOngoingNotification()
+{
+    if (m_hide_ongoing_notification == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_hide_ongoing_notification);
+    if (jni.Threw("hiding the ongoing notification"))
     {
         return ErrorCode::PlatformError;
     }

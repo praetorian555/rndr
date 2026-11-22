@@ -263,6 +263,21 @@ Input, all from `onInputEvent`:
   `<service android:name="dev.rndr.RndrActivity$LocationService" android:foregroundServiceType="location" android:exported="false" />`.
   Without the service declared the updates still run while the activity is in use. On the desktop there is no
   GPS: the permission is always denied and the calls report `FeatureNotSupported`.
+- Ongoing notification: `Application::ShowOngoingNotification(title, text)` starts `RndrActivity$OngoingService`, a
+  foreground service holding a notification that brings the task back when tapped, and `HideOngoingNotification`
+  stops it. Without it, a process in the background is cached and the system may freeze or kill it within a minute
+  (Samsung's does), taking whatever the application was in the middle of with it. Showing it again while it runs
+  only replaces the notification's text, through `NotificationManager.notify`, since a foreground service may not
+  be started again from the background. The service calls the two-argument `startForeground`, which takes the
+  types the manifest gives it, so the application declares the type that fits it and asks for that type's
+  permissions - for a workout timer `health`, with `FOREGROUND_SERVICE_HEALTH` and `HIGH_SAMPLING_RATE_SENSORS`, an
+  install-time permission that satisfies the type's runtime requirement:
+  `<service android:name="dev.rndr.RndrActivity$OngoingService" android:foregroundServiceType="health" android:exported="false" />`.
+  Like the location service it has to be started while the activity is in use. On Android 13 and later the first
+  show asks for `POST_NOTIFICATIONS`; refused, the service still keeps the process alive, unseen. Both services post
+  under one notification id, so while both run there is one notification, the last text shown, and stopping one
+  leaves it to the other. The small icon is the application's drawable named `rndr_notification`, a white
+  silhouette as status bar icons are, else its launcher icon. `onDestroy` stops both services.
 - Activity teardown: `onDestroy` shuts the speech engine down while native code may still be winding down and call
   `speak` or `stopSpeaking`; both do nothing from then on, since a call into the shut-down engine threw on the UI
   thread and killed the process.

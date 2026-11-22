@@ -207,6 +207,16 @@ Rndr::ErrorCode Rndr::Application::StopLocationUpdates()
     return m_platform_application->StopLocationUpdates();
 }
 
+Rndr::ErrorCode Rndr::Application::ShowOngoingNotification(const Opal::StringUtf8& title, const Opal::StringUtf8& text)
+{
+    return m_platform_application->ShowOngoingNotification(title, text);
+}
+
+Rndr::ErrorCode Rndr::Application::HideOngoingNotification()
+{
+    return m_platform_application->HideOngoingNotification();
+}
+
 Opal::DynamicArray<Rndr::MonitorInfo> Rndr::Application::GetMonitors() const
 {
     return m_platform_application->GetMonitors();

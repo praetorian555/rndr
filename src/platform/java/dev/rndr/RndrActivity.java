@@ -53,6 +53,9 @@ import java.util.Locale;
 public class RndrActivity extends NativeActivity {
     private static final String TAG = "Rndr";
     private static final int LOCATION_PERMISSION_REQUEST = 0x4c4f;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 0x4e4f;
+    /** The id of the one notification the foreground services show. */
+    static final int FOREGROUND_NOTIFICATION_ID = 0x4c4f43;
 
     private TextInputView textInputView;
     /** The GPS listener while location updates run, touched only on the UI thread. */
@@ -76,6 +79,11 @@ public class RndrActivity extends NativeActivity {
     /** The id of the latest utterance, whose end gives back the audio focus; an earlier one was cut off by it. */
     private String currentUtterance;
     private int utteranceCount;
+    /** Whether OngoingService runs, so that new text updates its notification instead of starting it again. */
+    private boolean ongoingShown;
+    /** What the ongoing notification says, posted again once the user lets the application post notifications. */
+    private String ongoingTitle;
+    private String ongoingText;
     private final AudioFocusRequest speechFocus =
         new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(SPEECH_ATTRIBUTES).build();
 
@@ -328,6 +336,11 @@ public class RndrActivity extends NativeActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        // A notification posted before the user allowed them was dropped, so the running service's goes up again.
+        if (ongoingShown && (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                             || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)) {
+            postOngoingNotification();
+        }
         if (requestCode != LOCATION_PERMISSION_REQUEST) {
             return;
         }
@@ -400,10 +413,95 @@ public class RndrActivity extends NativeActivity {
         locationListener = null;
     }
 
+    /**
+     * Show an ongoing notification with the title and text, held by a foreground service that keeps the process running
+     * while the activity is in the background or the screen is off; tapping it brings the activity back. Showing it again
+     * changes the text. The service takes its type from the manifest, which must declare RndrActivity$OngoingService.
+     * On Android 13 and later the first call asks to post notifications; without that the service still runs, unseen.
+     * Called by native code on its own thread.
+     */
+    public void showOngoingNotification(final String title, final String text) {
+        runOnUiThread(() -> {
+            if (isDestroyed()) {
+                return;
+            }
+            ongoingTitle = title;
+            ongoingText = text;
+            if (ongoingShown) {
+                postOngoingNotification();
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST);
+            }
+            Intent service = new Intent(this, OngoingService.class);
+            service.putExtra(OngoingService.EXTRA_TITLE, title);
+            service.putExtra(OngoingService.EXTRA_TEXT, text);
+            try {
+                startForegroundService(service);
+                ongoingShown = true;
+            } catch (RuntimeException e) {
+                // Android 12 refuses a foreground service started from the background.
+                Log.w(TAG, "The ongoing notification could not be shown; the process may be stopped in the background", e);
+            }
+        });
+    }
+
+    /** Replace the running OngoingService's notification with the latest title and text. */
+    private void postOngoingNotification() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.notify(FOREGROUND_NOTIFICATION_ID, buildForegroundNotification(this, OngoingService.CHANNEL_ID, ongoingTitle, ongoingText, 0));
+        }
+    }
+
+    /** Take down the notification showOngoingNotification put up, and its service. Called by native code on its own thread. */
+    public void hideOngoingNotification() {
+        runOnUiThread(() -> {
+            ongoingShown = false;
+            stopService(new Intent(this, OngoingService.class));
+        });
+    }
+
+    /**
+     * A foreground service's notification: ongoing, silent after the first time, opening the application's task when
+     * tapped. LocationService and OngoingService share its id, so while both run they show one notification, and
+     * stopping one leaves it to the other.
+     *
+     * @param icon The small icon, or 0 for the one ongoingIcon finds.
+     */
+    static Notification buildForegroundNotification(Context context, String channelId, String title, String text, int icon) {
+        Notification.Builder builder = new Notification.Builder(context, channelId)
+                                           .setContentTitle(title)
+                                           .setContentText(text)
+                                           .setSmallIcon(icon != 0 ? icon : ongoingIcon(context))
+                                           .setOngoing(true)
+                                           .setOnlyAlertOnce(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+        }
+        // The launcher's intent brings the running task forward rather than starting a second activity.
+        Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+        if (launch != null) {
+            launch.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            builder.setContentIntent(PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_IMMUTABLE));
+        }
+        return builder.build();
+    }
+
+    /** The application's drawable named rndr_notification, a white silhouette as a status bar icon must be, else its own icon. */
+    static int ongoingIcon(Context context) {
+        int icon = context.getResources().getIdentifier("rndr_notification", "drawable", context.getPackageName());
+        return icon != 0 ? icon : context.getApplicationInfo().icon;
+    }
+
     @Override
     protected void onDestroy() {
         removeLocationListener((LocationManager) getSystemService(Context.LOCATION_SERVICE));
         stopService(new Intent(this, LocationService.class));
+        stopService(new Intent(this, OngoingService.class));
+        ongoingShown = false;
         // Native code may still call speak or stopSpeaking while it winds down; with the engine gone they do nothing.
         speechReady = false;
         speechUnavailable = true;
@@ -450,7 +548,6 @@ public class RndrActivity extends NativeActivity {
         static final String EXTRA_TITLE = "dev.rndr.location.title";
         static final String EXTRA_TEXT = "dev.rndr.location.text";
         private static final String CHANNEL_ID = "dev.rndr.location";
-        private static final int NOTIFICATION_ID = 0x4c4f43;
 
         @Override
         public int onStartCommand(Intent intent, int flags, int startId) {
@@ -460,23 +557,50 @@ public class RndrActivity extends NativeActivity {
             if (manager != null) {
                 manager.createNotificationChannel(new NotificationChannel(CHANNEL_ID, "Location tracking", NotificationManager.IMPORTANCE_LOW));
             }
-            Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
-                                               .setContentTitle(title)
-                                               .setContentText(text)
-                                               .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                                               .setOngoing(true);
-            // The launcher's intent brings the running task forward rather than starting a second activity.
-            Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
-            if (launch != null) {
-                launch.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-                builder.setContentIntent(PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE));
-            }
+            Notification notification = buildForegroundNotification(this, CHANNEL_ID, title, text, android.R.drawable.ic_menu_mylocation);
             try {
-                startForeground(NOTIFICATION_ID, builder.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+                startForeground(FOREGROUND_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
             } catch (RuntimeException e) {
                 // Android 14 refuses a location service without the location permission, or without
                 // FOREGROUND_SERVICE_LOCATION in the manifest.
                 Log.w(TAG, "The location service could not come to the foreground", e);
+                stopSelf();
+            }
+            return START_NOT_STICKY;
+        }
+
+        @Override
+        public IBinder onBind(Intent intent) {
+            return null;
+        }
+    }
+
+    /**
+     * The foreground service behind showOngoingNotification. It holds nothing but its notification; running in the
+     * foreground is what keeps the process alive in the background. It takes the type the application's manifest gives
+     * it, so the application picks the type that fits what it does and asks for that type's permissions:
+     * {@code <service android:name="dev.rndr.RndrActivity$OngoingService" android:exported="false"
+     * android:foregroundServiceType="..." />}.
+     */
+    public static class OngoingService extends Service {
+        static final String EXTRA_TITLE = "dev.rndr.ongoing.title";
+        static final String EXTRA_TEXT = "dev.rndr.ongoing.text";
+        static final String CHANNEL_ID = "dev.rndr.ongoing";
+
+        @Override
+        public int onStartCommand(Intent intent, int flags, int startId) {
+            String title = intent != null ? intent.getStringExtra(EXTRA_TITLE) : null;
+            String text = intent != null ? intent.getStringExtra(EXTRA_TEXT) : null;
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(new NotificationChannel(CHANNEL_ID, "In progress", NotificationManager.IMPORTANCE_LOW));
+            }
+            try {
+                // The two-argument form takes the types the manifest declares.
+                startForeground(FOREGROUND_NOTIFICATION_ID, buildForegroundNotification(this, CHANNEL_ID, title, text, 0));
+            } catch (RuntimeException e) {
+                // Android 14 refuses a type whose permissions the manifest or the user did not grant.
+                Log.w(TAG, "The ongoing service could not come to the foreground", e);
                 stopSelf();
             }
             return START_NOT_STICKY;

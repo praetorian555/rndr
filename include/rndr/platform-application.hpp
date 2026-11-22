@@ -204,6 +204,26 @@ public:
     /** Stop the updates StartLocationUpdates started, and their notification. Does nothing when none run. */
     virtual ErrorCode StopLocationUpdates() { return ErrorCode::FeatureNotSupported; }
 
+    /**
+     * Show an ongoing notification that keeps the application running while it is in the background or the screen is
+     * off, and brings it back when tapped. Showing it again changes its text. On Android it is a foreground service,
+     * which the manifest must declare with the type that fits the application (see docs/android-plan.md); on Android 13
+     * and later the first call also asks to post notifications.
+     * @param title The notification's first line.
+     * @param text The line under it.
+     * @return ErrorCode::Success when it was asked for, ErrorCode::FeatureNotSupported where there is no such
+     *         notification, or ErrorCode::PlatformError when the call failed.
+     */
+    virtual ErrorCode ShowOngoingNotification(const Opal::StringUtf8& title, const Opal::StringUtf8& text)
+    {
+        (void)title;
+        (void)text;
+        return ErrorCode::FeatureNotSupported;
+    }
+
+    /** Take down what ShowOngoingNotification showed. Does nothing when it is not shown. */
+    virtual ErrorCode HideOngoingNotification() { return ErrorCode::FeatureNotSupported; }
+
     [[nodiscard]] virtual Opal::DynamicArray<MonitorInfo> GetMonitors() const = 0;
     [[nodiscard]] virtual MonitorInfo GetPrimaryMonitor() const = 0;
     [[nodiscard]] virtual MonitorInfo GetMonitorAtPosition(const Vector2i& pos) const = 0;

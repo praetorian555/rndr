@@ -141,6 +141,13 @@ public:
     /** End of location API. */
 
     /**
+     * An ongoing notification that keeps the application running in the background. See
+     * PlatformApplication::ShowOngoingNotification.
+     */
+    ErrorCode ShowOngoingNotification(const Opal::StringUtf8& title, const Opal::StringUtf8& text);
+    ErrorCode HideOngoingNotification();
+
+    /**
      * Checks whether a gamepad is currently connected on the given slot. Connection state is
      * refreshed by ProcessSystemEvents.
      * @param gamepad_index Slot in [0, k_max_gamepads).
