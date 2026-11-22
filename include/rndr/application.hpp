@@ -129,6 +129,8 @@ public:
     /** Say text aloud with the system's voice, or stop saying it. See PlatformApplication::Speak. */
     ErrorCode Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language = Opal::StringUtf8());
     ErrorCode StopSpeaking();
+    /** Boost the voice above the system's volume. See PlatformApplication::SetSpeechGain. */
+    ErrorCode SetSpeechGain(f32 decibels);
 
     /**
      * Location API: the GPS, on Android. Ask for the permission, then start updates; fixes arrive as

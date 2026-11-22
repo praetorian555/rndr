@@ -187,6 +187,11 @@ Rndr::ErrorCode Rndr::Application::StopSpeaking()
     return m_platform_application->StopSpeaking();
 }
 
+Rndr::ErrorCode Rndr::Application::SetSpeechGain(f32 decibels)
+{
+    return m_platform_application->SetSpeechGain(decibels);
+}
+
 Rndr::LocationPermission Rndr::Application::GetLocationPermission() const
 {
     return m_platform_application->GetLocationPermission();

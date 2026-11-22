@@ -281,6 +281,12 @@ Input, all from `onInputEvent`:
 - Activity teardown: `onDestroy` shuts the speech engine down while native code may still be winding down and call
   `speak` or `stopSpeaking`; both do nothing from then on, since a call into the shut-down engine threw on the UI
   thread and killed the process.
+- Speech gain: `Application::SetSpeechGain(decibels)` makes the voice louder than the system volume allows.
+  `TextToSpeech`'s own volume tops out at 1.0, and the dip other audio takes under it (`AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`)
+  is the system's to choose, so `RndrActivity` gives the voice an audio session of its own
+  (`AudioManager.generateAudioSessionId`, passed to each utterance as `KEY_PARAM_SESSION_ID`) and a
+  `LoudnessEnhancer` on it, whose limiter compresses the boost rather than clipping it. The effect is made before any
+  utterance plays in the session; AudioFlinger holds it and attaches it when the engine's track starts.
 - Cursor: `ShowCursor`, `IsCursorVisible`, `SetCursorPosition` are no-ops; `GetCursorPosition` is the last
   touch, which is in screen space already since the window is the screen.
 - Safe insets: `GenericWindow::GetSafeInsets` is the system bars and the display cutout, from

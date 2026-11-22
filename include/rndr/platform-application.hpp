@@ -175,6 +175,19 @@ public:
      */
     virtual ErrorCode StopSpeaking() { return ErrorCode::FeatureNotSupported; }
 
+    /**
+     * Make the voice Speak uses louder than the system's volume for it, with a limiter so the boost compresses rather
+     * than clips. Android only, through a LoudnessEnhancer on the voice's audio session.
+     * @param decibels The boost; 0 or less takes it away.
+     * @return ErrorCode::Success when it was asked for, ErrorCode::FeatureNotSupported where the voice cannot be
+     *         boosted, or ErrorCode::PlatformError when the call failed.
+     */
+    virtual ErrorCode SetSpeechGain(f32 decibels)
+    {
+        (void)decibels;
+        return ErrorCode::FeatureNotSupported;
+    }
+
     /** Whether the precise location may be read. Only Android has a GPS to read; elsewhere it is always Denied. */
     [[nodiscard]] virtual LocationPermission GetLocationPermission() const { return LocationPermission::Denied; }
 

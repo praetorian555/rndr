@@ -17,6 +17,7 @@ import android.location.LocationManager;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.media.audiofx.LoudnessEnhancer;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -84,6 +85,12 @@ public class RndrActivity extends NativeActivity {
     /** What the ongoing notification says, posted again once the user lets the application post notifications. */
     private String ongoingTitle;
     private String ongoingText;
+    /** How far above full scale the voice is boosted, in millibels; 0 leaves it alone. */
+    private int speechGainMillibels;
+    /** The audio session the voice plays in, made for speechBoost; 0 until a gain is set. */
+    private int speechSession;
+    /** The limiter that boosts the voice, on speechSession. */
+    private LoudnessEnhancer speechBoost;
     private final AudioFocusRequest speechFocus =
         new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(SPEECH_ATTRIBUTES).build();
 
@@ -237,6 +244,46 @@ public class RndrActivity extends NativeActivity {
         });
     }
 
+    /**
+     * Boost the voice above full scale, through a LoudnessEnhancer on the audio session it plays in, which limits rather
+     * than clips. The text-to-speech volume is already at its highest, so this is the only way to make it louder without
+     * touching the system volume. Called by native code on its own thread.
+     *
+     * @param millibels The boost; 0 or less takes it away.
+     */
+    public void setSpeechGain(final int millibels) {
+        runOnUiThread(() -> {
+            speechGainMillibels = Math.max(0, millibels);
+            applySpeechGain();
+        });
+    }
+
+    private void applySpeechGain() {
+        if (speechGainMillibels == 0) {
+            if (speechBoost != null) {
+                speechBoost.setEnabled(false);
+            }
+            return;
+        }
+        if (speechSession == 0) {
+            AudioManager audio = getSystemService(AudioManager.class);
+            if (audio == null) {
+                return;
+            }
+            speechSession = audio.generateAudioSessionId();
+        }
+        try {
+            if (speechBoost == null) {
+                speechBoost = new LoudnessEnhancer(speechSession);
+            }
+            speechBoost.setTargetGain(speechGainMillibels);
+            speechBoost.setEnabled(true);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "The voice cannot be boosted; it speaks at the system's volume", e);
+            speechBoost = null;
+        }
+    }
+
     /** The engine is up, or could not start. Runs on the UI thread, possibly inside the TextToSpeech constructor. */
     private void onSpeechInit(int status) {
         if (status != TextToSpeech.SUCCESS) {
@@ -293,7 +340,12 @@ public class RndrActivity extends NativeActivity {
         }
         utteranceCount++;
         currentUtterance = "rndr-" + utteranceCount;
-        speech.speak(text, TextToSpeech.QUEUE_FLUSH, null, currentUtterance);
+        Bundle params = null;
+        if (speechSession != 0) {
+            params = new Bundle();
+            params.putInt(TextToSpeech.Engine.KEY_PARAM_SESSION_ID, speechSession);
+        }
+        speech.speak(text, TextToSpeech.QUEUE_FLUSH, params, currentUtterance);
     }
 
     private void onUtteranceEnded(String utteranceId) {
@@ -510,6 +562,10 @@ public class RndrActivity extends NativeActivity {
             speech.shutdown();
             speech = null;
             abandonSpeechFocus();
+        }
+        if (speechBoost != null) {
+            speechBoost.release();
+            speechBoost = null;
         }
         super.onDestroy();
     }
