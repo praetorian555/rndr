@@ -138,6 +138,7 @@ public:
     ErrorCode Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language) override;
     ErrorCode StopSpeaking() override;
     ErrorCode SetSpeechGain(f32 decibels) override;
+    ErrorCode SetSpeechRate(f32 rate) override;
 
     /**
      * Location through dev.rndr.RndrActivity: the permission prompt, LocationManager's GPS provider, and a foreground
@@ -255,6 +256,7 @@ private:
     _jmethodID* m_speak = nullptr;
     _jmethodID* m_stop_speaking = nullptr;
     _jmethodID* m_set_speech_gain = nullptr;
+    _jmethodID* m_set_speech_rate = nullptr;
     _jmethodID* m_has_location_permission = nullptr;
     _jmethodID* m_request_location_permission = nullptr;
     _jmethodID* m_start_location_updates = nullptr;

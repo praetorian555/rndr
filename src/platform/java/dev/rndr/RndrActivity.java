@@ -91,6 +91,8 @@ public class RndrActivity extends NativeActivity {
     private int speechSession;
     /** The limiter that boosts the voice, on speechSession. */
     private LoudnessEnhancer speechBoost;
+    /** The voice's speed relative to its normal one, given to the engine once it is up. */
+    private float speechRate = 1.0f;
     private final AudioFocusRequest speechFocus =
         new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(SPEECH_ATTRIBUTES).build();
 
@@ -258,6 +260,20 @@ public class RndrActivity extends NativeActivity {
         });
     }
 
+    /**
+     * Make the voice talk slower or faster, from the next utterance on. Called by native code on its own thread.
+     *
+     * @param rate The speed relative to the voice's normal one: 1 is normal, 0.9 a tenth slower.
+     */
+    public void setSpeechRate(final float rate) {
+        runOnUiThread(() -> {
+            speechRate = rate;
+            if (speechReady && speech != null) {
+                speech.setSpeechRate(speechRate);
+            }
+        });
+    }
+
     private void applySpeechGain() {
         if (speechGainMillibels == 0) {
             if (speechBoost != null) {
@@ -294,6 +310,7 @@ public class RndrActivity extends NativeActivity {
         }
         speechReady = true;
         speech.setAudioAttributes(SPEECH_ATTRIBUTES);
+        speech.setSpeechRate(speechRate);
         speech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             // These run on a thread of the engine's; the focus is handed back on the UI thread.
             @Override

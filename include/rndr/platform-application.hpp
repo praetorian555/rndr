@@ -188,6 +188,20 @@ public:
         return ErrorCode::FeatureNotSupported;
     }
 
+    /**
+     * Make the voice Speak uses talk slower or faster. It holds for everything said afterwards, and from the first Speak
+     * when set before it. Android passes it to TextToSpeech.setSpeechRate; Windows rounds it to the nearest of SAPI's
+     * rate steps, where 10 steps triple the speed.
+     * @param rate The speed relative to the voice's normal one: 1 is normal, 0.9 a tenth slower. Clamped to 0.25..4.
+     * @return ErrorCode::Success when it was asked for, ErrorCode::FeatureNotSupported where there is no voice, or
+     *         ErrorCode::PlatformError when the call failed.
+     */
+    virtual ErrorCode SetSpeechRate(f32 rate)
+    {
+        (void)rate;
+        return ErrorCode::FeatureNotSupported;
+    }
+
     /** Whether the precise location may be read. Only Android has a GPS to read; elsewhere it is always Denied. */
     [[nodiscard]] virtual LocationPermission GetLocationPermission() const { return LocationPermission::Denied; }
 

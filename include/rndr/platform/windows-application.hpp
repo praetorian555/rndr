@@ -59,6 +59,7 @@ public:
      */
     ErrorCode Speak(const Opal::StringUtf8& text, const Opal::StringUtf8& language) override;
     ErrorCode StopSpeaking() override;
+    ErrorCode SetSpeechRate(f32 rate) override;
 
     [[nodiscard]] Opal::DynamicArray<MonitorInfo> GetMonitors() const override;
     [[nodiscard]] MonitorInfo GetPrimaryMonitor() const override;
@@ -82,6 +83,8 @@ private:
     ISpVoice* m_voice = nullptr;
     /** Whether Speak has tried to make the voice, so a missing one is not looked for again. */
     bool m_voice_attempted = false;
+    /** The SAPI rate step, -10..10, given to the voice when it is made and on each SetSpeechRate. */
+    i32 m_speech_rate_step = 0;
     /** Whether making the voice initialized COM on this thread, which the destructor then undoes. */
     bool m_com_initialized = false;
 };

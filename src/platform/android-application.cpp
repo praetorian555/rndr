@@ -465,6 +465,11 @@ void Rndr::AndroidApplication::SetUpJava()
     {
         m_set_speech_gain = nullptr;
     }
+    m_set_speech_rate = jni->GetMethodID(activity_class, "setSpeechRate", "(F)V");
+    if (jni.Threw("looking up RndrActivity.setSpeechRate"))
+    {
+        m_set_speech_rate = nullptr;
+    }
     m_has_location_permission = jni->GetMethodID(activity_class, "hasLocationPermission", "()Z");
     m_request_location_permission = jni->GetMethodID(activity_class, "requestLocationPermission", "()V");
     m_start_location_updates = jni->GetMethodID(activity_class, "startLocationUpdates", "(IZLjava/lang/String;Ljava/lang/String;)I");
@@ -681,6 +686,25 @@ Rndr::ErrorCode Rndr::AndroidApplication::SetSpeechGain(f32 decibels)
     const f32 millibels = std::round(Opal::Clamp(decibels, 0.0f, 100.0f) * 100.0f);
     jni->CallVoidMethod(jni.GetActivity(), m_set_speech_gain, static_cast<jint>(millibels));
     if (jni.Threw("setting the speech gain"))
+    {
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::AndroidApplication::SetSpeechRate(f32 rate)
+{
+    if (m_set_speech_rate == nullptr)
+    {
+        return ErrorCode::FeatureNotSupported;
+    }
+    const JniScope jni(m_app->activity);
+    if (!jni.IsValid())
+    {
+        return ErrorCode::PlatformError;
+    }
+    jni->CallVoidMethod(jni.GetActivity(), m_set_speech_rate, static_cast<jdouble>(Opal::Clamp(rate, 0.25f, 4.0f)));
+    if (jni.Threw("setting the speech rate"))
     {
         return ErrorCode::PlatformError;
     }

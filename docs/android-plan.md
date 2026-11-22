@@ -287,6 +287,9 @@ Input, all from `onInputEvent`:
   (`AudioManager.generateAudioSessionId`, passed to each utterance as `KEY_PARAM_SESSION_ID`) and a
   `LoudnessEnhancer` on it, whose limiter compresses the boost rather than clipping it. The effect is made before any
   utterance plays in the session; AudioFlinger holds it and attaches it when the engine's track starts.
+- Speech rate: `Application::SetSpeechRate(rate)` slows the voice down or speeds it up, 1 being its normal speed.
+  `RndrActivity` keeps the rate and hands it to `TextToSpeech.setSpeechRate` when the engine starts and on each
+  later call, so it can be set before the first `Speak`. Windows maps it onto SAPI's `ISpVoice::SetRate` steps.
 - Cursor: `ShowCursor`, `IsCursorVisible`, `SetCursorPosition` are no-ops; `GetCursorPosition` is the last
   touch, which is in screen space already since the window is the screen.
 - Safe insets: `GenericWindow::GetSafeInsets` is the system bars and the display cutout, from

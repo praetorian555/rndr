@@ -131,6 +131,8 @@ public:
     ErrorCode StopSpeaking();
     /** Boost the voice above the system's volume. See PlatformApplication::SetSpeechGain. */
     ErrorCode SetSpeechGain(f32 decibels);
+    /** Make the voice talk slower or faster. See PlatformApplication::SetSpeechRate. */
+    ErrorCode SetSpeechRate(f32 rate);
 
     /**
      * Location API: the GPS, on Android. Ask for the permission, then start updates; fixes arrive as

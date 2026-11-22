@@ -1,10 +1,12 @@
 #include "rndr/platform/windows-application.hpp"
 
 #include <Windowsx.h>
+#include <cmath>
 
 #include "glad/glad_wgl.h"
 
 #include "opal/container/in-place-array.h"
+#include "opal/math-base.h"
 
 #include <ShellScalingApi.h>
 #include <sapi.h>
@@ -396,6 +398,10 @@ Rndr::ErrorCode Rndr::WindowsApplication::Speak(const Opal::StringUtf8& text, co
             RNDR_LOG_WARNING("No SAPI voice could be made ({:#x}), so Speak says nothing", static_cast<u32>(voice_result));
             m_voice = nullptr;
         }
+        else if (m_speech_rate_step != 0)
+        {
+            (void)m_voice->SetRate(m_speech_rate_step);
+        }
     }
     if (m_voice == nullptr)
     {
@@ -421,6 +427,24 @@ Rndr::ErrorCode Rndr::WindowsApplication::StopSpeaking()
     if (FAILED(result))
     {
         RNDR_LOG_ERROR("ISpVoice::Speak failed to stop the voice with {:#x}", static_cast<u32>(result));
+        return ErrorCode::PlatformError;
+    }
+    return ErrorCode::Success;
+}
+
+Rndr::ErrorCode Rndr::WindowsApplication::SetSpeechRate(f32 rate)
+{
+    // SAPI's step 10 is three times the normal speed and -10 a third of it.
+    const f32 step = 10.0f * std::log(Opal::Clamp(rate, 0.25f, 4.0f)) / std::log(3.0f);
+    m_speech_rate_step = static_cast<i32>(std::round(Opal::Clamp(step, -10.0f, 10.0f)));
+    if (m_voice == nullptr)
+    {
+        return m_voice_attempted ? ErrorCode::FeatureNotSupported : ErrorCode::Success;
+    }
+    const HRESULT result = m_voice->SetRate(m_speech_rate_step);
+    if (FAILED(result))
+    {
+        RNDR_LOG_ERROR("ISpVoice::SetRate failed with {:#x}", static_cast<u32>(result));
         return ErrorCode::PlatformError;
     }
     return ErrorCode::Success;

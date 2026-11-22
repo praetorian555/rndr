@@ -192,6 +192,11 @@ Rndr::ErrorCode Rndr::Application::SetSpeechGain(f32 decibels)
     return m_platform_application->SetSpeechGain(decibels);
 }
 
+Rndr::ErrorCode Rndr::Application::SetSpeechRate(f32 rate)
+{
+    return m_platform_application->SetSpeechRate(rate);
+}
+
 Rndr::LocationPermission Rndr::Application::GetLocationPermission() const
 {
     return m_platform_application->GetLocationPermission();
