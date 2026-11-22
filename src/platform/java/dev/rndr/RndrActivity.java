@@ -202,7 +202,7 @@ public class RndrActivity extends NativeActivity {
      */
     public void speak(final String text, final String language) {
         runOnUiThread(() -> {
-            if (speechUnavailable) {
+            if (speechUnavailable || isDestroyed()) {
                 return;
             }
             if (!speechReady) {
@@ -221,7 +221,7 @@ public class RndrActivity extends NativeActivity {
     public void stopSpeaking() {
         runOnUiThread(() -> {
             pendingSpeech = null;
-            if (speechReady) {
+            if (speechReady && speech != null) {
                 currentUtterance = null;
                 speech.stop();
                 abandonSpeechFocus();
@@ -267,6 +267,9 @@ public class RndrActivity extends NativeActivity {
     }
 
     private void say(String text, String language) {
+        if (speech == null) {
+            return;
+        }
         String tag = language != null ? language : "";
         if (!tag.equals(speechLanguage)) {
             speechLanguage = tag;
@@ -401,6 +404,10 @@ public class RndrActivity extends NativeActivity {
     protected void onDestroy() {
         removeLocationListener((LocationManager) getSystemService(Context.LOCATION_SERVICE));
         stopService(new Intent(this, LocationService.class));
+        // Native code may still call speak or stopSpeaking while it winds down; with the engine gone they do nothing.
+        speechReady = false;
+        speechUnavailable = true;
+        pendingSpeech = null;
         if (speech != null) {
             speech.shutdown();
             speech = null;

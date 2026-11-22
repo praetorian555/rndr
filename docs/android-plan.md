@@ -263,6 +263,9 @@ Input, all from `onInputEvent`:
   `<service android:name="dev.rndr.RndrActivity$LocationService" android:foregroundServiceType="location" android:exported="false" />`.
   Without the service declared the updates still run while the activity is in use. On the desktop there is no
   GPS: the permission is always denied and the calls report `FeatureNotSupported`.
+- Activity teardown: `onDestroy` shuts the speech engine down while native code may still be winding down and call
+  `speak` or `stopSpeaking`; both do nothing from then on, since a call into the shut-down engine threw on the UI
+  thread and killed the process.
 - Cursor: `ShowCursor`, `IsCursorVisible`, `SetCursorPosition` are no-ops; `GetCursorPosition` is the last
   touch, which is in screen space already since the window is the screen.
 - Safe insets: `GenericWindow::GetSafeInsets` is the system bars and the display cutout, from
